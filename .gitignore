@@ -1,0 +1,7 @@
+# Local scratch work: legacy prototypes, old versions, test pages and seeds
+_*
+app.js
+
+# Local previews, screenshots and archives
+preview-*
+*.zip

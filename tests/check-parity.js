@@ -79,6 +79,26 @@ if (!/function\s+stopCode\s*\([\s\S]{0,500}?stopAllSounds\(\)/.test(engine)) {
   ok = false; console.log('FAIL stopCode() no corta los sonidos');
 }
 
+/* Exportación a .sb3: las piezas que no pueden faltar. El ZIP, el MD5 y el
+   CRC32 son propios (no hay librerías), así que si alguien los borra el botón
+   queda muerto sin que ninguna otra prueba se entere. */
+['exportSb3', 'sb3Build', 'sb3SpriteBlocks', 'zipStore', 'md5hex', 'crc32', 'wavFromSteps', 'backdropPng', 'emojiPng']
+  .forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() del exportador .sb3');
+    }
+  });
+if (!/const\s+SB3_NO_EQUIV\s*=/.test(engine)) { ok = false; console.log('FAIL falta la lista SB3_NO_EQUIV'); }
+/* Una melodía en bucle dentro de Scratch colgaría el guion: tiene que salir
+   como «tocar sonido hasta que termine». */
+if (!/case\s+'play_music'[\s\S]{0,400}?sound_playuntildone/.test(engine)) {
+  ok = false; console.log('FAIL la música no se exporta como sound_playuntildone');
+}
+if (!/id="sb3Btn"/.test(html)) { ok = false; console.log('FAIL falta el botón #sb3Btn'); }
+if (!/sb3Btn[\s\S]{0,120}exportSb3/.test(engine)) {
+  ok = false; console.log('FAIL el botón .sb3 no está enganchado a exportSb3');
+}
+
 /* Ids de bloque únicos: un id repetido no rompe nada, pero `BYID` se queda
    con el último y la paleta muestra el bloque dos veces. Pasó con `rebotar`. */
 const idsBloque = ctx.ALLB.map(b => b.id);

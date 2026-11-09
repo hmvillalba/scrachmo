@@ -3921,6 +3921,904 @@ async function copyShare() {
   }
 }
 
+/* ================= exportación a Scratch 3 (.sb3) =================
+   Un .sb3 es un ZIP con project.json y un archivo por recurso, nombrado con
+   el MD5 de su contenido. Se arma todo acá adentro, sin librerías: MD5, ZIP
+   sin comprimir, disfraces en PNG y sonidos en WAV sintetizados con las
+   mismas recetas del motor.
+
+   Lo que no tiene equivalente en Scratch (multijugador, puntaje, agitar el
+   celu, vibrar, inclinación) se deja afuera y queda anotado en un comentario
+   dentro del proyecto exportado, para que se vea al abrirlo en Scratch y no
+   se pierda en un aviso que desaparece. */
+
+/* ---------- MD5 (para nombrar los recursos, como exige Scratch) ---------- */
+function md5hex(bytes) {
+  const buf = Array.from(bytes);
+  const bitLen = buf.length * 8;
+  buf.push(0x80);
+  while (buf.length % 64 !== 56) buf.push(0);
+  const lo = bitLen >>> 0;
+  const hi = Math.floor(bitLen / 4294967296) >>> 0;
+  for (let i = 0; i < 4; i++) buf.push((lo >>> (8 * i)) & 255);
+  for (let i = 0; i < 4; i++) buf.push((hi >>> (8 * i)) & 255);
+
+  const K = [];
+  for (let i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) >>> 0;
+  const S = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+
+  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+  for (let off = 0; off < buf.length; off += 64) {
+    const M = [];
+    for (let i = 0; i < 16; i++) {
+      M[i] = (buf[off + i * 4] | (buf[off + i * 4 + 1] << 8) |
+        (buf[off + i * 4 + 2] << 16) | (buf[off + i * 4 + 3] << 24)) >>> 0;
+    }
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, g;
+      if (i < 16) { F = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+      else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+      F = (F + A + K[i] + M[g]) >>> 0;
+      A = D; D = C; C = B;
+      const sh = S[(i >> 4) * 4 + (i % 4)];
+      B = (B + (((F << sh) | (F >>> (32 - sh))) >>> 0)) >>> 0;
+    }
+    a0 = (a0 + A) >>> 0; b0 = (b0 + B) >>> 0; c0 = (c0 + C) >>> 0; d0 = (d0 + D) >>> 0;
+  }
+  const hx = n => {
+    let s = '';
+    for (let i = 0; i < 4; i++) s += ((n >>> (8 * i)) & 255).toString(16).padStart(2, '0');
+    return s;
+  };
+  return hx(a0) + hx(b0) + hx(c0) + hx(d0);
+}
+
+/* ---------- CRC32 + ZIP sin comprimir ---------- */
+let crcTable = null;
+function crc32(bytes) {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function concatBytes(list) {
+  let total = 0;
+  list.forEach(b => { total += b.length; });
+  const out = new Uint8Array(total);
+  let at = 0;
+  list.forEach(b => { out.set(b, at); at += b.length; });
+  return out;
+}
+
+/* ZIP con método 0 (guardado): no comprime, pero es lo que necesita Scratch
+   y evita depender de CompressionStream. */
+function zipStore(files) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  files.forEach(f => {
+    const name = enc.encode(f.name);
+    const crc = crc32(f.bytes);
+    const size = f.bytes.length;
+    const local = new Uint8Array(30 + name.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, 0, true);
+    lv.setUint16(12, 0x21, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, size, true);
+    lv.setUint32(22, size, true);
+    lv.setUint16(26, name.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(name, 30);
+    parts.push(local, f.bytes);
+
+    const cen = new Uint8Array(46 + name.length);
+    const cv = new DataView(cen.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, 0, true);
+    cv.setUint16(14, 0x21, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, size, true);
+    cv.setUint32(24, size, true);
+    cv.setUint16(28, name.length, true);
+    cv.setUint32(42, offset, true);
+    cen.set(name, 46);
+    central.push(cen);
+    offset += local.length + size;
+  });
+  const cdSize = central.reduce((a, c) => a + c.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  return concatBytes(parts.concat(central, [eocd]));
+}
+
+/* ---------- recursos ---------- */
+function dataUrlBytes(url) {
+  const s = String(url || '');
+  const comma = s.indexOf(',');
+  if (comma < 0) return null;
+  const meta = s.slice(0, comma);
+  const body = s.slice(comma + 1);
+  if (/;base64$/i.test(meta)) {
+    const bin = atob(body);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  return new TextEncoder().encode(decodeURIComponent(body));
+}
+
+function loadImageUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('imagen ilegible'));
+    img.src = url;
+  });
+}
+
+function canvasToPng(canvas) {
+  /* toBlob no resuelve bajo tiempo virtual en las pruebas: toDataURL sí. */
+  const bytes = dataUrlBytes(canvas.toDataURL('image/png'));
+  return bytes || new Uint8Array(0);
+}
+
+function emojiPng(ch, px) {
+  const size = px || 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, size, size);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = Math.round(size * 0.78) + 'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  g.fillText(String(ch || '🐱'), size / 2, size / 2 + size * 0.04);
+  return canvasToPng(canvas);
+}
+
+async function imagePng(url, maxPx) {
+  const img = await loadImageUrl(url);
+  const max = Math.max(img.width || 1, img.height || 1);
+  const scale = Math.min(1, (maxPx || 480) / max);
+  const w = Math.max(1, Math.round((img.width || 1) * scale));
+  const h = Math.max(1, Math.round((img.height || 1) * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  g.drawImage(img, 0, 0, w, h);
+  return { bytes: canvasToPng(canvas), width: w, height: h };
+}
+
+function backdropPng(colors) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 480;
+  canvas.height = 360;
+  const g = canvas.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 360);
+  grad.addColorStop(0, colors[0]);
+  grad.addColorStop(1, colors[1]);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 480, 360);
+  return canvasToPng(canvas);
+}
+
+/* Ruido determinista: el mismo proyecto debe dar siempre el mismo archivo
+   (mismo MD5), si no cada exportación sería distinta. */
+function noiseAt(i) {
+  let t = (i * 1664525 + 1013904223) >>> 0;
+  t ^= t >>> 15;
+  t = Math.imul(t, 2246822507) >>> 0;
+  t ^= t >>> 13;
+  return (t / 4294967296) * 2 - 1;
+}
+
+/* WAV 16 bits mono a 22050 Hz con las mismas recetas que suenan en la app. */
+function wavFromSteps(steps, rate) {
+  const hz = rate || 22050;
+  const samples = [];
+  let noiseSeed = 0;
+  (steps || []).forEach(step => {
+    const dur = Math.max(0.02, num(step[1], 0.12));
+    const n = Math.max(1, Math.round(dur * hz));
+    const isNoise = step[0] === 'noise';
+    const base = isNoise ? 0 : num(step[0], 0);
+    const sweep = num(step[3], base);
+    const type = step[2] || 'sine';
+    for (let i = 0; i < n; i++) {
+      const t = i / hz;
+      const attack = Math.min(1, t / 0.012);
+      const decay = Math.max(0, 1 - t / dur);
+      let v = 0;
+      if (base > 0) {
+        const f = base + (sweep - base) * (t / dur);
+        const ph = 2 * Math.PI * f * t;
+        if (type === 'square') v = Math.sin(ph) >= 0 ? 1 : -1;
+        else if (type === 'triangle') v = 2 * Math.abs(2 * ((f * t) % 1) - 1) - 1;
+        else v = Math.sin(ph);
+      } else if (isNoise) {
+        v = noiseAt(noiseSeed++) * 0.8;
+      }
+      samples.push(Math.max(-1, Math.min(1, v * attack * decay * 0.34)));
+    }
+  });
+  const dataLen = samples.length * 2;
+  const out = new Uint8Array(44 + dataLen);
+  const dv = new DataView(out.buffer);
+  const ascii = (at, s) => { for (let i = 0; i < s.length; i++) out[at + i] = s.charCodeAt(i); };
+  ascii(0, 'RIFF');
+  dv.setUint32(4, 36 + dataLen, true);
+  ascii(8, 'WAVE');
+  ascii(12, 'fmt ');
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, 1, true);
+  dv.setUint32(24, hz, true);
+  dv.setUint32(28, hz * 2, true);
+  dv.setUint16(32, 2, true);
+  dv.setUint16(34, 16, true);
+  ascii(36, 'data');
+  dv.setUint32(40, dataLen, true);
+  samples.forEach((s, i) => {
+    dv.setInt16(44 + i * 2, Math.round(s * 32767), true);
+  });
+  return out;
+}
+
+/* ---------- bloques ---------- */
+const SB3_HATS = {
+  when_flag: 'event_whenflagclicked',
+  when_tap: 'event_whenstageclicked'
+};
+
+/* Bloques sin equivalente en Scratch. Se listan para poder avisar. */
+const SB3_NO_EQUIV = {
+  when_shake: 'agitar el celular',
+  when_score: 'sombrero de puntaje',
+  if_tilt: 'inclinación',
+  vibrate: 'vibrar',
+  create_var: 'crear variable',
+  show_vars: 'mostrar variables',
+  show2: 'mostrar amigo',
+  hide2: 'esconder amigo',
+  move2: 'mover amigo',
+  sino: 'sino suelto',
+  op_calc: 'calcular'
+};
+
+function sb3KeyName(val) {
+  const k = normKeyName(val || 'espacio');
+  if (k === ' ') return 'space';
+  if (k === 'arrowup') return 'up arrow';
+  if (k === 'arrowdown') return 'down arrow';
+  if (k === 'arrowleft') return 'left arrow';
+  if (k === 'arrowright') return 'right arrow';
+  if (k === 'enter') return 'enter';
+  return k;
+}
+
+function sb3SlotCount(def) {
+  return ((def.n[lang] || def.n.es).match(/\{[vxy]\}/g) || []).length;
+}
+
+/* Convierte el código de UN personaje. Devuelve el mapa de bloques, los
+   comentarios, los recursos usados y la lista de lo que quedó afuera. */
+function sb3SpriteBlocks(sprite, index) {
+  const blocks = {};
+  const dropped = [];
+  const usedSounds = new Set();
+  const usedVars = new Set();
+  let seq = 0;
+  let scriptY = 0;
+
+  const newId = () => 'b' + index + '_' + (++seq);
+
+  function mk(opcode, parentId, extra) {
+    const id = newId();
+    const b = {
+      opcode: opcode, next: null, parent: parentId || null,
+      inputs: {}, fields: {}, shadow: false, topLevel: false
+    };
+    if (extra) {
+      if (extra.inputs) Object.assign(b.inputs, extra.inputs);
+      if (extra.fields) Object.assign(b.fields, extra.fields);
+      if (extra.shadow) b.shadow = true;
+    }
+    blocks[id] = b;
+    return id;
+  }
+
+  function topLevel(id) {
+    blocks[id].topLevel = true;
+    blocks[id].parent = null;
+    blocks[id].x = 48;
+    blocks[id].y = 48 + scriptY * 180;
+    scriptY++;
+  }
+
+  function note(node) {
+    const def = BYID[node.type];
+    const label = def ? (def.n[lang] || def.n.es).replace(/\{[vxy]\}/g, '').trim() : node.type;
+    dropped.push(label + ' (' + node.type + ')');
+  }
+
+  function varBlock(name, parentId) {
+    usedVars.add(name);
+    return mk('data_variable', parentId, { fields: { VARIABLE: [name, sb3VarId(name)] } });
+  }
+
+  function slotIn(node, i, shadowType, hostId) {
+    const def = BYID[node.type] || { n: { es: '' }, def: '' };
+    const count = Math.max(sb3SlotCount(def), i + 1);
+    const vals = blockValues(node, def, count);
+    const raw = vals[i] !== undefined ? vals[i] : '';
+    const shadow = [shadowType || 10, String(raw)];
+    const rep = node.reps && node.reps[i];
+    if (!rep) return [1, shadow];
+    const rid = reporterIn(rep, hostId);
+    return rid ? [3, rid, shadow] : [1, shadow];
+  }
+
+  function binop(opcode, rep, hostId, a, b) {
+    const id = mk(opcode, hostId);
+    blocks[id].inputs[a] = slotIn(rep, 0, 4, id);
+    blocks[id].inputs[b] = slotIn(rep, 1, 4, id);
+    return id;
+  }
+
+  function reporterIn(rep, hostId) {
+    switch (rep.type) {
+      case 'rep_x': return mk('motion_xposition', hostId);
+      case 'rep_y': return mk('motion_yposition', hostId);
+      case 'rep_timer': return mk('sensing_timer', hostId);
+      case 'rep_score': return varBlock('puntaje', hostId);
+      case 'rep_var': {
+        const name = String(rep.val === undefined ? '' : rep.val).trim();
+        return varBlock(name || 'variable', hostId);
+      }
+      case 'rep_random': {
+        const id = mk('operator_random', hostId);
+        blocks[id].inputs.FROM = slotIn(rep, 0, 4, id);
+        blocks[id].inputs.TO = slotIn(rep, 1, 4, id);
+        return id;
+      }
+      case 'rep_add': return binop('operator_add', rep, hostId, 'NUM1', 'NUM2');
+      case 'rep_sub': return binop('operator_subtract', rep, hostId, 'NUM1', 'NUM2');
+      case 'rep_mul': return binop('operator_multiply', rep, hostId, 'NUM1', 'NUM2');
+      case 'rep_div': return binop('operator_divide', rep, hostId, 'NUM1', 'NUM2');
+      case 'rep_gt': return binop('operator_gt', rep, hostId, 'OPERAND1', 'OPERAND2');
+      default: return null;
+    }
+  }
+
+  function menu(opcode, field, value, hostId) {
+    const id = newId();
+    const fields = {};
+    fields[field] = [value, null];
+    blocks[id] = {
+      opcode: opcode, next: null, parent: hostId || null, inputs: {},
+      fields: fields, shadow: true, topLevel: false
+    };
+    return [1, id];
+  }
+
+  function soundNameFor(id) {
+    const s = SOUNDMAP[id];
+    return s ? (s.name[lang] || s.name.es) : '';
+  }
+
+  function melodyNameFor(id) {
+    const m = MELODYMAP[id];
+    return m ? (m.name[lang] || m.name.es) : '';
+  }
+
+  /* Condición de «si»: reportero si lo hay, o una comparación escrita a mano
+     (lo que acepta evalCond). Si no se entiende, no se inventa nada. */
+  function conditionIn(node, hostId) {
+    const rep = node.reps && node.reps[0];
+    if (rep) {
+      const rid = reporterIn(rep, hostId);
+      if (rid) return [2, rid];
+    }
+    const text = String(node.val === undefined ? '' : node.val).trim();
+    const m = /^(.+?)\s*(>=|<=|>|<|=)\s*(.+)$/.exec(text);
+    if (!m) return null;
+    const opcode = (m[2] === '>') ? 'operator_gt' : (m[2] === '<') ? 'operator_lt' : 'operator_equals';
+    const id = mk(opcode, hostId);
+    const operand = v => {
+      const n = Number(v);
+      return Number.isFinite(n) ? [1, [4, String(n)]] : [1, [10, String(v)]];
+    };
+    blocks[id].inputs.OPERAND1 = operand(m[1]);
+    blocks[id].inputs.OPERAND2 = operand(m[3]);
+    return [2, id];
+  }
+
+  function touching(target, hostId) {
+    const id = mk('sensing_touchingobject', hostId);
+    blocks[id].inputs.TOUCHINGOBJECTMENU =
+      menu('sensing_touchingobjectmenu', 'TOUCHINGOBJECTMENU', target, id);
+    return id;
+  }
+
+  function statement(node, parentId) {
+    const t = node.type;
+    const id = (opcode, inputs) => {
+      const bid = mk(opcode, parentId);
+      if (inputs) Object.keys(inputs).forEach(k => { blocks[bid].inputs[k] = inputs[k](bid); });
+      return bid;
+    };
+    switch (t) {
+      case 'move': return id('motion_movesteps', { STEPS: b => slotIn(node, 0, 4, b) });
+      case 'turn': return id('motion_turnright', { DEGREES: b => slotIn(node, 0, 4, b) });
+      case 'point_dir': return id('motion_pointindirection', { DIRECTION: b => slotIn(node, 0, 8, b) });
+      case 'go_xy': return id('motion_gotoxy', {
+        X: b => slotIn(node, 0, 4, b),
+        Y: b => slotIn(node, 1, 4, b)
+      });
+      case 'bounce': return mk('motion_ifonedgebounce', parentId);
+      case 'go_random': return id('motion_gotoxy', {
+        X: b => {
+          const r = mk('operator_random', b);
+          blocks[r].inputs.FROM = [1, [4, '-210']];
+          blocks[r].inputs.TO = [1, [4, '210']];
+          return [3, r, [4, '0']];
+        },
+        Y: b => {
+          const r = mk('operator_random', b);
+          blocks[r].inputs.FROM = [1, [4, '-150']];
+          blocks[r].inputs.TO = [1, [4, '150']];
+          return [3, r, [4, '0']];
+        }
+      });
+      case 'say': return id('looks_say', { MESSAGE: b => slotIn(node, 0, 10, b) });
+      case 'size': return id('looks_setsizeto', { SIZE: b => slotIn(node, 0, 4, b) });
+      case 'hide': return mk('looks_hide', parentId);
+      case 'show': return mk('looks_show', parentId);
+      case 'change_bg': return mk('looks_nextbackdrop', parentId);
+      case 'next_costume': return mk('looks_nextcostume', parentId);
+      case 'switch_costume': {
+        const list = sprite.costumes || [];
+        const idx = findCostumeIndex(sprite, node.val);
+        const name = (list[idx] && list[idx].name) || 'disfraz1';
+        return id('looks_switchcostumeto', {
+          COSTUME: b => menu('looks_costume', 'COSTUME', name, b)
+        });
+      }
+      case 'meow':
+      case 'pop': {
+        const name = soundNameFor(t);
+        usedSounds.add(t);
+        return id('sound_play', { SOUND_MENU: b => menu('sound_sounds_menu', 'SOUND_MENU', name, b) });
+      }
+      case 'play_sound': {
+        const key = String(node.val === undefined ? '' : node.val).trim();
+        const name = soundNameFor(key);
+        if (!name) return null;
+        usedSounds.add(key);
+        return id('sound_play', { SOUND_MENU: b => menu('sound_sounds_menu', 'SOUND_MENU', name, b) });
+      }
+      case 'play_music': {
+        const key = String(node.val === undefined ? '' : node.val).trim();
+        const name = melodyNameFor(key);
+        if (!name) return null;
+        usedSounds.add('melody:' + key);
+        /* Scratch no repite un sonido solo: suena una vez. */
+        return id('sound_playuntildone', { SOUND_MENU: b => menu('sound_sounds_menu', 'SOUND_MENU', name, b) });
+      }
+      case 'stop_sounds': return mk('sound_stopallsounds', parentId);
+      case 'set_volume': return id('sound_setvolumeto', { VOLUME: b => slotIn(node, 0, 4, b) });
+      case 'change_volume': return id('sound_changevolumeby', { VOLUME: b => slotIn(node, 0, 4, b) });
+      case 'wait': return id('control_wait', { DURATION: b => slotIn(node, 0, 5, b) });
+      case 'repeat': {
+        const bid = mk('control_repeat', parentId);
+        blocks[bid].inputs.TIMES = slotIn(node, 0, 6, bid);
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'forever': {
+        const bid = mk('control_forever', parentId);
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'if_edge': {
+        const bid = mk('control_if', parentId);
+        blocks[bid].inputs.CONDITION = [2, touching('_edge_', bid)];
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'if_touch': {
+        const others = sprites.filter(s => s !== sprite);
+        if (!others.length) return null;
+        const bid = mk('control_if', parentId);
+        blocks[bid].inputs.CONDITION = [2, touching(others[0].name, bid)];
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'if_score': {
+        const bid = mk('control_if', parentId);
+        const gt = mk('operator_gt', bid);
+        blocks[gt].inputs.OPERAND1 = [3, varBlock('puntaje', gt), [10, '']];
+        blocks[gt].inputs.OPERAND2 = slotIn(node, 0, 4, gt);
+        blocks[bid].inputs.CONDITION = [2, gt];
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'if_cond': {
+        const bid = mk('control_if', parentId);
+        const cond = conditionIn(node, bid);
+        if (!cond) return null;
+        blocks[bid].inputs.CONDITION = cond;
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'if_else': {
+        const bid = mk('control_if_else', parentId);
+        const cond = conditionIn(node, bid);
+        if (!cond) return null;
+        blocks[bid].inputs.CONDITION = cond;
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        const sub2 = buildStack(node.elseBody || [], bid);
+        if (sub2) blocks[bid].inputs.SUBSTACK2 = [2, sub2];
+        return bid;
+      }
+      case 'timer_reset': return mk('sensing_resettimer', parentId);
+      case 'score_add': {
+        const bid = mk('data_changevariableby', parentId);
+        blocks[bid].fields.VARIABLE = ['puntaje', sb3VarId('puntaje')];
+        blocks[bid].inputs.VALUE = slotIn(node, 0, 4, bid);
+        usedVars.add('puntaje');
+        return bid;
+      }
+      case 'score_set': {
+        const bid = mk('data_setvariableto', parentId);
+        blocks[bid].fields.VARIABLE = ['puntaje', sb3VarId('puntaje')];
+        blocks[bid].inputs.VALUE = slotIn(node, 0, 4, bid);
+        usedVars.add('puntaje');
+        return bid;
+      }
+      case 'score_reset': {
+        const bid = mk('data_setvariableto', parentId);
+        blocks[bid].fields.VARIABLE = ['puntaje', sb3VarId('puntaje')];
+        blocks[bid].inputs.VALUE = [1, [4, '0']];
+        usedVars.add('puntaje');
+        return bid;
+      }
+      case 'set_var':
+      case 'add_var':
+      case 'sub_var': {
+        const txt = String(node.val === undefined ? '' : node.val);
+        const eq = txt.indexOf('=');
+        if (eq < 0) return null;
+        const name = txt.slice(0, eq).trim();
+        if (!name) return null;
+        const raw = txt.slice(eq + 1).trim();
+        usedVars.add(name);
+        if (t === 'set_var') {
+          const bid = mk('data_setvariableto', parentId);
+          blocks[bid].fields.VARIABLE = [name, sb3VarId(name)];
+          blocks[bid].inputs.VALUE = [1, [10, raw]];
+          return bid;
+        }
+        const bid = mk('data_changevariableby', parentId);
+        blocks[bid].fields.VARIABLE = [name, sb3VarId(name)];
+        const amount = num(raw, 0);
+        blocks[bid].inputs.VALUE = [1, [4, String(t === 'sub_var' ? -amount : amount)]];
+        return bid;
+      }
+      case 'op_random': {
+        const parts = String(node.val === undefined ? '1,10' : node.val).split(',');
+        usedVars.add('res');
+        const bid = mk('data_setvariableto', parentId);
+        blocks[bid].fields.VARIABLE = ['res', sb3VarId('res')];
+        const r = mk('operator_random', bid);
+        blocks[r].inputs.FROM = [1, [4, String(Math.floor(num(parts[0], 1)))]];
+        blocks[r].inputs.TO = [1, [4, String(Math.floor(num(parts[1], 10)))]];
+        blocks[bid].inputs.VALUE = [3, r, [4, '0']];
+        return bid;
+      }
+      case 'send_msg': {
+        const bid = mk('event_broadcast', parentId);
+        blocks[bid].inputs.BROADCAST_INPUT = [1, [11, 'mensaje', SB3_MSG_ID]];
+        return bid;
+      }
+      default: return null;
+    }
+  }
+
+  function hatBlock(node) {
+    if (node.type === 'when_flag') return mk('event_whenflagclicked', null);
+    if (node.type === 'when_tap') return mk('event_whenstageclicked', null);
+    if (node.type === 'when_key') {
+      const bid = mk('event_whenkeypressed', null);
+      blocks[bid].fields.KEY_OPTION = [sb3KeyName(node.val), null];
+      return bid;
+    }
+    if (node.type === 'when_msg') {
+      const bid = mk('event_whenbroadcastreceived', null);
+      blocks[bid].fields.BROADCAST_OPTION = ['mensaje', SB3_MSG_ID];
+      return bid;
+    }
+    return null;
+  }
+
+  function buildStack(nodes, parentId) {
+    let first = null;
+    let prev = null;
+    (nodes || []).forEach(node => {
+      const id = statement(node, prev || parentId);
+      if (!id) { note(node); return; }
+      if (prev) {
+        blocks[prev].next = id;
+        blocks[id].parent = prev;
+      } else {
+        first = id;
+      }
+      prev = id;
+    });
+    return first;
+  }
+
+  /* Recorremos el código como lo hace el motor: un sombrero abre un guion y
+     lo que sigue le pertenece hasta el próximo sombrero. */
+  let prev = null;
+  let seenHat = false;
+  (sprite.code || []).forEach(node => {
+    const def = BYID[node.type];
+    if (def && def.hat) {
+      seenHat = true;
+      prev = hatBlock(node);
+      if (prev) topLevel(prev);
+      else note(node);
+      return;
+    }
+    const id = statement(node, prev);
+    if (!id) { note(node); return; }
+    if (prev) {
+      blocks[prev].next = id;
+      blocks[id].parent = prev;
+    } else if (!seenHat) {
+      /* Bloques sueltos al principio: el motor los corre con la bandera. */
+      const hat = mk('event_whenflagclicked', null);
+      topLevel(hat);
+      blocks[hat].next = id;
+      blocks[id].parent = hat;
+    } else {
+      /* Quedaron sueltos porque su sombrero no tiene equivalente: flotan. */
+      topLevel(id);
+    }
+    prev = id;
+  });
+
+  return { blocks: blocks, dropped: dropped, usedSounds: usedSounds, usedVars: usedVars };
+}
+
+/* Ids de variables y del mensaje: estables dentro de un mismo export. */
+const SB3_MSG_ID = 'bc_mensaje';
+let sb3VarIds = null;
+function sb3VarId(name) {
+  if (!sb3VarIds) sb3VarIds = new Map();
+  if (!sb3VarIds.has(name)) sb3VarIds.set(name, 'var_' + (sb3VarIds.size + 1));
+  return sb3VarIds.get(name);
+}
+
+/* Arma project.json + los archivos del ZIP. Devuelve también la lista de lo
+   que quedó afuera, para poder avisarlo. */
+async function sb3Build() {
+  sb3VarIds = null;
+  const files = [];
+  const seen = new Set();
+  const dropped = [];
+  const allVars = new Map();
+  const soundsNeeded = new Set();
+  let assets = 0;
+
+  function addAsset(bytes, ext) {
+    const md5 = md5hex(bytes);
+    const name = md5 + '.' + ext;
+    if (!seen.has(name)) { seen.add(name); files.push({ name: name, bytes: bytes }); assets++; }
+    return { assetId: md5, md5ext: name, dataFormat: ext };
+  }
+
+  /* Fondo del escenario: el degradado propio o la imagen que subió la persona. */
+  let backdrop;
+  if (stageBgImg) {
+    try {
+      const png = await imagePng(stageBgImg, 960);
+      backdrop = Object.assign({ name: 'fondo', rotationCenterX: 240, rotationCenterY: 180 }, addAsset(png.bytes, 'png'));
+    } catch (e) { backdrop = null; }
+  }
+  if (!backdrop) {
+    const pair = BG[clamp(Math.floor(num(stageBg, 0)), 0, BG.length - 1)] || BG[0];
+    backdrop = Object.assign({ name: 'fondo', rotationCenterX: 240, rotationCenterY: 180 },
+      addAsset(backdropPng(pair), 'png'));
+  }
+
+  const targets = [];
+  const stageVars = {};
+
+  /* Primero los personajes: así se sabe qué variables y sonidos hacen falta. */
+  const spriteTargets = [];
+  for (let i = 0; i < sprites.length; i++) {
+    const s = sprites[i];
+    const built = sb3SpriteBlocks(s, i);
+    built.dropped.forEach(d => { if (dropped.indexOf(d) < 0) dropped.push(d); });
+    built.usedVars.forEach(v => allVars.set(v, true));
+    built.usedSounds.forEach(k => soundsNeeded.add(k));
+
+    const costumes = [];
+    const list = (s.costumes && s.costumes.length) ? s.costumes : [{ kind: 'emoji', src: '🐱', name: 'disfraz1' }];
+    for (let j = 0; j < list.length; j++) {
+      const c = list[j];
+      const cname = String(c.name || ('disfraz' + (j + 1)));
+      let png = null;
+      if (c.kind === 'img' && c.src) {
+        try { png = await imagePng(c.src, 480); } catch (e) { png = null; }
+      }
+      if (!png) {
+        const bytes = emojiPng(c.kind === 'emoji' ? c.src : '🐱', 128);
+        png = { bytes: bytes, width: 128, height: 128 };
+      }
+      costumes.push(Object.assign({
+        name: cname,
+        rotationCenterX: Math.round(png.width / 2),
+        rotationCenterY: Math.round(png.height / 2)
+      }, addAsset(png.bytes, 'png')));
+    }
+
+    const sounds = [];
+    built.usedSounds.forEach(key => {
+      const isMelody = key.indexOf('melody:') === 0;
+      const id = isMelody ? key.slice(7) : key;
+      const def = isMelody ? MELODYMAP[id] : SOUNDMAP[id];
+      if (!def) return;
+      const wav = wavFromSteps(def.steps);
+      const nm = def.name[lang] || def.name.es;
+      if (sounds.some(x => x.name === nm)) return;
+      sounds.push(Object.assign({
+        name: nm, rate: 22050, sampleCount: Math.round((wav.length - 44) / 2)
+      }, addAsset(wav, 'wav')));
+    });
+
+    spriteTargets.push({
+      isStage: false,
+      name: String(s.name || ('Personaje' + (i + 1))),
+      variables: {},
+      lists: {},
+      broadcasts: {},
+      blocks: built.blocks,
+      comments: {},
+      currentCostume: clamp(Math.floor(num(s.costumeIndex, 0)), 0, costumes.length - 1),
+      costumes: costumes,
+      sounds: sounds,
+      volume: clamp(Math.round(num(volume, 100)), 0, 100),
+      layerOrder: i + 1,
+      visible: s.visible !== false,
+      x: Math.round(num(s.x, 0) * 10) / 10,
+      y: Math.round(num(s.y, 0) * 10) / 10,
+      size: clamp(Math.round(num(s.size, 100)), 5, 500),
+      direction: Math.round(num(s.dir, 90) * 10) / 10,
+      draggable: false,
+      rotationStyle: normRot(s.rot) === 'leftright' ? 'left-right'
+        : (normRot(s.rot) === 'none' ? "don't rotate" : 'all around'),
+      _dropped: built.dropped
+    });
+  }
+
+  /* Variables del proyecto (las que ya existen) más las que usan los bloques. */
+  Object.keys(variables || {}).forEach(k => allVars.set(k, true));
+  allVars.forEach((_, name) => {
+    stageVars[sb3VarId(name)] = [name, Number(variables && variables[name]) || 0];
+  });
+
+  /* Comentario con lo que no se pudo traducir, colgado del primer bloque de
+     cada personaje: así se ve en Scratch sin abrir nada más. */
+  spriteTargets.forEach(t => {
+    if (!t._dropped.length) { delete t._dropped; return; }
+    const first = Object.keys(t.blocks).find(id => t.blocks[id].topLevel);
+    if (first) {
+      const cid = 'c_' + first;
+      t.comments[cid] = {
+        blockId: first, x: 60, y: 60, width: 320, height: 160, minimized: false,
+        text: (UI[lang].sb3Comment || 'Sin equivalente en Scratch') + ':\n' + t._dropped.join('\n')
+      };
+    }
+    dropped.push.apply(dropped, t._dropped.filter(d => dropped.indexOf(d) < 0));
+    delete t._dropped;
+  });
+
+  const stage = {
+    isStage: true,
+    name: 'Stage',
+    variables: stageVars,
+    lists: {},
+    broadcasts: { [SB3_MSG_ID]: 'mensaje' },
+    blocks: {},
+    comments: {},
+    currentCostume: 0,
+    costumes: [backdrop],
+    sounds: [],
+    volume: 100,
+    layerOrder: 0,
+    tempo: 60,
+    videoTransparency: 50,
+    videoState: 'off',
+    textToSpeechLanguage: null
+  };
+
+  const project = {
+    targets: [stage].concat(spriteTargets),
+    monitors: [],
+    extensions: [],
+    meta: { semver: '3.0.0', vm: '0.2.0', agent: 'ScrachMo' }
+  };
+
+  const json = new TextEncoder().encode(JSON.stringify(project));
+  files.unshift({ name: 'project.json', bytes: json });
+  return { files: files, project: project, dropped: dropped, assets: assets };
+}
+
+async function exportSb3() {
+  const t = UI[lang];
+  const btn = $('#sb3Btn');
+  if (btn) btn.disabled = true;
+  try {
+    const built = await sb3Build();
+    const zip = zipStore(built.files);
+    const name = (activeProject() && activeProject().name) || t.untitledProject || 'proyecto';
+    const clean = String(name).replace(/[^a-z0-9_\-áéíóúñü ]/gi, '').trim() || 'proyecto';
+    const blob = new Blob([zip], { type: 'application/zip' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = clean + '.sb3';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    if (built.dropped.length) {
+      toast(t.sb3Done + ' · ' + built.dropped.length + ' ' + t.sb3Dropped);
+    } else {
+      toast(t.sb3Done);
+    }
+  } catch (e) {
+    toast(t.sb3Fail || t.badFile);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function exportProject() {
   /* Cancelar ahora cancela de verdad: antes prompt() devolvía null y el
      archivo se exportaba igual con el nombre por defecto. */
@@ -4308,6 +5206,8 @@ function bindEvents() {
   $('#saveBtn').addEventListener('click', () => { saveProject(); toast(UI[lang].saved); });
   $('#shareBtn').addEventListener('click', shareProject);
   $('#exportBtn').addEventListener('click', exportProject);
+  const sb3Btn = $('#sb3Btn');
+  if (sb3Btn) sb3Btn.addEventListener('click', exportSb3);
   $('#importBtn').addEventListener('click', importProject);
   $('#multiBtn').addEventListener('click', toggleMulti);
   $('#clearBtn').addEventListener('click', clearProject);

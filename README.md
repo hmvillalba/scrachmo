@@ -164,7 +164,7 @@ La app que se abre en el navegador son esos tres archivos más el manifest, el s
 
 ## Verificación
 
-Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **772 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
+Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite vive **dentro del repo** (`tests/`) y corre también en CI. Son **772 comprobaciones por idioma, 1544 en total**: cada escenario se corre **dos veces, en español y en inglés**, y las dos tienen que dar 0 fallos:
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
@@ -199,14 +199,18 @@ node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
-node tests/run.js mi-corrida     # 16 escenarios en Chrome headless
+node tests/run.js mi-corrida     # 16 escenarios × 2 idiomas en Chrome headless
 ```
 
-`tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
+`tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y por idioma, y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
+
+**Por qué dos idiomas y por qué `--lang`**: el idioma inicial de la app sale de `navigator.language`. Sin fijarlo, Chrome usa el del sistema —español en una máquina, inglés en el runner de Linux— y una prueba que comparaba texto escrito a mano pasaba en un lado y fallaba en el otro. Ya pasó una vez. Ahora `tests/run.js` lanza Chrome con `--lang` explícito (`es-419` y `en-US`) y **verifica en el DOM que el idioma se haya aplicado de verdad**: si el `<html lang>` no coincide con el pedido, cuenta un error y lo dice, para que dos corridas idénticas nunca se confundan con dos idiomas. Se puede acotar con `SCRACHMO_LANGS=es node tests/run.js`.
 
 Además: los 4 idiomas tienen las mismas 190 claves de texto (82 de `UI_EXTRA`) y los 48 bloques activos más 11 reporteros; los 75 `data-t` y 12 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()`, la geometría de los sensores (`spriteRadius()`, `touchingEdge()`, `touchingOther()`, `bounceSprite()`, el cronómetro), las piezas del exportador (`exportSb3()`, `sb3Build()`, `zipStore()`, `md5hex()`, `crc32()`, `wavFromSteps()`), el modal `openAbout()`/`closeAbout()`/`bindAbout()` con su botón, y el tope `MAX_CODE_DEPTH`; que el área de código **aísle su contexto de apilamiento** (`isolation:isolate`), porque sus bloques usan `z-index` desde 6000 y sin eso se dibujaban encima de cualquier modal; y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app, el modal de proyectos, los cuatro bloques de sensores con el cronómetro en el selector `ƒ`, los bloques de sonido con sus selectores de sonido y melodía y el modal *Acerca de* también se revisaron en capturas reales, a 500 px y en pantalla ancha.
 
 Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve DOM ni capturas por línea de comando); se usó Chrome con `--headless=new --dump-dom`. En el decodificador de imágenes de Chrome headless se detectó un cuelgue intermitente de `createImageBitmap`, por lo que el motor ahora cae a `<img>` si tarda más de 3 segundos.
+
+**Lo que sí cambia entre una máquina y el runner**, para que nadie se sorprenda si algo falla sólo en CI: la **versión de Chrome** (el workflow imprime la suya en el paso *Localizar Chrome*), el **sistema operativo** (Linux en CI, Windows o macOS en casa) y las **fuentes**, sobre todo las de emoji: CI instala `fonts-noto-color-emoji` y `fonts-dejavu-core`, Windows usa Segoe UI Emoji. Eso hace que el mismo emoji se dibuje distinto, así que ninguna prueba compara los **bytes** de un PNG: se comprueban la firma, el tamaño y que el archivo exista. Los WAV se sintetizan con semilla fija y salen idénticos byte a byte **dentro de un mismo navegador** (que es lo que exige la prueba de determinismo), pero tampoco se compara su hash entre máquinas: `Math.sin` no está obligado a dar el mismo bit en versiones distintas de V8. El idioma, que era la diferencia que más dolía, ya está fijado.
 
 ## Limitaciones conocidas
 

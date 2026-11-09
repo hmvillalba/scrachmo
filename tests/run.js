@@ -2,6 +2,12 @@
    Uso: node tests/run.js [etiqueta] [solo-este-harness]
    La ruta de Chrome se puede forzar con CHROME_PATH.
    El directorio de las páginas se puede fijar con SCRACHMO_TMP.
+   Los idiomas se pueden fijar con SCRACHMO_LANGS (por defecto 'es,en').
+
+   IMPORTANTE: la suite se corre una vez por idioma, con `--lang` explícito.
+   Sin eso el idioma lo decidía el sistema —español en una máquina, inglés en
+   el runner de CI— y una prueba que comparaba texto escrito a mano pasaba en
+   un lado y fallaba en el otro. Ahora los dos entornos ven lo mismo.
 
    Si Chrome no imprime el DOM se reintenta con el headless clásico: según la
    versión, `--headless=new` puede no estar soportado y entonces `--dump-dom`
@@ -14,6 +20,14 @@ const { build } = require('./build');
 
 const tag = process.argv[2] || 'run';
 const only = process.argv[3] || '';
+
+/* Códigos de Chrome para cada idioma de la app. `--lang` es el que manda en
+   navigator.language; LANG/LC_ALL acompañan para que la comparación de
+   cadenas y los formatos no dependan del sistema. */
+const LANGS = [
+  { id: 'es', chrome: 'es-419', env: 'es_419.UTF-8' },
+  { id: 'en', chrome: 'en-US', env: 'en_US.UTF-8' }
+].filter(l => (process.env.SCRACHMO_LANGS || 'es,en').split(',').indexOf(l.id) > -1);
 
 function findChrome() {
   const candidates = [
@@ -43,14 +57,16 @@ const selected = targets.filter(t => !only || t[0] === only);
    artefactos: son cientos de archivos que no sirven para diagnosticar. */
 const PROFILES = fs.mkdtempSync(path.join(os.tmpdir(), 'scrachmo-profile-'));
 
-function launch(url, headless, profile) {
+function launch(url, headless, profile, L) {
   const args = [
     headless, '--disable-gpu', '--no-sandbox', '--no-first-run',
     '--disable-dev-shm-usage', '--disable-extensions', '--disable-background-networking',
+    '--lang=' + L.chrome,
     '--user-data-dir=' + profile,
     '--virtual-time-budget=25000', '--dump-dom', url
   ];
-  const r = spawnSync(CHROME, args, { encoding: 'utf8', maxBuffer: 40 * 1024 * 1024, timeout: 180000 });
+  const env = Object.assign({}, process.env, { LANG: L.env, LC_ALL: L.env, LANGUAGE: L.chrome });
+  const r = spawnSync(CHROME, args, { encoding: 'utf8', maxBuffer: 40 * 1024 * 1024, timeout: 180000, env: env });
   const dom = r.stdout || '';
   const m = dom.match(/<pre id="TESTRESULT">([\s\S]*?)<\/pre>/);
   return {
@@ -64,40 +80,64 @@ function launch(url, headless, profile) {
   };
 }
 
-let totalPass = 0, totalFail = 0, totalErr = 0;
-for (const [name, url] of selected) {
-  let r = launch(url, '--headless=new', path.join(PROFILES, tag + '-' + name));
-  if (!r.found) {
-    /* Reintento con el headless clásico, que sigue siendo el único válido en
-       algunas versiones de Chrome empaquetadas en Linux. */
-    r = launch(url, '--headless', path.join(PROFILES, tag + '-' + name + '-old'));
-  }
-  fs.writeFileSync(path.join(T, 'dom-' + tag + '-' + name + '.html'), r.dom);
-  fs.writeFileSync(path.join(T, 'err-' + tag + '-' + name + '.log'),
-    'chrome=' + CHROME + '\nflags=' + r.headless +
-    '\nstatus=' + r.status + '\nerror=' + r.error +
-    '\ndomBytes=' + r.dom.length + '\n--- stderr ---\n' + r.stderr.slice(-2000) + '\n');
+let grandPass = 0, grandFail = 0, grandErr = 0;
 
-  const pass = (r.body.match(/PASS /g) || []).length;
-  const fail = (r.body.match(/FAIL /g) || []).length;
-  const err = (r.body.match(/ERROR /g) || []).length;
-  totalPass += pass; totalFail += fail; totalErr += err;
-  console.log(name.padEnd(9) + ' PASS=' + String(pass).padStart(3) +
-    ' FAIL=' + String(fail).padStart(2) + ' ERROR=' + String(err).padStart(2) +
-    (r.found ? '' : '  << SIN RESULTADO >>'));
-  if (fail || err || !r.found) {
-    const bad = r.body.split('\n').filter(l => /^(FAIL|ERROR)/.test(l)).slice(0, 25);
-    bad.forEach(l => console.log('   ' + l));
-    /* Línea sin sangría y con el harness delante: es la que el CI convierte
-       en anotación del check, así el detalle se lee sin bajar el log. */
-    bad.forEach(l => console.log('FALLO ' + name + ' :: ' + l.replace(/^(FAIL|ERROR)\s*/, '')));
+for (const L of LANGS) {
+  console.log('--- idioma: ' + L.id + ' (' + L.chrome + ') ---');
+  let langPass = 0, langFail = 0, langErr = 0;
+
+  for (const [name, url] of selected) {
+    const label = name + ' [' + L.id + ']';
+    const base = tag + '-' + L.id + '-' + name;
+    let r = launch(url, '--headless=new', path.join(PROFILES, base), L);
     if (!r.found) {
-      console.log('   chrome=' + CHROME + ' flags=' + r.headless +
-        ' status=' + r.status + ' error=' + r.error + ' dom=' + r.dom.length + 'B');
-      console.log('   ' + r.stderr.slice(-400).replace(/\n/g, ' | '));
+      /* Reintento con el headless clásico, que sigue siendo el único válido en
+         algunas versiones de Chrome empaquetadas en Linux. */
+      r = launch(url, '--headless', path.join(PROFILES, base + '-old'), L);
+    }
+    fs.writeFileSync(path.join(T, 'dom-' + base + '.html'), r.dom);
+    fs.writeFileSync(path.join(T, 'err-' + base + '.log'),
+      'chrome=' + CHROME + '\nflags=' + r.headless + '\nlang=' + L.chrome +
+      '\nstatus=' + r.status + '\nerror=' + r.error +
+      '\ndomBytes=' + r.dom.length + '\n--- stderr ---\n' + r.stderr.slice(-2000) + '\n');
+
+    const pass = (r.body.match(/PASS /g) || []).length;
+    const fail = (r.body.match(/FAIL /g) || []).length;
+    const err = (r.body.match(/ERROR /g) || []).length;
+    /* La app escribe <html lang="xx"> en render(). Si el idioma no cambió, el
+       `--lang` no se aplicó (o Chrome no tiene ese locale) y estaríamos
+       corriendo dos veces el mismo idioma creyendo que cubrimos dos. */
+    const langDom = (r.dom.match(/<html[^>]*\blang="([^"]*)"/) || [])[1];
+    const langOk = !langDom || langDom.indexOf(L.id) === 0;
+    const extra = langOk ? err : err + 1;
+    langPass += pass; langFail += fail; langErr += extra;
+    console.log(label.padEnd(16) + ' PASS=' + String(pass).padStart(3) +
+      ' FAIL=' + String(fail).padStart(2) + ' ERROR=' + String(extra).padStart(2) +
+      (r.found ? '' : '  << SIN RESULTADO >>') +
+      (langOk ? '' : '  << IDIOMA NO APLICADO: ' + langDom + ' >>'));
+    if (fail || extra || !r.found) {
+      const bad = r.body.split('\n').filter(l => /^(FAIL|ERROR)/.test(l)).slice(0, 25);
+      bad.forEach(l => console.log('   ' + l));
+      /* Línea sin sangría y con el harness y el idioma delante: es la que el
+         CI convierte en anotación, así el detalle se lee sin bajar el log. */
+      bad.forEach(l => console.log('FALLO ' + label + ' :: ' + l.replace(/^(FAIL|ERROR)\s*/, '')));
+      if (!langOk) {
+        console.log('FALLO ' + label + ' :: el DOM salió en «' + langDom +
+          '» y se pidió «' + L.id + '» (¿Chrome sin ese locale?)');
+      }
+      if (!r.found) {
+        console.log('   chrome=' + CHROME + ' flags=' + r.headless + ' lang=' + L.chrome +
+          ' status=' + r.status + ' error=' + r.error + ' dom=' + r.dom.length + 'B');
+        console.log('   ' + r.stderr.slice(-400).replace(/\n/g, ' | '));
+      }
     }
   }
+
+  console.log('SUBTOTAL ' + L.id + ' PASS=' + langPass + ' FAIL=' + langFail + ' ERROR=' + langErr);
+  grandPass += langPass; grandFail += langFail; grandErr += langErr;
 }
-console.log('TOTAL ' + tag + ' PASS=' + totalPass + ' FAIL=' + totalFail + ' ERROR=' + totalErr);
+
+console.log('TOTAL ' + tag + ' PASS=' + grandPass + ' FAIL=' + grandFail + ' ERROR=' + grandErr +
+  '  (' + LANGS.length + ' idioma' + (LANGS.length === 1 ? '' : 's') + ' x ' + selected.length + ' escenarios)');
 console.log('Artefactos en ' + T);
-process.exit(totalFail + totalErr === 0 && selected.length ? 0 : 1);
+process.exit(grandFail + grandErr === 0 && selected.length ? 0 : 1);

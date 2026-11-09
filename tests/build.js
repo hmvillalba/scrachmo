@@ -14,7 +14,16 @@ const HARNESS = [
 ];
 
 function build() {
-  const T = fs.mkdtempSync(path.join(os.tmpdir(), 'scrachmo-smoke-'));
+  /* En CI conviene un directorio fijo dentro del workspace para poder subir
+     los artefactos; en local, uno nuevo por corrida en el temporal. */
+  const fixed = process.env.SCRACHMO_TMP;
+  let T;
+  if (fixed) {
+    T = path.resolve(fixed);
+    fs.mkdirSync(T, { recursive: true });
+  } else {
+    T = fs.mkdtempSync(path.join(os.tmpdir(), 'scrachmo-smoke-'));
+  }
   for (const f of ['data.js', 'engine.js']) {
     fs.copyFileSync(path.join(SRC, f), path.join(T, f));
   }

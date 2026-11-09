@@ -6,5 +6,8 @@ app.js
 preview-*
 *.zip
 
+# Artefactos de la suite en CI (DOM y logs de cada corrida)
+tests-out/
+
 # Notas internas de la herramienta (no forman parte de la app)
 .workbuddy-ai/

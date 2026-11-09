@@ -10,7 +10,7 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 
 ### Bloques como en Scratch
 
-- 49 bloques en 9 categorías con los colores clásicos de Scratch: movimiento, apariencia, sonido, eventos, control, sensores, operadores, variables y multijugador.
+- 48 bloques en 9 categorías con los colores clásicos de Scratch: movimiento, apariencia, sonido, eventos, control, sensores, operadores, variables y multijugador.
 - Bloques sombrero (bandera verde, toque, tecla, agitar el celu, recibir mensaje, puntaje) y bloques C: `repetir`, `por siempre` y condicionales con `si... si no`.
 - Anidado real: arrastrá bloques adentro de un bloque C para envolverlos, con guardas que evitan anidar un bloque dentro de sí mismo.
 - **Varios guiones por sprite**: cada sombrero inicia un guion independiente y sólo se ejecutan los que corresponden al evento ocurrido. Un mismo sprite puede reaccionar a la bandera, a una tecla y a un toque a la vez.
@@ -122,7 +122,7 @@ También podés abrir `index.html` directo con doble clic. Para probarlo desde e
 | --- | --- |
 | `index.html` | Toda la interfaz: layout, estilos, íconos SVG y paneles. |
 | `engine.js` | El motor: render de bloques, drag & drop táctil, ejecución, sprites, variables y eventos. |
-| `data.js` | Catálogo de bloques (49 enunciados + 11 reporteros), categorías y textos de la interfaz (4 idiomas). |
+| `data.js` | Catálogo de bloques (48 enunciados + 11 reporteros), categorías y textos de la interfaz (4 idiomas). |
 | `manifest.webmanifest` | Ficha de instalación: nombre, colores, `display: standalone` e íconos. |
 | `sw.js` | Service worker: guarda la app para que abra sin internet y sirve el shell a los links `?p=`. |
 | `icons/` | Ícono de la app en SVG y PNG (192, 512, *maskable* y *apple-touch*). |
@@ -140,7 +140,7 @@ Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless.
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
-| Estructura | 30 | Catálogo de 143 personajes, 49 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
+| Estructura | 30 | Catálogo de 143 personajes, 48 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
 | Motor y eventos | 25 | Buscador, guiones por sombrero, despacho de teclado/toque/bandera, aislamiento de hilos, no guardar durante la ejecución, persistencia de puntaje y multijugador, sombrero de puntaje sin re-disparos. |
 | Disfraces y links | 52 | Migración de proyectos viejos, rechazo de SVG/URLs, tira de miniaturas, selector por nombre, serialización, ejecución de los dos bloques nuevos, estado final del disfraz y «Volver al inicio», gzip/base64url, links viejos y fallback. |
 | Importación real | 27 | `File` → canvas → WebP, filtro de tipos, nombres únicos, nuevo personaje desde imágenes, borrado, límite de 12, aviso de espacio lleno. |
@@ -174,7 +174,7 @@ node tests/run.js mi-corrida     # 14 escenarios en Chrome headless
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
 
-Además: los 4 idiomas tienen las mismas 174 claves de texto (72 de `UI_EXTRA`) y los 49 bloques activos más 11 reporteros; los 64 `data-t` y 11 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()`, la geometría de los sensores (`spriteRadius()`, `touchingEdge()`, `touchingOther()`, `bounceSprite()`, el cronómetro) y el tope `MAX_CODE_DEPTH`, y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app, el modal de proyectos, los cuatro bloques de sensores con el cronómetro en el selector `ƒ` y los bloques de sonido con sus selectores de sonido y melodía también se revisaron en capturas reales a 500 px de ancho.
+Además: los 4 idiomas tienen las mismas 174 claves de texto (72 de `UI_EXTRA`) y los 48 bloques activos más 11 reporteros; los 64 `data-t` y 11 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()`, la geometría de los sensores (`spriteRadius()`, `touchingEdge()`, `touchingOther()`, `bounceSprite()`, el cronómetro) y el tope `MAX_CODE_DEPTH`, y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app, el modal de proyectos, los cuatro bloques de sensores con el cronómetro en el selector `ƒ` y los bloques de sonido con sus selectores de sonido y melodía también se revisaron en capturas reales a 500 px de ancho.
 
 Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve DOM ni capturas por línea de comando); se usó Chrome con `--headless=new --dump-dom`. En el decodificador de imágenes de Chrome headless se detectó un cuelgue intermitente de `createImageBitmap`, por lo que el motor ahora cae a `<img>` si tarda más de 3 segundos.
 
@@ -182,7 +182,7 @@ Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve
 
 Mejor honesto que vendedor:
 
-- **Exportación a Scratch (`.sb3`) — pendiente, no implementada**: los formatos de ScrachMo (`.scmo` y `?p=`) son JSON propio y no se abren en Scratch 3. Exportar de verdad no es un «guardar como»: hay que generar un ZIP con `project.json`, nombrar los recursos por su MD5, convertir emojis e imágenes a disfraces `svg`/`bitmap` y mapear los 49 bloques a opcodes de Scratch (varios, como los de multijugador, el puntaje o el agitado del celu, no tienen equivalente). Queda anotado en la lista de pendientes, con ese costo a la vista.
+- **Exportación a Scratch (`.sb3`) — pendiente, no implementada**: los formatos de ScrachMo (`.scmo` y `?p=`) son JSON propio y no se abren en Scratch 3. Exportar de verdad no es un «guardar como»: hay que generar un ZIP con `project.json`, nombrar los recursos por su MD5, convertir emojis e imágenes a disfraces `svg`/`bitmap` y mapear los 48 bloques a opcodes de Scratch (varios, como los de multijugador, el puntaje o el agitado del celu, no tienen equivalente). Queda anotado en la lista de pendientes, con ese costo a la vista.
 - **Los choques no son pixel a pixel**: cada personaje es un círculo de radio 26 al 100 % de tamaño, escalado por su tamaño. Es rápido y estable, pero un personaje muy alargado choca antes o después de lo que sugiere el dibujo, y no hay detección de color ni de «tocando el puntero».
 - **El cronómetro vive en la sesión**: cuenta desde que abriste el proyecto (o desde el último `reiniciar cronómetro`), no se guarda en el `.scmo`, no se reinicia con *Ejecutar* y no se detiene con *Detener*. Si el juego necesita un tiempo, reinicialo al principio del guion.
 - **No se pueden importar sonidos ni grabar con el micrófono**: el catálogo es cerrado (8 sonidos y 3 melodías sintetizadas) y no hay editor de audio. Agregar sonidos propios implicaría archivos o grabación, con su costo en el peso del proyecto y en la caché de la PWA.

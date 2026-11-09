@@ -323,11 +323,6 @@ const BLOCKS = [
     d: L('Teletransporta el personaje a un punto al azar.', 'Teleports the character to a random spot.', 'Teletransporta o personagem para um ponto aleatório.', 'Téléporte le personnage à un endroit aléatoire.')
   },
   {
-    id: 'bounce', cat: 'motion', icon: 'bounce',
-    n: L('Rebotar', 'Bounce', 'Quicar', 'Rebondir'),
-    d: L('Invierte el movimiento al chocar con el borde.', 'Reverses direction when hitting the edge.', 'Inverte o movimento ao bater na borda.', 'Inverse le mouvement au bord.')
-  },
-  {
     id: 'say', cat: 'looks', icon: 'speech', def: 'Hola!', w: 96,
     n: L('Decir {v}', 'Say {v}', 'Dizer {v}', 'Dire {v}'),
     d: L('Muestra un globo de diálogo.', 'Shows a speech bubble.', 'Mostra um balão de fala.', 'Affiche une bulle de dialogue.')

@@ -9,7 +9,7 @@ const ctx = { console: console };
 vm.createContext(ctx);
 vm.runInContext(
   fs.readFileSync(path.join(SRC, 'data.js'), 'utf8') +
-  '\n;this.UIX = UI; this.EX = UI_EXTRA; this.PB = PALETTE_BLOCKS;', ctx);
+  '\n;this.UIX = UI; this.EX = UI_EXTRA; this.PB = PALETTE_BLOCKS; this.ALLB = BLOCKS;', ctx);
 
 const langs = ['es', 'en', 'pt', 'fr'];
 let ok = true;
@@ -77,6 +77,20 @@ if (!/function\s+stopAllSounds\s*\(/.test(engine)) { ok = false; console.log('FA
 if (!/function\s+volumeGain\s*\(/.test(engine)) { ok = false; console.log('FAIL falta volumeGain()'); }
 if (!/function\s+stopCode\s*\([\s\S]{0,500}?stopAllSounds\(\)/.test(engine)) {
   ok = false; console.log('FAIL stopCode() no corta los sonidos');
+}
+
+/* Ids de bloque únicos: un id repetido no rompe nada, pero `BYID` se queda
+   con el último y la paleta muestra el bloque dos veces. Pasó con `rebotar`. */
+const idsBloque = ctx.ALLB.map(b => b.id);
+const idsRepetidos = idsBloque.filter((v, i, a) => a.indexOf(v) !== i);
+if (idsRepetidos.length) {
+  ok = false; console.log('FAIL ids de bloque repetidos: ' + idsRepetidos.join(', '));
+}
+/* Y la paleta no puede tener dos entradas con el mismo id. */
+const palIds = ctx.PB.map(b => b.id);
+const palRepetidos = palIds.filter((v, i, a) => a.indexOf(v) !== i);
+if (palRepetidos.length) {
+  ok = false; console.log('FAIL la paleta repite bloques: ' + palRepetidos.join(', '));
 }
 
 /* Layout ancho: dos columnas por CSS sin tocar el orden del celular. Si

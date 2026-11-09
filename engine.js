@@ -20,6 +20,9 @@ let stageBg = 0;
 let stageBgImg = '';
 let showScore = false;
 let score = 0;
+/* Cronómetro: corre desde que se abre el proyecto y se reinicia con el bloque
+   correspondiente. No se toca al dar Ejecutar, igual que en Scratch. */
+let timerStart = Date.now();
 let isRunning = false;
 let multiOn = false;
 let currentFilter = 'all';
@@ -3091,6 +3094,10 @@ function evalReporter(node, sprite, depth) {
   const b = num(parts[1], 0);
   switch (node.type) {
     case 'rep_score': return score;
+    case 'rep_timer': {
+      const secs = Math.max(0, (Date.now() - timerStart) / 1000);
+      return Math.round(secs * 10) / 10;
+    }
     case 'rep_x': return sprite ? sprite.x : 0;
     case 'rep_y': return sprite ? sprite.y : 0;
     case 'rep_var': {
@@ -3165,9 +3172,65 @@ function changeBg() {
 }
 
 /* ---------------- engine ---------------- */
+/* ---------------- colisiones ----------------
+   El escenario mide 480x360 unidades y cada personaje se aproxima con un
+   círculo de radio fijo escalado por su tamaño. No es pixel-perfect como
+   Scratch, pero alcanza para rebotar y detectar choques sin medir el DOM en
+   cada paso de la ejecución (que sería caro y frágil). */
+const SPRITE_RADIUS = 26;
+const STAGE_W = 240;
+const STAGE_H = 180;
+
+function spriteRadius(s) {
+  const size = Math.max(10, Math.min(300, Number(s.size) || 100));
+  return SPRITE_RADIUS * (size / 100);
+}
+
+function touchingEdge(s) {
+  if (!s) return false;
+  const r = spriteRadius(s);
+  return s.x <= -STAGE_W + r || s.x >= STAGE_W - r ||
+    s.y <= -STAGE_H + r || s.y >= STAGE_H - r;
+}
+
+function touchingOther(s) {
+  if (!s || !s.visible) return false;
+  const r = spriteRadius(s);
+  for (let i = 0; i < sprites.length; i++) {
+    const o = sprites[i];
+    if (o === s || !o.visible) continue;
+    const dx = o.x - s.x;
+    const dy = o.y - s.y;
+    const rr = r + spriteRadius(o);
+    if (dx * dx + dy * dy <= rr * rr) return true;
+  }
+  return false;
+}
+
+/* Devuelve true si había que rebotar. `move` calcula x con el seno y la y con
+   el coseno: rebotar en una pared vertical invierte el seno (dir → -dir) y en
+   una horizontal invierte el coseno (dir → 180 - dir). */
+function bounceSprite(s) {
+  if (!s) return false;
+  const r = spriteRadius(s);
+  let hitX = false;
+  let hitY = false;
+  if (s.x <= -STAGE_W + r) { s.x = -STAGE_W + r; hitX = true; }
+  else if (s.x >= STAGE_W - r) { s.x = STAGE_W - r; hitX = true; }
+  if (s.y <= -STAGE_H + r) { s.y = -STAGE_H + r; hitY = true; }
+  else if (s.y >= STAGE_H - r) { s.y = STAGE_H - r; hitY = true; }
+  if (!hitX && !hitY) return false;
+  if (hitX && hitY) s.dir = normDir(s.dir + 180);
+  else if (hitX) s.dir = normDir(-s.dir);
+  else s.dir = normDir(180 - s.dir);
+  return true;
+}
+
 function checkNodeCondition(node, sprite) {
   if (node.type === 'if_tilt') return Math.abs(window.lastTilt || 0) > 15;
   if (node.type === 'if_score') return score > num(nodeVal(node, sprite), 5);
+  if (node.type === 'if_edge') return touchingEdge(sprite);
+  if (node.type === 'if_touch') return touchingOther(sprite);
   return evalCond(nodeVal(node, sprite));
 }
 
@@ -3207,24 +3270,21 @@ async function execBlock(node, sprite) {
       await sleep(180);
       return;
     }
+    case 'bounce':
+      bounceSprite(sprite);
+      updateSpriteEl(sprite);
+      await sleep(180);
+      return;
+    case 'timer_reset':
+      timerStart = Date.now();
+      await sleep(120);
+      return;
     case 'go_random':
       sprite.x = Math.round((Math.random() * 2 - 1) * 210);
       sprite.y = Math.round((Math.random() * 2 - 1) * 150);
       updateSpriteEl(sprite);
       await sleep(180);
       return;
-    case 'bounce': {
-      const rad = sprite.dir * Math.PI / 180;
-      const dx = Math.sin(rad), dy = Math.cos(rad);
-      // Paredes izquierda/derecha: reflejar en horizontal (dir -> -dir).
-      if ((sprite.x >= 240 && dx > 0) || (sprite.x <= -240 && dx < 0)) sprite.dir = -sprite.dir;
-      // Paredes arriba/abajo: reflejar en vertical (dir -> 180 - dir).
-      if ((sprite.y >= 180 && dy > 0) || (sprite.y <= -180 && dy < 0)) sprite.dir = 180 - sprite.dir;
-      sprite.dir = normDir(sprite.dir);
-      updateSpriteEl(sprite);
-      await sleep(160);
-      return;
-    }
     case 'wait':
       await sleep(Math.max(0, num(v, 1)) * 1000);
       return;

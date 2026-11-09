@@ -276,6 +276,11 @@ const BLOCKS = [
     d: L('Salta directo a esa coordenada. x va de -240 a 240 e y de -180 a 180.', 'Jumps straight to that coordinate. x goes from -240 to 240 and y from -180 to 180.', 'Vai direto para essa coordenada. x vai de -240 a 240 e y de -180 a 180.', 'Va directement à cette coordonnée. x va de -240 à 240 et y de -180 à 180.')
   },
   {
+    id: 'bounce', cat: 'motion', icon: 'bounce',
+    n: L('Rebotar si toca el borde', 'Bounce if on edge', 'Rebater se tocar a borda', 'Rebondir au bord'),
+    d: L('Da media vuelta y vuelve al escenario cuando llega al borde.', 'Turns around and comes back when it hits the edge.', 'Dá meia-volta e volta ao cenário quando chega à borda.', 'Fait demi-tour et revient dans la scène au bord.')
+  },
+  {
     id: 'go_random', cat: 'motion', icon: 'shuffle',
     n: L('Ir a un lugar al azar', 'Go somewhere random', 'Ir a um lugar aleatório', 'Aller au hasard'),
     d: L('Teletransporta el personaje a un punto al azar.', 'Teleports the character to a random spot.', 'Teletransporta o personagem para um ponto aleatório.', 'Téléporte le personnage à un endroit aléatoire.')
@@ -371,6 +376,16 @@ const BLOCKS = [
     d: L('Envuelve bloques que se ejecutan si inclinás el teléfono.', 'Wraps blocks that run if the phone is tilted.', 'Envolve blocos que rodam se você inclinar o celular.', 'Entoure des blocs exécutés si le téléphone est incliné.')
   },
   {
+    id: 'if_edge', cat: 'control', icon: 'flag', c: 1,
+    n: L('Si toca el borde', 'If on the edge', 'Se toca a borda', 'Si touche le bord'),
+    d: L('Envuelve bloques que se ejecutan si el personaje llegó al borde del escenario.', 'Wraps blocks that run when the character reaches the stage edge.', 'Envolve blocos que rodam quando o personagem chega à borda do cenário.', 'Entoure des blocs exécutés quand le personnage atteint le bord de la scène.')
+  },
+  {
+    id: 'if_touch', cat: 'control', icon: 'pointer', c: 1,
+    n: L('Si toca a otro personaje', 'If touching another sprite', 'Se toca outro personagem', 'Si touche un autre personnage'),
+    d: L('Envuelve bloques que se ejecutan si se cruza con otro personaje visible.', 'Wraps blocks that run when it overlaps another visible sprite.', 'Envolve blocos que rodam quando cruza com outro personagem visível.', 'Entoure des blocs exécutés quand il croise un autre personnage visible.')
+  },
+  {
     id: 'if_score', cat: 'control', icon: 'target', def: 5, w: 46, num: 1, c: 1,
     n: L('Si puntos > {v}', 'If score > {v}', 'Se pontos > {v}', 'Si score > {v}'),
     d: L('Envuelve bloques que se ejecutan si el puntaje es mayor.', 'Wraps blocks that run if the score is higher.', 'Envolve blocos que rodam se os pontos forem maiores.', 'Entoure des blocs exécutés si le score est plus grand.')
@@ -394,6 +409,11 @@ const BLOCKS = [
     id: 'when_shake', cat: 'sensor', icon: 'phone', hat: 1,
     n: L('Al agitar', 'On shake', 'Ao agitar', 'En secouant'),
     d: L('Se activa si agitás el teléfono.', 'Triggers when you shake the phone.', 'Ativa quando você agita o celular.', 'Se déclenche quand tu secoues le téléphone.')
+  },
+  {
+    id: 'timer_reset', cat: 'sensor', icon: 'rotate-ccw',
+    n: L('Reiniciar cronómetro', 'Reset timer', 'Reiniciar cronômetro', 'Réinitialiser le chrono'),
+    d: L('Vuelve el cronómetro a cero. Después lo leés con el reportero «Cronómetro».', 'Sets the timer back to zero. Read it with the "Timer" reporter.', 'Volta o cronômetro a zero. Depois leia com o repórter «Cronômetro».', 'Remet le chrono à zéro. Lisez-le avec le rapporteur « Chronomètre ».')
   },
   {
     id: 'vibrate', cat: 'sensor', icon: 'vibrate', def: 200, w: 62, num: 1,
@@ -469,6 +489,11 @@ const BLOCKS = [
     id: 'rep_score', cat: 'ops', icon: 'trophy', rep: 1,
     n: L('Puntos', 'Score', 'Pontos', 'Score'),
     d: L('Devuelve el puntaje actual.', 'Returns the current score.', 'Devolve a pontuação atual.', 'Renvoie le score actuel.')
+  },
+  {
+    id: 'rep_timer', cat: 'ops', icon: 'clock', rep: 1,
+    n: L('Cronómetro', 'Timer', 'Cronômetro', 'Chronomètre'),
+    d: L('Devuelve los segundos desde que abriste el proyecto o desde el último reinicio.', 'Returns the seconds since you opened the project or since the last reset.', 'Devolve os segundos desde que abriu o projeto ou desde o último reinicio.', 'Renvoie les secondes depuis l’ouverture du projet ou la dernière remise à zéro.')
   },
   {
     id: 'rep_x', cat: 'ops', icon: 'target', rep: 1,

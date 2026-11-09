@@ -61,6 +61,27 @@ if (!/const\s+MAX_CODE_DEPTH\s*=/.test(engine)) { ok = false; console.log('FAIL 
 if (!/function\s+nodeVal\s*\(/.test(engine)) { ok = false; console.log('FAIL falta nodeVal() para los reporteros'); }
 if (!/function\s+evalReporter\s*\(/.test(engine)) { ok = false; console.log('FAIL falta evalReporter()'); }
 if (!/function\s+bindRepPicker\s*\(/.test(engine)) { ok = false; console.log('FAIL falta el selector de reporteros'); }
+/* Sensores: si alguien borra la geometría o el cronómetro, el arnés 11 lo
+   detecta en el navegador, pero esto avisa antes y sin Chrome. */
+if (!/function\s+spriteRadius\s*\(/.test(engine)) { ok = false; console.log('FAIL falta spriteRadius() de los sensores'); }
+if (!/function\s+touchingEdge\s*\(/.test(engine)) { ok = false; console.log('FAIL falta touchingEdge()'); }
+if (!/function\s+touchingOther\s*\(/.test(engine)) { ok = false; console.log('FAIL falta touchingOther()'); }
+if (!/function\s+bounceSprite\s*\(/.test(engine)) { ok = false; console.log('FAIL falta bounceSprite()'); }
+if (!/timerStart\s*=\s*Date\.now\(\)/.test(engine)) { ok = false; console.log('FAIL falta el cronómetro'); }
+
+/* Un `case` repetido dentro del mismo switch es JavaScript válido y no avisa
+   de nada: el segundo queda muerto y el bloque sigue haciendo lo viejo. Pasó
+   al agregar `rebotar` encima de una versión anterior que quedó olvidada. */
+const fnStarts = [];
+const fnRe = /(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/g;
+let fm;
+while ((fm = fnRe.exec(engine))) fnStarts.push({ name: fm[1], at: fm.index });
+fnStarts.forEach((f, i) => {
+  const chunk = engine.slice(f.at, i + 1 < fnStarts.length ? fnStarts[i + 1].at : engine.length);
+  const labels = (chunk.match(/case\s+'[a-z0-9_]+'/g) || []).map(c => c.replace(/[^a-z0-9_]/g, ''));
+  const dups = labels.filter((v, idx, arr) => arr.indexOf(v) !== idx);
+  if (dups.length) { ok = false; console.log('FAIL case duplicado en ' + f.name + '(): ' + dups.join(', ')); }
+});
 
 /* Workflows: un valor sin comillas que contenga «: » rompe el YAML entero y
    GitHub corre el archivo con el nombre del path, sin ejecutar ni un paso.

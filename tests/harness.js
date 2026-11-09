@@ -4,8 +4,8 @@ window.addEventListener('load', function () {
   try {
     check('catalogo_grupos', SPRITE_GROUPS.length >= 8);
     check('catalogo_items', SPRITE_CHOICES.length >= 100);
-    check('paleta_40', PALETTE_BLOCKS.length === 40);
-    check('badge_40', document.getElementById('blocksCount').textContent === '40');
+    check('paleta_44', PALETTE_BLOCKS.length === 44);
+    check('badge_44', document.getElementById('blocksCount').textContent === '44');
     check('modal_grupos', document.querySelectorAll('#spriteChoices .sprite-group').length === SPRITE_GROUPS.length);
     check('modal_items', document.querySelectorAll('#spriteChoices .sprite-choice').length >= 100);
     spriteSearchTerm = 'cohete';

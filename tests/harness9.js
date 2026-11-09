@@ -30,8 +30,8 @@ window.addEventListener('load', function () {
       check('sin_errores_arranque', errs.length === 0);
 
       /* ============ 1. catálogo ============ */
-      check('reporteros_10', REPORTER_BLOCKS.length === 10);
-      check('paleta_40', PALETTE_BLOCKS.length === 40);
+      check('reporteros_11', REPORTER_BLOCKS.length === 11);
+      check('paleta_44', PALETTE_BLOCKS.length === 44);
       check('paleta_sin_reporteros', PALETTE_BLOCKS.every(b => !b.rep));
       check('byid_reportero', !!BYID.rep_add && BYID.rep_add.rep === 1);
       check('anfitriones', ['move', 'go_xy', 'say', 'repeat', 'if_cond', 'if_score', 'op_calc', 'score_add']
@@ -257,7 +257,7 @@ window.addEventListener('load', function () {
       lang = oldLang;
       render();
 
-      check('badge_40', $('#blocksCount').textContent === '40');
+      check('badge_44', $('#blocksCount').textContent === '44');
       check('sin_errores_final', errs.length === 0);
     } catch (err) {
       out.push('ERROR ' + err.message + ' @ ' + (err.stack || '').split('\n')[1]);

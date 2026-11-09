@@ -10,13 +10,13 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 
 ### Bloques como en Scratch
 
-- 40 bloques en 9 categorías con los colores clásicos de Scratch: movimiento, apariencia, sonido, eventos, control, sensores, operadores, variables y multijugador.
+- 44 bloques en 9 categorías con los colores clásicos de Scratch: movimiento, apariencia, sonido, eventos, control, sensores, operadores, variables y multijugador.
 - Bloques sombrero (bandera verde, toque, tecla, agitar el celu, recibir mensaje, puntaje) y bloques C: `repetir`, `por siempre` y condicionales con `si... si no`.
 - Anidado real: arrastrá bloques adentro de un bloque C para envolverlos, con guardas que evitan anidar un bloque dentro de sí mismo.
 - **Varios guiones por sprite**: cada sombrero inicia un guion independiente y sólo se ejecutan los que corresponden al evento ocurrido. Un mismo sprite puede reaccionar a la bandera, a una tecla y a un toque a la vez.
 - Muescas tipo puzzle en la parte superior de los bloques y resaltado visible del bloque en ejecución.
 - **`ir a x: {x} y: {y}`**: dos casillas numéricas en un mismo bloque para teletransportar el personaje a una coordenada exacta (x de -240 a 240, e y de -180 a 180). Es la forma de fijar la posición de partida de un guion aunque el estado final de la corrida anterior haya quedado guardado como estado de diseño.
-- **Reporteros: 10 bloques que devuelven un valor**. Las casillas de movimiento, apariencia, control, operadores, variables y puntaje tienen un botón **ƒ** para poner un valor calculado en vez de un número fijo: `puntos`, `posición x`, `posición y`, `variable {v}`, `al azar {x} a {y}`, `{x} + {y}`, `{x} − {y}`, `{x} × {y}`, `{x} ÷ {y}` y `{x} > {y}`. Se pueden **anidar** —`mover ((posición x) + 10)`, `si (puntos > 10) entonces`, `repetir (al azar 2 a 5)`— y la **×** del chip vuelve al texto libre sin perder lo que habías escrito. No son enunciados: no aparecen en la paleta ni se agregan sueltos, viven dentro de la casilla de otro bloque.
+- **Reporteros: 11 bloques que devuelven un valor**. Las casillas de movimiento, apariencia, control, operadores, variables y puntaje tienen un botón **ƒ** para poner un valor calculado en vez de un número fijo: `puntos`, `posición x`, `posición y`, `variable {v}`, `cronómetro`, `al azar {x} a {y}`, `{x} + {y}`, `{x} − {y}`, `{x} × {y}`, `{x} ÷ {y}` y `{x} > {y}`. Se pueden **anidar** —`mover ((posición x) + 10)`, `si (puntos > 10) entonces`, `repetir (al azar 2 a 5)`— y la **×** del chip vuelve al texto libre sin perder lo que habías escrito. No son enunciados: no aparecen en la paleta ni se agregan sueltos, viven dentro de la casilla de otro bloque.
 
 ### Editor cómodo en pantalla chica
 
@@ -52,6 +52,14 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 - **Los personajes se quedan donde terminaron**: al detener o al terminar los guiones ya no vuelven a cero. La posición, el disfraz, el tamaño, la visibilidad y el fondo que dejó el programa pasan a ser el estado de diseño: se guardan y son el punto de partida de la próxima ejecución. Si querés deshacer ese recorrido, tocá **Volver al inicio** (aparece debajo del escenario tras la primera corrida) y se restaura la instantánea tomada al arrancar. Durante la ejecución no se autoguardan cambios; el puntaje sí se conserva entre ejecuciones.
 - Bucles con tope de seguridad: un `repetir` o `por siempre` descontrolado no cuelga el navegador.
 - En iOS 13+ se pide el permiso de movimiento desde el primer toque, como exige el sistema.
+
+### Sensores y colisiones
+
+- **`rebotar`**: si el personaje está tocando un borde, da media vuelta y sigue. La dirección se corrige según el lado: contra una pared vertical se invierte el componente horizontal (`dirección → −dirección`) y contra el piso o el techo el vertical (`dirección → 180 − dirección`), así que el personaje sale en el ángulo espejado y no se queda pegado al borde.
+- **`si toca el borde`** y **`si toca a otro personaje`**: condiciones para envolver lo que quieras, con el mismo `si` / `si no` de siempre. La segunda ignora a los personajes ocultos y a sí mismo, así que un disfraz invisible no bloquea ni dispara choques.
+- **`reiniciar cronómetro`** y el reportero **`cronómetro`**: devuelve los segundos (con un decimal) desde que abriste el proyecto o desde el último reinicio. Sirve para «sobreviví 30 segundos», cuentas atrás con `si (cronómetro > 10) entonces` y para medir tiempos dentro de un juego.
+- Los choques usan la geometría del escenario, pero **con un círculo por personaje**: cada uno se aproxima a un círculo de radio 26 unidades al 100 % de tamaño (el escenario mide 480 × 360) y los bordes se miden contra ese círculo, así que el choque ocurre cuando el cuerpo del personaje llega al límite y no cuando el recuadro del dibujo lo toca. No es una colisión pixel a pixel: con un personaje muy alargado o muy flaco el roce se siente un poco generoso o un poco tarde.
+- Todo esto se ejecuta también en **modo juego**, y el cronómetro no se reinicia al apretar *Ejecutar*: si querés que vuelva a cero, poné `reiniciar cronómetro` al principio del guion.
 
 ### Proyectos
 
@@ -104,7 +112,7 @@ También podés abrir `index.html` directo con doble clic. Para probarlo desde e
 | --- | --- |
 | `index.html` | Toda la interfaz: layout, estilos, íconos SVG y paneles. |
 | `engine.js` | El motor: render de bloques, drag & drop táctil, ejecución, sprites, variables y eventos. |
-| `data.js` | Catálogo de bloques (40 enunciados + 10 reporteros), categorías y textos de la interfaz (4 idiomas). |
+| `data.js` | Catálogo de bloques (44 enunciados + 11 reporteros), categorías y textos de la interfaz (4 idiomas). |
 | `manifest.webmanifest` | Ficha de instalación: nombre, colores, `display: standalone` e íconos. |
 | `sw.js` | Service worker: guarda la app para que abra sin internet y sirve el shell a los links `?p=`. |
 | `icons/` | Ícono de la app en SVG y PNG (192, 512, *maskable* y *apple-touch*). |
@@ -118,11 +126,11 @@ La app que se abre en el navegador son esos tres archivos más el manifest, el s
 
 ## Verificación
 
-Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **519 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
+Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **572 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
-| Estructura | 30 | Catálogo de 143 personajes, 40 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
+| Estructura | 30 | Catálogo de 143 personajes, 44 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
 | Motor y eventos | 25 | Buscador, guiones por sombrero, despacho de teclado/toque/bandera, aislamiento de hilos, no guardar durante la ejecución, persistencia de puntaje y multijugador, sombrero de puntaje sin re-disparos. |
 | Disfraces y links | 52 | Migración de proyectos viejos, rechazo de SVG/URLs, tira de miniaturas, selector por nombre, serialización, ejecución de los dos bloques nuevos, estado final del disfraz y «Volver al inicio», gzip/base64url, links viejos y fallback. |
 | Importación real | 27 | `File` → canvas → WebP, filtro de tipos, nombres únicos, nuevo personaje desde imágenes, borrado, límite de 12, aviso de espacio lleno. |
@@ -130,9 +138,10 @@ Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless.
 | Escenario, globo y posición final | 52 | Zoom del escenario (alto, personaje, topes, persistencia, independencia y modo juego), globo horizontal y envoltura de texto largo, corrida natural y `Detener` conservando la posición, guardado del estado final, botón «Volver al inicio», siguiente corrida partiendo del estado final. |
 | Bloque `ir a x: y:` | 64 | Catálogo y 4 idiomas, dos casillas en la paleta y en el editor, edición conjunta del par `"x,y"`, serialización y link compartido, `normalizeNodes` / clonar / duplicar / deshacer / rehacer, ejecución exacta con decimales, recorte al borde, campos vacíos y valores inválidos, y un guion real de principio a fin. |
 | Parser, diálogos y topes | 65 | Aritmética sin `eval` (precedencia, paréntesis, potencia, decimales, errores de sintaxis), `evalExpr()` con `score`, variables y `aleatorio()`, condiciones, modal propio en modo confirmación y texto con traducciones en 4 idiomas, cancelación por `Escape`, flujos reales de borrado sin diálogos nativos, y recorte de proyectos con 40 niveles / 2000 nodos / 8 MB. |
-| Reporteros | 71 | Catálogo de 10 y 4 idiomas, `node.reps` sin cambiar `node.val`, rechazo de reporteros sueltos o dentro de sombreros, tope de una casilla por hueco, anidado, serialización, clonado y deshacer, evaluación de los 10, ejecución real de `mover`, `ir a x: y:`, `repetir`, `si` y `decir`, y el selector `ƒ` con chip, borrado, texto conservado y casilla de nombre sin anidado. |
+| Reporteros | 71 | Catálogo de 11 y 4 idiomas, `node.reps` sin cambiar `node.val`, rechazo de reporteros sueltos o dentro de sombreros, tope de una casilla por hueco, anidado, serialización, clonado y deshacer, evaluación de los 11, ejecución real de `mover`, `ir a x: y:`, `repetir`, `si` y `decir`, y el selector `ƒ` con chip, borrado, texto conservado y casilla de nombre sin anidado. |
 | Link al arrancar | 12 | Una página abierta con `?p=g1.…` carga proyecto, disfraces, puntaje, fondo y el bloque `ir a x: y:` con sus dos casillas, y renderiza la imagen en el escenario. |
 | Proyectos con nombre | 47 | Migración del proyecto que ya existía, crear, abrir (y que el anterior quede intacto), renombrar con cancelación, duplicar, borrar cancelado y confirmado, salto al borrar el activo, no poder quedarse sin proyectos, límite de 24, la lista y el modal, los textos en 4 idiomas y la relectura del índice al arrancar. |
+| Sensores y colisiones | 53 | Catálogo de los 4 bloques y el reportero en 4 idiomas, radio por tamaño y sus casos raros, detección de los 4 bordes, choque entre círculos que ignora al propio personaje y a los ocultos, rebote con la dirección correcta en cada pared (arriba, abajo, izquierda, derecha y esquina), cronómetro que avanza, se reinicia y no lo reinicia *Ejecutar*, `nodeVal()` y el selector `ƒ` ofreciendo el cronómetro, y un guion real con `por siempre` + `si toca el borde` + `rebotar`. |
 
 Aparte de la suite de navegador hay **90 comprobaciones de PWA** que no necesitan Chrome:
 
@@ -148,12 +157,12 @@ node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
-node tests/run.js mi-corrida     # 11 escenarios en Chrome headless
+node tests/run.js mi-corrida     # 12 escenarios en Chrome headless
 ```
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
 
-Además: los 4 idiomas tienen las mismas 173 claves de texto (71 de `UI_EXTRA`) y los 40 bloques activos más 10 reporteros; los 64 `data-t` y 11 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()` y el tope `MAX_CODE_DEPTH`, y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app y el modal de proyectos también se revisaron en capturas reales a 500 px de ancho.
+Además: los 4 idiomas tienen las mismas 173 claves de texto (71 de `UI_EXTRA`) y los 44 bloques activos más 11 reporteros; los 64 `data-t` y 11 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()`, la geometría de los sensores (`spriteRadius()`, `touchingEdge()`, `touchingOther()`, `bounceSprite()`, el cronómetro) y el tope `MAX_CODE_DEPTH`, y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app, el modal de proyectos y los cuatro bloques nuevos de sensores con el cronómetro en el selector `ƒ` también se revisaron en capturas reales a 500 px de ancho.
 
 Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve DOM ni capturas por línea de comando); se usó Chrome con `--headless=new --dump-dom`. En el decodificador de imágenes de Chrome headless se detectó un cuelgue intermitente de `createImageBitmap`, por lo que el motor ahora cae a `<img>` si tarda más de 3 segundos.
 
@@ -161,7 +170,9 @@ Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve
 
 Mejor honesto que vendedor:
 
-- **Exportación a Scratch (`.sb3`) — pendiente, no implementada**: los formatos de ScrachMo (`.scmo` y `?p=`) son JSON propio y no se abren en Scratch 3. Exportar de verdad no es un «guardar como»: hay que generar un ZIP con `project.json`, nombrar los recursos por su MD5, convertir emojis e imágenes a disfraces `svg`/`bitmap` y mapear los 40 bloques a opcodes de Scratch (varios, como los de multijugador, el puntaje o el agitado del celu, no tienen equivalente). Queda anotado en la lista de pendientes, con ese costo a la vista.
+- **Exportación a Scratch (`.sb3`) — pendiente, no implementada**: los formatos de ScrachMo (`.scmo` y `?p=`) son JSON propio y no se abren en Scratch 3. Exportar de verdad no es un «guardar como»: hay que generar un ZIP con `project.json`, nombrar los recursos por su MD5, convertir emojis e imágenes a disfraces `svg`/`bitmap` y mapear los 44 bloques a opcodes de Scratch (varios, como los de multijugador, el puntaje o el agitado del celu, no tienen equivalente). Queda anotado en la lista de pendientes, con ese costo a la vista.
+- **Los choques no son pixel a pixel**: cada personaje es un círculo de radio 26 al 100 % de tamaño, escalado por su tamaño. Es rápido y estable, pero un personaje muy alargado choca antes o después de lo que sugiere el dibujo, y no hay detección de color ni de «tocando el puntero».
+- **El cronómetro vive en la sesión**: cuenta desde que abriste el proyecto (o desde el último `reiniciar cronómetro`), no se guarda en el `.scmo`, no se reinicia con *Ejecutar* y no se detiene con *Detener*. Si el juego necesita un tiempo, reinicialo al principio del guion.
 - Las cuentas de los bloques **ya no aceptan JavaScript arbitrario**: sólo números, `+ - * / % **`, paréntesis, `score`, variables y `aleatorio(a,b)`. Fue el precio de sacar `Function()`; a cambio la app funciona con CSP estricto.
 - No hay editor de disfraces: las imágenes se importan tal cual (reducidas a 256 px), pero no se pueden dibujar, recortar, renombrar ni reordenar desde la app. Un GIF animado se queda con su primer fotograma.
 - Las casillas aceptan números fijos o un reportero (`ƒ`); el texto libre de una casilla de movimiento no resuelve variables ni cuentas. En `ir a x: y:` los valores fuera del escenario se recortan al borde. Si querés volver a la posición previa a una corrida, usá **Volver al inicio**.

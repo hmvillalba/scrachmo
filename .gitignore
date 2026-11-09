@@ -9,5 +9,8 @@ preview-*
 # Artefactos de la suite en CI (DOM y logs de cada corrida)
 tests-out/
 
+# Sitio preparado para publicar en GitHub Pages
+_site/
+
 # Notas internas de la herramienta (no forman parte de la app)
 .workbuddy-ai/

@@ -60,6 +60,13 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 - Si el link supera los 8000 caracteres, la app avisa que algunos chats pueden cortarlo y conviene usar menos imágenes o exportar el `.scmo`.
 - Interfaz en español, inglés, portugués y francés.
 
+### Instalarla en el celular (PWA)
+
+- Se puede **instalar como app**: tiene `manifest.webmanifest` con nombre, íconos (192, 512 y un *maskable* para Android) y color de tema, así que Chrome/Android ofrece «Instalar aplicación» y en iPhone se agrega a la pantalla de inicio con el ícono propio. Abierta así no muestra la barra del navegador.
+- **Funciona sin internet**: un service worker (`sw.js`) guarda la app completa (`index.html`, `data.js`, `engine.js`, el manifest y los íconos) la primera vez que la abrís. Después arranca desde la caché y se actualiza sola cuando hay red.
+- Los **links compartidos `?p=` también abren offline**: la navegación siempre devuelve el shell guardado y el proyecto viaja en la URL, así que un link sigue funcionando aunque el celular no tenga datos.
+- Todo esto es **opcional y no rompe el doble clic**: abierta como archivo (`file://`) no hay service worker y la app funciona exactamente igual, sin caché. El registro está protegido con `location.protocol !== 'file:'`.
+
 ### Seguridad y robustez
 
 - **Sin `eval` ni `Function()`**: las cuentas de los bloques de operadores, de variables y de las condiciones pasan por un parser aritmético propio (`calcExpr()`). Acepta `+ - * / % **`, paréntesis, decimales, menos unario, `score`, variables y `aleatorio(a,b)`; cualquier otro texto (incluido código JavaScript) no se ejecuta y devuelve `null`. Así la app funciona con un CSP estricto.
@@ -81,6 +88,8 @@ php -S localhost:8000             # ídem con PHP
 
 También podés abrir `index.html` directo con doble clic. Para probarlo desde el celular, servilo en tu compu y entrá desde el navegador del teléfono a la IP local (mismo WiFi), o publicalo en GitHub Pages.
 
+**Publicarlo en GitHub Pages**: el repo trae `.github/workflows/pages.yml`, que en cada push a `main` copia a `_site/` sólo lo que la app necesita y lo publica. Sólo hay que habilitarlo una vez: **Settings → Pages → Source: GitHub Actions**. La URL queda como `https://<usuario>.github.io/scrachmo/`, y desde ahí el navegador del celular ya ofrece instalarla. Ojo: para instalar y para el modo offline hace falta `https` (o `localhost`); por eso no funciona abriendo el archivo.
+
 ### El flujo básico
 
 1. Elegí un sprite (o creá uno desde el catálogo, buscando por nombre) y agregá bloques: tocá la paleta para sumarlos al final, o **arrastralos desde la empuñadura** y soltalos donde quieras. Si querés usar tus propios dibujos, tocá **Importar mis imágenes…** y elegí uno o varios archivos: se crea un personaje con esas imágenes como disfraces.
@@ -95,10 +104,14 @@ También podés abrir `index.html` directo con doble clic. Para probarlo desde e
 | `index.html` | Toda la interfaz: layout, estilos, íconos SVG y paneles. |
 | `engine.js` | El motor: render de bloques, drag & drop táctil, ejecución, sprites, variables y eventos. |
 | `data.js` | Catálogo de bloques (40 enunciados + 10 reporteros), categorías y textos de la interfaz (4 idiomas). |
-| `tests/` | Suite de pruebas de humo sobre el DOM real, comprobaciones estáticas y el generador de páginas de prueba. |
-| `.github/workflows/test.yml` | CI: sintaxis, paridad de textos y suite en Chrome headless en cada push y pull request. |
+| `manifest.webmanifest` | Ficha de instalación: nombre, colores, `display: standalone` e íconos. |
+| `sw.js` | Service worker: guarda la app para que abra sin internet y sirve el shell a los links `?p=`. |
+| `icons/` | Ícono de la app en SVG y PNG (192, 512, *maskable* y *apple-touch*). |
+| `tests/` | Suite de pruebas de humo sobre el DOM real, comprobaciones estáticas, PWA y el generador de páginas de prueba. |
+| `.github/workflows/test.yml` | CI: sintaxis, paridad de textos, PWA y suite en Chrome headless en cada push y pull request. |
+| `.github/workflows/pages.yml` | Publicación en GitHub Pages en cada push a `main`. |
 
-La app que se abre en el navegador sigue siendo esos tres archivos; `tests/` y el workflow son herramientas de desarrollo y no se cargan al usar ScrachMo.
+La app que se abre en el navegador son esos tres archivos más el manifest, el service worker y los íconos; `tests/` y los workflows son herramientas de desarrollo y no se cargan al usar ScrachMo.
 
 ¿Querés agregar un bloque nuevo? Es una entrada en `data.js` y su lógica en `engine.js`.
 
@@ -119,12 +132,21 @@ Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless.
 | Reporteros | 71 | Catálogo de 10 y 4 idiomas, `node.reps` sin cambiar `node.val`, rechazo de reporteros sueltos o dentro de sombreros, tope de una casilla por hueco, anidado, serialización, clonado y deshacer, evaluación de los 10, ejecución real de `mover`, `ir a x: y:`, `repetir`, `si` y `decir`, y el selector `ƒ` con chip, borrado, texto conservado y casilla de nombre sin anidado. |
 | Link al arrancar | 12 | Una página abierta con `?p=g1.…` carga proyecto, disfraces, puntaje, fondo y el bloque `ir a x: y:` con sus dos casillas, y renderiza la imagen en el escenario. |
 
+Aparte de la suite de navegador hay **90 comprobaciones de PWA** que no necesitan Chrome:
+
+| Chequeo | Comprobaciones | Qué cubre |
+| --- | ---: | --- |
+| `tests/pwa-check.js` | 70 | Manifest válido y con los campos que pide la instalación, cada ícono declarado existe y mide lo que dice (se lee el ancho/alto del PNG), enganche en el HTML (manifest, favicon, `apple-touch-icon`, `theme-color`), registro del service worker protegido para `file://`, y las 10 rutas críticas servidas por HTTP con su content-type (así se detectan rutas absolutas que darían 404 en Pages). |
+| `tests/pwa-sw.js` | 20 | La lógica real de `sw.js` ejecutada contra dobles de `caches`/`fetch`: `install` guarda los 10 archivos, `activate` borra la caché vieja y toma el control, la navegación con `?p=` sale del shell cacheado, los assets salen de la caché, y no se interceptan otros orígenes ni los `POST`. |
+
 Para correrlo en tu máquina:
 
 ```bash
-node --check data.js && node --check engine.js
+node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
-node tests/run.js mi-corrida    # 10 escenarios en Chrome headless
+node tests/pwa-check.js          # manifest, íconos y rutas servidas
+node tests/pwa-sw.js             # lógica del service worker
+node tests/run.js mi-corrida     # 10 escenarios en Chrome headless
 ```
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
@@ -143,6 +165,8 @@ Mejor honesto que vendedor:
 - Las casillas aceptan números fijos o un reportero (`ƒ`); el texto libre de una casilla de movimiento no resuelve variables ni cuentas. En `ir a x: y:` los valores fuera del escenario se recortan al borde. Si querés volver a la posición previa a una corrida, usá **Volver al inicio**.
 - Los reporteros son numéricos: `{x} > {y}` devuelve `1` o `0` (alcanza para `si`, pero no hay booleanos ni textos de primera clase) y una variable con texto cuenta como `0` dentro de una cuenta. La anidación se corta a los 12 niveles al ejecutar y a los 10 al dibujar, para que un proyecto manipulado no cuelgue la app.
 - Los links `?p=` siguen llevando todo el proyecto adentro de la URL. Con muchos disfraces grandes pueden volverse demasiado largos para WhatsApp o para el navegador; en ese caso conviene exportar el `.scmo`. Publicarlo en un hosting estático no cambia esto: haría falta un backend con almacenamiento para tener links cortos.
+- **La instalación y el modo offline necesitan `https` o `localhost`**: son requisitos del navegador para los service workers, no una decisión de la app. Abierta con doble clic (`file://`) ScrachMo funciona igual, pero sin ícono instalable ni caché.
+- La caché de la PWA se invalida a mano: `sw.js` lleva una `VERSION` (`scrachmo-v1`) y, al cambiarla, `activate` borra la anterior. Si se edita `index.html` sin subir la versión, el celular puede seguir mostrando la copia vieja hasta la siguiente visita con red.
 - Un solo proyecto por dispositivo: el autoguardado pisa siempre el mismo slot; no hay lista de proyectos con nombre.
 - El "multijugador" usa `localStorage`: los mensajes llegan a los sprites del mismo navegador (y a otras pestañas del mismo origen), pero no a otros dispositivos. Para eso haría falta un servicio externo.
 - Hay zoom del área de bloques y del escenario, pero todavía no hay layout específico para pantalla horizontal.

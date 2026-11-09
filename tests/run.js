@@ -86,7 +86,11 @@ for (const [name, url] of selected) {
     ' FAIL=' + String(fail).padStart(2) + ' ERROR=' + String(err).padStart(2) +
     (r.found ? '' : '  << SIN RESULTADO >>'));
   if (fail || err || !r.found) {
-    r.body.split('\n').filter(l => /^(FAIL|ERROR)/.test(l)).slice(0, 25).forEach(l => console.log('   ' + l));
+    const bad = r.body.split('\n').filter(l => /^(FAIL|ERROR)/.test(l)).slice(0, 25);
+    bad.forEach(l => console.log('   ' + l));
+    /* Línea sin sangría y con el harness delante: es la que el CI convierte
+       en anotación del check, así el detalle se lee sin bajar el log. */
+    bad.forEach(l => console.log('FALLO ' + name + ' :: ' + l.replace(/^(FAIL|ERROR)\s*/, '')));
     if (!r.found) {
       console.log('   chrome=' + CHROME + ' flags=' + r.headless +
         ' status=' + r.status + ' error=' + r.error + ' dom=' + r.dom.length + 'B');

@@ -34,6 +34,12 @@ jobs:
       - name: Paridad de textos y comprobaciones estáticas
         run: node tests/check-parity.js
 
+      - name: PWA: manifest, iconos y rutas servidas
+        run: node tests/pwa-check.js
+
+      - name: PWA: lógica del service worker
+        run: node tests/pwa-sw.js
+
       - name: Localizar Chrome
         shell: bash
         run: |
@@ -54,7 +60,7 @@ jobs:
           if [ "$code" -ne 0 ]; then
             # Las anotaciones del check son la única salida visible sin permisos
             # de administrador, así que el diagnóstico viaja ahí.
-            grep -E '^(FAIL|ERROR)|SIN RESULTADO|^TOTAL' run.txt | head -20 | while IFS= read -r line; do
+            grep -E '^FALLO |SIN RESULTADO|^TOTAL' run.txt | head -20 | while IFS= read -r line; do
               echo "::error::$(printf '%s' "$line" | sed 's/%/%25/g')"
             done
             for f in tests-out/err-*.log; do

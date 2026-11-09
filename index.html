@@ -960,6 +960,48 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
   .sb{font-size:12.5px}
   .sprite-choices{grid-template-columns:repeat(4,1fr)}
 }
+
+/* ---------- Pantalla ancha: escenario a la izquierda, código a la derecha ----------
+   Las tarjetas viven en dos columnas en el HTML, pero en el celular las
+   columnas se disuelven (`display:contents`) y el orden lo decide `order`,
+   así se sigue viendo Escenario → Personajes → Código → Variables →
+   Proyecto → Bloques. El modo juego queda afuera: ahí el escenario ocupa
+   toda la pantalla. */
+.col{display:contents}
+#stageCard{order:1}
+#spritesCard{order:2}
+#codeCard{order:3}
+#varsCard{order:4}
+#toolsCard{order:5}
+#blocksCard{order:6}
+
+@media(min-width:900px){
+  body:not(.game-mode) .app{max-width:1320px;margin:0 auto}
+  body:not(.game-mode) main{
+    display:grid;
+    grid-template-columns:minmax(300px,38%) minmax(0,1fr);
+    align-items:start;
+    gap:12px;
+    padding:12px;
+  }
+  body:not(.game-mode) .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  /* Dentro de la columna derecha, la paleta va pegada al código: es de donde
+     se arrastran los bloques. Variables y Proyecto quedan debajo. */
+  body:not(.game-mode) #codeCard{order:1}
+  body:not(.game-mode) #blocksCard{order:2}
+  body:not(.game-mode) #varsCard{order:3}
+  body:not(.game-mode) #toolsCard{order:4}
+  /* Con más ancho el escenario puede ser más alto sin comerse la pantalla. */
+  body:not(.game-mode) .stage{height:calc(clamp(240px,32vh,340px) * var(--stage-zoom,1))}
+  body:not(.game-mode) .sprite-choices{grid-template-columns:repeat(5,1fr)}
+}
+
+/* Celular acostado: hay poco alto, así que achicamos márgenes y escenario. */
+@media(orientation:landscape) and (max-height:540px){
+  .topbar{padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:6px}
+  main{gap:8px;padding:8px 8px 2px}
+  .stage{height:calc(clamp(150px,44vh,220px) * var(--stage-zoom,1))}
+}
 </style>
 </head>
 <body>
@@ -982,6 +1024,10 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
   </header>
 
   <main>
+
+    <!-- Dos columnas en pantalla ancha; en el celular se apilan en el orden de
+         siempre gracias a `display:contents` + `order` (ver CSS). -->
+    <div class="col" id="colLeft">
 
     <!-- ESCENARIO -->
     <section class="card" id="stageCard">
@@ -1125,6 +1171,10 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
       </div>
     </section>
 
+    </div><!-- /colLeft -->
+
+    <div class="col" id="colRight">
+
     <!-- CÓDIGO -->
     <section class="card" id="codeCard">
       <button type="button" class="section-head" data-collapse="codeCard" aria-expanded="true" aria-controls="codeBody">
@@ -1267,6 +1317,7 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
       </div>
     </section>
 
+    </div><!-- /colRight -->
   </main>
 
   <footer>

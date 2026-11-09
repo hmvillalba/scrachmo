@@ -79,6 +79,25 @@ if (!/function\s+stopCode\s*\([\s\S]{0,500}?stopAllSounds\(\)/.test(engine)) {
   ok = false; console.log('FAIL stopCode() no corta los sonidos');
 }
 
+/* Layout ancho: dos columnas por CSS sin tocar el orden del celular. Si
+   alguien borra el `display:contents` o los `order`, en el celular las
+   tarjetas se desordenan (Variables y Proyecto antes que el código). */
+const CARDS_ORDEN = ['stageCard', 'spritesCard', 'codeCard', 'varsCard', 'toolsCard', 'blocksCard'];
+if (!/id="colLeft"/.test(html) || !/id="colRight"/.test(html)) {
+  ok = false; console.log('FAIL faltan las dos columnas del layout ancho');
+}
+if (!/\.col\{display:contents\}/.test(html)) {
+  ok = false; console.log('FAIL las columnas no se disuelven en el celular');
+}
+CARDS_ORDEN.forEach((id, i) => {
+  if (!new RegExp('#' + id + '\\{order:' + (i + 1) + '\\}').test(html)) {
+    ok = false; console.log('FAIL falta el order de ' + id + ' (esperado ' + (i + 1) + ')');
+  }
+});
+if (!/@media\(min-width:900px\)/.test(html) || !/body:not\(\.game-mode\) main/.test(html)) {
+  ok = false; console.log('FAIL el layout ancho falta o no excluye el modo juego');
+}
+
 /* Un `case` repetido dentro del mismo switch es JavaScript válido y no avisa
    de nada: el segundo queda muerto y el bloque sigue haciendo lo viejo. Pasó
    al agregar `rebotar` encima de una versión anterior que quedó olvidada. */

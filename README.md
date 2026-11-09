@@ -25,6 +25,7 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 - **Deshacer / Rehacer**: botones y atajos `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` y `Ctrl/Cmd+Y`. El historial guarda hasta 60 instantáneas y no interfiere con el deshacer de texto dentro de un input.
 - **Dos zooms independientes**: el del **área de código** (70 % a 160 % con `− / +`, tocando el porcentaje volvés a 100 %) y el del **escenario y los personajes** (misma escala, en la fila que está debajo del escenario). El primero agranda los bloques; el segundo agranda la escena, los sprites y los globos. Los dos se recuerdan entre sesiones, no viajan en el proyecto y la línea de inserción se corrige sola al arrastrar con zoom.
 - Layout mobile-first: paneles verticales apilables y colapsables, con respeto de los *safe areas* en pantallas con notch.
+- **En pantalla ancha (desde 900 px) se pone en dos columnas**: el escenario y los personajes a la izquierda, el código con la paleta de bloques a la derecha, y variables y proyecto debajo. En el celular se sigue apilando igual, en el mismo orden de siempre (Escenario → Personajes → Código → Variables → Proyecto → Bloques): las columnas se «disuelven» con `display:contents` y el orden lo decide `order`. El modo juego queda afuera y sigue ocupando toda la pantalla. En un celular acostado se achican márgenes y escenario para que entre más.
 - Interacción 100% táctil (pointer events): tocá para agregar, arrastrá por el ícono para reordenar o anidar. También hay reordenado por teclado.
 
 ### Escenario y sprites
@@ -135,7 +136,7 @@ La app que se abre en el navegador son esos tres archivos más el manifest, el s
 
 ## Verificación
 
-Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **640 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
+Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **661 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
@@ -152,6 +153,7 @@ Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless.
 | Proyectos con nombre | 47 | Migración del proyecto que ya existía, crear, abrir (y que el anterior quede intacto), renombrar con cancelación, duplicar, borrar cancelado y confirmado, salto al borrar el activo, no poder quedarse sin proyectos, límite de 24, la lista y el modal, los textos en 4 idiomas y la relectura del índice al arrancar. |
 | Sensores y colisiones | 53 | Catálogo de los 4 bloques y el reportero en 4 idiomas, radio por tamaño y sus casos raros, detección de los 4 bordes, choque entre círculos que ignora al propio personaje y a los ocultos, rebote con la dirección correcta en cada pared (arriba, abajo, izquierda, derecha y esquina), cronómetro que avanza, se reinicia y no lo reinicia *Ejecutar*, `nodeVal()` y el selector `ƒ` ofreciendo el cronómetro, y un guion real con `por siempre` + `si toca el borde` + `rebotar`. |
 | Sonidos y música | 68 | Catálogo de los 5 bloques, los 8 sonidos y las 3 melodías en 4 idiomas, nombre accesible con el nombre del sonido y no su id, volumen (topes, redondeo, texto inválido y ganancia maestra), y la síntesis de verdad contra un `AudioContext` falso: qué nota suena, cuántas, en qué orden, el ruido filtrado de la explosión, la melodía en bucle que se corta al cambiar de melodía, `detener los sonidos` cortando notas y música, *Detener* cortando la música, los `<select>` del editor guardando el id, un id inexistente que no rompe el bloque, la paleta con los 7 bloques y el volumen que viaja en el guardado (y un proyecto viejo sin volumen que arranca al 100). |
+| Layout horizontal | 21 | En el ancho de las pruebas (800 px) las columnas se disuelven, las seis tarjetas quedan en una sola columna, mismo ancho y mismo borde izquierdo, en el orden de siempre con su `order` 1 a 6, sin desborde horizontal; el modo juego oculta código, bloques y personajes, deja el escenario a la altura exacta de la ventana y al salir vuelve el editor en orden; y un `resize` a mitad de uso no rompe nada. La disposición ancha (≥ 900 px) se revisó en capturas reales y su CSS está cubierto por las comprobaciones estáticas. |
 
 Aparte de la suite de navegador hay **90 comprobaciones de PWA** que no necesitan Chrome:
 
@@ -167,7 +169,7 @@ node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
-node tests/run.js mi-corrida     # 13 escenarios en Chrome headless
+node tests/run.js mi-corrida     # 14 escenarios en Chrome headless
 ```
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
@@ -195,7 +197,7 @@ Mejor honesto que vendedor:
 - Un proyecto abierto desde un link `?p=` o desde un `.scmo` se carga **en el proyecto actual**, así que reemplaza lo que había ahí. Si querés conservarlo, creá uno nuevo antes de abrirlo.
 - El nombre del proyecto vive en la biblioteca del dispositivo: no viaja dentro del `.scmo` ni del link `?p=`. Tampoco hay carpetas ni orden manual: la lista se ordena por último cambio.
 - El "multijugador" usa `localStorage`: los mensajes llegan a los sprites del mismo navegador (y a otras pestañas del mismo origen), pero no a otros dispositivos. Para eso haría falta un servicio externo.
-- Hay zoom del área de bloques y del escenario, pero todavía no hay layout específico para pantalla horizontal.
+- Hay zoom del área de bloques y del escenario, y layout de dos columnas desde 900 px, pero la disposición ancha no se puede forzar a mano en un celular: sale sola según el ancho de la pantalla.
 
 ## Licencia
 

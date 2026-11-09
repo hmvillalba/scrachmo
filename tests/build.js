@@ -12,7 +12,7 @@ const HARNESS = [
   'harness.js', 'harness2.js', 'harness3.js', 'harness4.js',
   'harness5.js', 'harness6.js', 'harness7.js', 'harness8.js',
   'harness9.js', 'harness10.js', 'harness11.js', 'harness12.js', 'harness13.js', 'harness14.js',
-  'harness15.js', 'harness16.js', 'harness17.js'
+  'harness15.js', 'harness16.js', 'harness17.js', 'harness18.js'
 ];
 
 function build() {

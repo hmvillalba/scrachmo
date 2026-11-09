@@ -156,14 +156,54 @@ if (!anyOpenDecl || !/about/.test(anyOpenDecl[0])) {
   ok = false; console.log('FAIL updateModalLock() no tiene en cuenta el modal «Acerca de»');
 }
 
-/* Modo juego: el campo tiene que conservar el 4:3 del mundo (480x360). Si se
-   estira, 100 pasos verticales se ven más grandes que 100 horizontales aunque
-   los choques se sigan calculando en unidades. */
-if (!/body\.game-mode \.stage\{[^}]*aspect-ratio:4 \/ 3/.test(html)) {
-  ok = false; console.log('FAIL el campo del modo juego no fija la proporción 4:3');
+/* Modo juego: el campo tiene que conservar la proporción del mundo (480x360 de
+   fábrica, pero el usuario puede agrandarlo). Si se estira, 100 pasos
+   verticales se ven más grandes que 100 horizontales aunque los choques se
+   sigan calculando en unidades. */
+if (!/body\.game-mode \.stage\{[^}]*aspect-ratio:var\(--stage-w,480\) \/ var\(--stage-h,360\)/.test(html)) {
+  ok = false; console.log('FAIL el campo del modo juego no fija la proporción del mundo');
 }
-if (!/body\.game-mode \.stage\{[^}]*width:min\(100vw, calc\(100dvh \* 4 \/ 3\)\)/.test(html)) {
+if (!/body\.game-mode \.stage\{[^}]*width:min\(100vw, calc\(100dvh \* var\(--stage-w,480\) \/ var\(--stage-h,360\)\)\)/.test(html)) {
   ok = false; console.log('FAIL el campo del modo juego no se limita a la pantalla');
+}
+/* La ventana del escenario NO puede escalar con el zoom: eso era el error.
+   El zoom va sobre `.stage-world`, que es el contenido. */
+if (!/\.stage-world\{[^}]*transform:scale\(var\(--stage-zoom,1\)\)/.test(html)) {
+  ok = false; console.log('FAIL el zoom del escenario no se aplica al mundo (`.stage-world`)');
+}
+if (/\.stage\{[^}]*height:calc\([^}]*var\(--stage-zoom/.test(html)) {
+  ok = false; console.log('FAIL el alto del escenario sigue dependiendo del zoom');
+}
+if (!/\.scratch-workspace\{[^}]*height:clamp/.test(html)) {
+  ok = false; console.log('FAIL el área de código no tiene alto fijo: el zoom estiraría la tarjeta');
+}
+if (!/id="stageWorld"/.test(html) || !/id="stageBg"/.test(html)) {
+  ok = false; console.log('FAIL faltan la capa del mundo o la del fondo');
+}
+/* Tamaño del mundo: asas, botón de volver y los bordes atados a worldW/worldH. */
+['gripY', 'gripX', 'gripCorner', 'stageSizeReset'].forEach(id => {
+  if (!new RegExp('id="' + id + '"').test(html)) {
+    ok = false; console.log('FAIL falta #' + id);
+  }
+});
+['applyWorldSize', 'startStageResize', 'moveStageResize', 'endStageResize',
+  'resizeWorldBy', 'resetWorldSize', 'keyStageResize', 'clampToWorld',
+  'worldLeft', 'worldRight', 'worldTop', 'worldBottom'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '()');
+    }
+  });
+if (!/const\s+WORLD_W0 = 480/.test(engine) || !/const\s+WORLD_H0 = 360/.test(engine)) {
+  ok = false; console.log('FAIL el mundo de fábrica ya no es 480x360');
+}
+/* Los bordes no pueden volver a estar clavados en ±240/±180: si alguien los
+   escribe a mano, agrandar el escenario deja de servir para los choques. */
+if (/function\s+touchingEdge[\s\S]{0,220}?240/.test(engine) ||
+  /function\s+touchingEdge[\s\S]{0,220}?180/.test(engine)) {
+  ok = false; console.log('FAIL touchingEdge() volvió a usar los bordes fijos');
+}
+if (!/worldW: worldW/.test(engine) || !/worldH: worldH/.test(engine)) {
+  ok = false; console.log('FAIL el tamaño del mundo no se guarda en el proyecto');
 }
 if (!/id="rotateHint"/.test(html) || !/id="rotateClose"/.test(html)) {
   ok = false; console.log('FAIL faltan el aviso de girar o su botón de cerrar');

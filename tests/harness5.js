@@ -58,6 +58,14 @@ window.addEventListener('load', function () {
       check('zoom_tope', codeZoom === ZOOM_MAX && $('#zoomInBtn').disabled === true);
       for (let i = 0; i < 20; i++) changeZoom(-ZOOM_STEP);
       check('zoom_piso', codeZoom === ZOOM_MIN && $('#zoomOutBtn').disabled === true);
+      /* El zoom tiene que agrandar los BLOQUES, no la tarjeta: el área de
+         código tiene alto fijo y lo que no entra se ve con scroll. Antes el
+         alto lo ponía el contenido y cada clic en «+» estiraba la columna. */
+      resetZoom();
+      const wsH0 = $('.scratch-workspace').getBoundingClientRect().height;
+      for (let i = 0; i < 5; i++) changeZoom(ZOOM_STEP);
+      const wsH1 = $('.scratch-workspace').getBoundingClientRect().height;
+      check('zoom_no_estira_el_panel', codeZoom > 1.4 && Math.abs(wsH0 - wsH1) < 1);
       $('#zoomVal').click();
       check('zoom_reset', codeZoom === 1 && $('#zoomVal').textContent === '100%');
       changeZoom(ZOOM_STEP);
@@ -203,8 +211,10 @@ window.addEventListener('load', function () {
       pl.stageBg = 3;
       check('apply_payload_fondo', applyPayload(pl) === true && stageBgImg === PNG && stageBg === 3);
       render();
-      check('css_fondo', $('#stage').style.background.indexOf('url(') === 0 &&
-        $('#stage').style.background.indexOf('center / cover') > -1);
+      /* El fondo vive en su capa dentro del mundo (`.stage-bg`), no en la
+         ventana: así el zoom lo agranda junto con los personajes. */
+      check('css_fondo', $('#stageBg').style.background.indexOf('url(') === 0 &&
+        $('#stageBg').style.background.indexOf('center / cover') > -1);
       check('boton_quitar_visible', $('#bgClearBtn').hidden === false);
       check('serializa_fondo', serializeProject().stageBgImg === PNG);
       const shareCode = await encodeSharePayload(serializeProject());
@@ -214,7 +224,7 @@ window.addEventListener('load', function () {
       $('#bgClearBtn').click();
       check('quitar_fondo', stageBgImg === '' && $('#bgClearBtn').hidden === true &&
         getComputedStyle($('#bgClearBtn')).display === 'none' &&
-        $('#stage').style.background.indexOf('url(') !== 0);
+        $('#stageBg').style.background.indexOf('url(') !== 0);
       const pl2 = serializeProject();
       pl2.stageBgImg = PNG; pl2.stageBg = 3;
       applyPayload(pl2); render();
@@ -244,7 +254,7 @@ window.addEventListener('load', function () {
       let imported = false;
       try { await importBackdropFile(file); imported = (stageBgImg !== '' && validBackdrop(stageBgImg) === stageBgImg); } catch (e) { }
       check('fondo_importa_real', imported);
-      check('fondo_importado_en_css', $('#stage').style.background.indexOf('url(') === 0);
+      check('fondo_importado_en_css', $('#stageBg').style.background.indexOf('url(') === 0);
       clearBackdrop();
       check('fondo_limpio_tras_importar', stageBgImg === '');
 

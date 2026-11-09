@@ -105,8 +105,18 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 10px 2px}
 .status.on{color:#047857;background:#ecfdf5}
 .status.on .status-dot{background:#10b981;animation:pulse 1.2s infinite}
 
+/* El escenario es una VENTANA de tamaño fijo: el zoom no lo agranda, agranda
+   lo que hay adentro (`.stage-world`). El ancho sale del alto disponible y del
+   tamaño del mundo (`--stage-w` x `--stage-h`, en unidades), así que la caja
+   siempre tiene la proporción del mundo y nada se estira. */
 .stage{
-  position:relative;width:100%;height:calc(clamp(200px,30vh,260px) * var(--stage-zoom,1));border-radius:18px;overflow:hidden;cursor:pointer;
+  --stage-h-budget:clamp(200px,30vh,260px);
+  --stage-box-h:calc(var(--stage-h-budget) * var(--stage-h,360) / 360);
+  position:relative;
+  width:min(100%, calc(var(--stage-box-h) * var(--stage-w,480) / var(--stage-h,360)));
+  aspect-ratio:var(--stage-w,480) / var(--stage-h,360);
+  margin-inline:auto;
+  border-radius:18px;overflow:hidden;cursor:pointer;
   touch-action:manipulation;
   background:
     radial-gradient(150px 100px at 14% 16%,rgba(255,255,255,.95),rgba(255,255,255,0) 65%),
@@ -118,6 +128,30 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 10px 2px}
   content:"";position:absolute;left:-10%;right:-10%;bottom:-30%;height:55%;pointer-events:none;
   background:radial-gradient(50% 60% at 50% 100%,rgba(191,219,254,.55),rgba(191,219,254,0) 70%);
 }
+/* El mundo: el fondo y los personajes, nada más. `scale()` es el zoom, así que
+   la ventana mide siempre lo mismo y lo que cambia de tamaño es el contenido.
+   Todo lo que va acá adentro se mueve y crece junto, como una cámara. */
+.stage-world{
+  position:absolute;inset:0;z-index:1;
+  transform:scale(var(--stage-zoom,1));transform-origin:50% 50%;
+}
+.stage-bg{position:absolute;inset:0}
+/* Asas para cambiar el tamaño del mundo. Van encima de los personajes porque
+   están en el borde: sin `z-index` propio, el último personaje dibujado las
+   tapaba y no se podía arrastrar. */
+.stage-grip{position:absolute;z-index:20;touch-action:none;background:transparent}
+.stage-grip::after{
+  content:"";position:absolute;border-radius:99px;background:rgba(79,70,229,.30);
+  transition:background .15s;
+}
+.stage-grip:hover::after,.stage-grip.dragging::after{background:rgba(79,70,229,.75)}
+.grip-y{left:0;right:0;bottom:0;height:14px;cursor:ns-resize}
+.grip-y::after{left:50%;transform:translateX(-50%);bottom:2px;width:42px;height:4px}
+.grip-x{top:0;bottom:0;right:0;width:14px;cursor:ew-resize}
+.grip-x::after{top:50%;transform:translateY(-50%);right:2px;width:4px;height:42px}
+.grip-corner{right:0;bottom:0;width:22px;height:22px;cursor:nwse-resize}
+.grip-corner::after{right:4px;bottom:4px;width:11px;height:11px;border-radius:3px}
+body.game-mode .stage-grip{display:none}
 .stage-hud{
   position:absolute;top:10px;left:10px;z-index:6;
   display:flex;align-items:center;gap:6px;max-width:calc(100% - 90px);
@@ -584,8 +618,8 @@ body.game-mode #stageCard{
    100 pasos hacia arriba se veían 2,15x más que 100 a la derecha, y como los
    choques se calculan en unidades, lo que se veía y lo que tocaba no coincidía. */
 body.game-mode .stage{
-  width:min(100vw, calc(100dvh * 4 / 3));
-  height:auto;aspect-ratio:4 / 3;max-height:100dvh;
+  width:min(100vw, calc(100dvh * var(--stage-w,480) / var(--stage-h,360)));
+  height:auto;aspect-ratio:var(--stage-w,480) / var(--stage-h,360);max-height:100dvh;
   border-radius:0;box-shadow:none;
 }
 body.game-mode .exit-game{display:flex}
@@ -657,15 +691,15 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
 .sprite-wrap.off{display:none}
 .sprite-wrap.selected::before{
   content:"";position:absolute;
-  left:calc(-40px * var(--stage-zoom,1));top:calc(-40px * var(--stage-zoom,1));
-  width:calc(80px * var(--stage-zoom,1));height:calc(80px * var(--stage-zoom,1));
+  left:-40px;top:-40px;
+  width:80px;height:80px;
   border:2px dashed rgba(79,70,229,.5);border-radius:50%;pointer-events:none;
 }
 .sprite-wrap.dragging{cursor:grabbing}
 .sprite-wrap.dragging .sprite-emoji{transition:none}
 .sprite-emoji{
   position:absolute;left:0;top:0;transform-origin:50% 50%;
-  font-size:calc(clamp(48px,15vw,68px) * var(--stage-zoom,1));line-height:1;
+  font-size:clamp(48px,15vw,68px);line-height:1;
   transform:translate(-50%,-50%) rotate(0deg) scale(1);
   filter:drop-shadow(0 12px 14px rgba(15,23,42,.24));
   transition:transform .2s ease;
@@ -675,11 +709,11 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
 /* El .sprite-wrap tiene ancho 0: sin width:max-content un hijo absoluto
    se encoge al ancho de una letra y el «¡Hola!» se lee en vertical. */
 .sprite-bubble{
-  position:absolute;left:0;bottom:calc(36px * var(--stage-zoom,1));transform:translateX(-50%);z-index:5;
-  width:max-content;min-width:calc(38px * var(--stage-zoom,1));
-  max-width:calc(152px * var(--stage-zoom,1));box-sizing:border-box;
+  position:absolute;left:0;bottom:36px;transform:translateX(-50%);z-index:5;
+  width:max-content;min-width:38px;
+  max-width:152px;box-sizing:border-box;
   background:#fff;border:1.5px solid #cbd5e1;border-radius:12px;
-  padding:5px 8px;font-size:calc(12px * var(--stage-zoom,1));font-weight:700;line-height:1.3;color:#1e293b;
+  padding:5px 8px;font-size:12px;font-weight:700;line-height:1.3;color:#1e293b;
   text-align:center;overflow-wrap:anywhere;word-break:normal;
   box-shadow:0 8px 18px -10px rgba(15,23,42,.35);
   display:none;pointer-events:none;
@@ -793,7 +827,12 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
   background-image:radial-gradient(#d7dfeb 1px,transparent 1px);
   background-size:16px 16px;
   border:1px solid var(--line);border-radius:14px;
-  padding:14px 10px;overflow-x:auto;min-height:104px;
+  padding:14px 10px;
+  /* Alto fijo a propósito: el zoom agranda los bloques, no la tarjeta. Si el
+     área creciera con el contenido, cada clic en «+» estiraba toda la columna
+     y la página saltaba. Lo que no entra se ve con scroll, como en Scratch. */
+  height:clamp(200px,34vh,360px);
+  overflow:auto;
   -webkit-overflow-scrolling:touch;
   /* Los bloques se apilan con z-index alto (assignZ(), desde 6000) para que
      una pila anidada tape a la siguiente. Sin aislar el contexto, esos
@@ -999,8 +1038,8 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
 body.game-mode #spritesCard{display:none}
 body.game-mode .sprite-wrap.selected::before{display:none}
 body.game-mode .sprite-wrap{cursor:default}
-body.game-mode .sprite-emoji{font-size:calc(clamp(64px,20vw,120px) * var(--stage-zoom,1))}
-body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:calc(46px * var(--stage-zoom,1))}
+body.game-mode .sprite-emoji{font-size:clamp(64px,20vw,120px)}
+body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
 
 /* ---------------- disfraces ---------------- */
 .costume-img{width:1em;height:1em;object-fit:contain;display:block;vertical-align:middle}
@@ -1085,7 +1124,7 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
   body:not(.game-mode) #varsCard{order:3}
   body:not(.game-mode) #toolsCard{order:4}
   /* Con más ancho el escenario puede ser más alto sin comerse la pantalla. */
-  body:not(.game-mode) .stage{height:calc(clamp(240px,32vh,340px) * var(--stage-zoom,1))}
+  body:not(.game-mode) .stage{--stage-h-budget:clamp(240px,32vh,340px)}
   body:not(.game-mode) .sprite-choices{grid-template-columns:repeat(5,1fr)}
 }
 
@@ -1093,7 +1132,7 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
 @media(orientation:landscape) and (max-height:540px){
   .topbar{padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:6px}
   main{gap:8px;padding:8px 8px 2px}
-  .stage{height:calc(clamp(150px,44vh,220px) * var(--stage-zoom,1))}
+  .stage{--stage-h-budget:clamp(150px,44vh,220px)}
 }
 </style>
 </head>
@@ -1144,6 +1183,10 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
         </span>
       </div>
       <div class="stage" id="stage">
+        <div class="stage-world" id="stageWorld">
+          <div class="stage-bg" id="stageBg"></div>
+          <div class="sprites-layer" id="spritesLayer"></div>
+        </div>
         <div class="stage-hud is-empty">
           <span class="hud-score" id="scoreHud" hidden>
             <span class="hud-label" data-t="score">PUNTOS</span>
@@ -1151,12 +1194,17 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
           </span>
           <span id="varsHud"></span>
         </div>
-        <div class="sprites-layer" id="spritesLayer"></div>
         <div class="stage-hint" id="stageHint" data-t="stageHint">Tocá el escenario para probar</div>
         <button type="button" class="exit-game" id="exitGame">
           <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
           <span data-t="exit">Salir</span>
         </button>
+        <div class="stage-grip grip-y" id="gripY" role="separator" tabindex="0"
+             data-tt="stageResizeY" aria-label="Cambiar el alto del escenario"></div>
+        <div class="stage-grip grip-x" id="gripX" role="separator" tabindex="0"
+             data-tt="stageResizeX" aria-label="Cambiar el ancho del escenario"></div>
+        <div class="stage-grip grip-corner" id="gripCorner" role="separator" tabindex="0"
+             data-tt="stageResizeXY" aria-label="Cambiar el ancho y el alto del escenario"></div>
       </div>
       <div class="stage-bottom">
         <div class="tool-group">
@@ -1167,6 +1215,10 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
           <button type="button" class="zoom-val" id="stageZoomVal" data-tt="stageZoomReset" aria-label="Volver al tamaño normal">100%</button>
           <button type="button" class="mini-btn" id="stageZoomInBtn" data-tt="stageZoomIn" aria-label="Agrandar escenario">
             <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>
+          </button>
+          <button type="button" class="mini-btn" id="stageSizeReset" data-tt="stageSizeReset"
+                  aria-label="Volver al tamaño original del escenario" hidden>
+            <svg class="ic" aria-hidden="true"><use href="#i-resize"></use></svg>
           </button>
         </div>
         <button type="button" class="reset-start" id="resetStartBtn" data-tt="backToStart" aria-label="Volver al inicio" hidden>

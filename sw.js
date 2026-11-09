@@ -3,7 +3,7 @@
    La app es estática, así que alcanza con guardar los pocos archivos que usa.
    Si algo falla, la app sigue funcionando desde la red: nunca es requisito. */
 
-const VERSION = 'scrachmo-v3';
+const VERSION = 'scrachmo-v4';
 
 /* Todo lo que se pide en install tiene que existir: si un solo archivo falta,
    addAll() rechaza y el service worker no se instala. */

@@ -13,6 +13,18 @@ let lang = (() => {
 })();
 
 let sprites = [];
+/* Tamaño del mundo, en unidades. Es del proyecto y manda sobre todo lo demás:
+   la proporción del escenario, dónde están los bordes y hasta dónde llega un
+   personaje. De fábrica mide 480x360, igual que Scratch. Se puede agrandar
+   arrastrando las asas del escenario y volver atrás con «tamaño original». */
+const WORLD_W0 = 480;
+const WORLD_H0 = 360;
+const WORLD_MIN_W = 480;
+const WORLD_MIN_H = 360;
+const WORLD_MAX_W = 1440;
+const WORLD_MAX_H = 1080;
+let worldW = WORLD_W0;
+let worldH = WORLD_H0;
 /* Clones: copias vivas de un personaje que existen SÓLO mientras dura la
    ejecución. No están en `sprites` (eso es el estado de diseño y es lo que se
    guarda) y no se serializan nunca. Cada clon es «parecido a un personaje»:
@@ -187,8 +199,44 @@ function findSpriteEl(id) {
   return Array.from(layer.children).find(el => el.dataset.sprite === id) || null;
 }
 
-function posLeft(s) { return 50 + (s.x / 4.8); }
-function posTop(s) { return 50 - (s.y / 3.6); }
+/* Bordes del mundo, en unidades. El mundo crece hacia la DERECHA y hacia
+   ABAJO: el borde izquierdo se queda en x=-240 y el de arriba en y=180, así
+   agrandar el escenario no mueve ni un píxel a lo que ya estaba puesto. */
+function worldLeft() { return -WORLD_W0 / 2; }
+function worldRight() { return worldW - WORLD_W0 / 2; }
+function worldTop() { return WORLD_H0 / 2; }
+function worldBottom() { return -(worldH - WORLD_H0 / 2); }
+
+/* Las posiciones se guardan en unidades y se dibujan en porcentaje del mundo.
+   Con el tamaño de fábrica esto da exactamente 50 + x/4.8 y 50 - y/3.6. */
+function posLeft(s) { return (s.x - worldLeft()) / worldW * 100; }
+function posTop(s) { return (worldTop() - s.y) / worldH * 100; }
+
+/* Deja un personaje adentro del mundo. Se usa al cargar y al achicar. */
+function clampToWorld(s) {
+  if (!s) return s;
+  s.x = clamp(num(s.x, 0), worldLeft(), worldRight());
+  s.y = clamp(num(s.y, 0), worldBottom(), worldTop());
+  return s;
+}
+
+/* Lleva el tamaño del mundo al CSS (la caja del escenario sale de ahí) y
+   muestra u oculta el botón de volver al tamaño original. */
+function applyWorldSize() {
+  /* Se redondea sólo al dibujar: `worldW`/`worldH` guardan decimales para que
+     un arrastre lento no se quede clavado (con el redondeo en cada paso, los
+     movimientos de menos de media unidad se perdían). */
+  document.body.style.setProperty('--stage-w', String(Math.round(worldW)));
+  document.body.style.setProperty('--stage-h', String(Math.round(worldH)));
+  const btn = $('#stageSizeReset');
+  if (btn) btn.hidden = (Math.round(worldW) === WORLD_W0 && Math.round(worldH) === WORLD_H0);
+  /* Las casillas de x/y siguen los bordes del mundo, si no el navegador marca
+     como inválido un valor que el motor acepta perfectamente. */
+  const px = $('#propX');
+  const py = $('#propY');
+  if (px) px.max = String(Math.round(worldRight()));
+  if (py) py.min = String(Math.round(worldBottom()));
+}
 
 /* ---------------- project ---------------- */
 /* Links compartidos:
@@ -526,8 +574,8 @@ function normalizeSprites(list) {
       const s = {
         id: id,
         name: name,
-        x: clamp(num(raw.x, 0), -240, 240),
-        y: clamp(num(raw.y, 0), -180, 180),
+        x: clamp(num(raw.x, 0), worldLeft(), worldRight()),
+        y: clamp(num(raw.y, 0), worldBottom(), worldTop()),
         dir: normDir(num(raw.dir, 90)),
         size: clamp(num(raw.size, 100), 20, 200),
         visible: raw.visible !== false,
@@ -571,6 +619,11 @@ function applyPayloadInner(payload) {
   applyVolume();
 
   if (payload && Array.isArray(payload.sprites)) {
+    /* El tamaño del mundo se lee ANTES de normalizar: los personajes se
+       recortan contra los bordes nuevos, no contra los de fábrica. */
+    worldW = clamp(Math.round(num(payload.worldW, WORLD_W0)), WORLD_MIN_W, WORLD_MAX_W);
+    worldH = clamp(Math.round(num(payload.worldH, WORLD_H0)), WORLD_MIN_H, WORLD_MAX_H);
+    applyWorldSize();
     sprites = normalizeSprites(payload.sprites);
     variables = (payload.variables && typeof payload.variables === 'object' && !Array.isArray(payload.variables)) ? payload.variables : {};
     loadHidden(payload.hidden);
@@ -594,6 +647,9 @@ function applyPayloadInner(payload) {
   }
   if (!oldCode) return false;
 
+  worldW = WORLD_W0;
+  worldH = WORLD_H0;
+  applyWorldSize();
   sprites = [createSpriteData('🐱', 'Gato', migrateOldCode(oldCode))];
   selectedSpriteId = sprites[0].id;
   variables = (oldVars && typeof oldVars === 'object' && !Array.isArray(oldVars)) ? oldVars : {};
@@ -606,6 +662,9 @@ function applyPayloadInner(payload) {
 }
 
 function resetProjectData(withCode) {
+  worldW = WORLD_W0;
+  worldH = WORLD_H0;
+  applyWorldSize();
   sprites = [createSpriteData('🐱', 'Gato', withCode ? defaultCode() : [])];
   selectedSpriteId = sprites[0].id;
   variables = {};
@@ -701,6 +760,8 @@ function serializeProject() {
     })),
     variables: variables,
     hidden: hiddenList(),
+    worldW: worldW,
+    worldH: worldH,
     stageBg: stageBg,
     stageBgImg: stageBgImg,
     showScore: showScore,
@@ -1587,7 +1648,10 @@ function bindRepPicker() {
 
 /* ---------------- stage and sprites ---------------- */
 function applyStageBg() {
-  const stage = $('#stage');
+  /* El fondo va en su propia capa DENTRO del mundo (`.stage-bg`), no en
+     `.stage`: así el zoom lo agranda junto con los personajes. Si quedara en
+     la ventana, al acercarse los personajes crecerían sobre un fondo quieto. */
+  const stage = $('#stageBg') || $('#stage');
   if (!stage) return;
   const clearBtn = $('#bgClearBtn');
   if (clearBtn) clearBtn.hidden = !stageBgImg;
@@ -2393,9 +2457,12 @@ function resetZoom() {
 }
 
 /* ---------------- zoom del escenario y los personajes ----------------
-   Una variable CSS escala la altura de la escena, el emoji/imagen de cada
-   sprite, el globo y el aro de selección. Las posiciones siguen siendo
-   porcentuales, así que arrastrar y los bloques de movimiento no cambian. */
+   El zoom es una cámara: la ventana del escenario mide siempre lo mismo y lo
+   que se agranda es el mundo (`.stage-world`), con su fondo y sus personajes.
+   Antes la variable CSS escalaba el alto de la escena y el tamaño de cada
+   emoji por separado: la caja crecía, la página saltaba y las posiciones
+   quedaban estiradas. Las posiciones siguen siendo porcentuales del mundo, así
+   que arrastrar y los bloques de movimiento no cambian. */
 function applyStageZoom() {
   const stage = $('#stage');
   if (stage) stage.style.setProperty('--stage-zoom', String(stageZoom));
@@ -3048,8 +3115,10 @@ function startSpriteDrag(e, wrap) {
     startY: e.clientY,
     x: s.x,
     y: s.y,
-    stageW: rect.width,
-    stageH: rect.height,
+    /* Cuántas unidades del mundo vale un píxel de pantalla. El zoom cuenta:
+       el mundo se dibuja escalado adentro de la caja. */
+    perX: worldW / (rect.width * (stageZoom || 1)),
+    perY: worldH / (rect.height * (stageZoom || 1)),
     moved: false,
     wrap: wrap
   };
@@ -3063,11 +3132,14 @@ function moveSpriteDrag(e) {
   e.preventDefault();
   const s = getSprite(spriteDrag.id);
   if (!s) return;
-  const dx = (e.clientX - spriteDrag.startX) / spriteDrag.stageW * 480;
-  const dy = (e.clientY - spriteDrag.startY) / spriteDrag.stageH * 360;
+  /* Un píxel de pantalla vale `perX` unidades. Se calcula al empezar porque el
+     zoom agranda el mundo dentro de la caja: sin dividir por él, con zoom 150%
+     el personaje se escapaba de la punta del dedo. */
+  const dx = (e.clientX - spriteDrag.startX) * spriteDrag.perX;
+  const dy = (e.clientY - spriteDrag.startY) * spriteDrag.perY;
   if (Math.abs(e.clientX - spriteDrag.startX) > 3 || Math.abs(e.clientY - spriteDrag.startY) > 3) spriteDrag.moved = true;
-  s.x = clamp(spriteDrag.x + dx, -240, 240);
-  s.y = clamp(spriteDrag.y - dy, -180, 180);
+  s.x = clamp(spriteDrag.x + dx, worldLeft(), worldRight());
+  s.y = clamp(spriteDrag.y - dy, worldBottom(), worldTop());
   updateSpriteEl(s);
   if (s.id === selectedSpriteId) updatePropPosition();
 }
@@ -3091,6 +3163,98 @@ function endSpriteDrag(e, cancelled) {
       setTimeout(() => { suppressStageClick = false; }, 350);
     }
   }
+}
+
+/* ---------------- tamaño del mundo (asas del escenario) ----------------
+   El asa de abajo cambia el alto, la de la derecha el ancho y la esquina las
+   dos. El mundo crece hacia la derecha y hacia abajo, así que lo que ya estaba
+   puesto no se mueve ni un píxel. */
+let stageResize = null;
+
+function startStageResize(e, mode) {
+  if (document.body.classList.contains('game-mode')) return;
+  e.preventDefault();
+  stageResize = {
+    mode: mode,
+    pointerId: e.pointerId,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    el: e.currentTarget
+  };
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { }
+  e.currentTarget.classList.add('dragging');
+}
+
+function moveStageResize(e) {
+  if (!stageResize || e.pointerId !== stageResize.pointerId) return;
+  e.preventDefault();
+  const d = stageResize;
+  const rect = $('#stage').getBoundingClientRect();
+  /* La escala se recalcula en cada movimiento con la caja ACTUAL: al agrandar,
+     la caja también cambia, y con una escala fija el asa se escapaba del dedo
+     (a los pocos píxeles crecía el doble de lo que pedía el gesto). */
+  if (d.mode !== 'y' && rect.width > 0) {
+    worldW = clamp(worldW + (e.clientX - d.lastX) * (worldW / rect.width), WORLD_MIN_W, WORLD_MAX_W);
+  }
+  if (d.mode !== 'x' && rect.height > 0) {
+    worldH = clamp(worldH + (e.clientY - d.lastY) * (worldH / rect.height), WORLD_MIN_H, WORLD_MAX_H);
+  }
+  d.lastX = e.clientX;
+  d.lastY = e.clientY;
+  applyWorldSize();
+  sprites.concat(clones).forEach(clampToWorld);
+  renderSprites();
+}
+
+function endStageResize(e) {
+  if (!stageResize) return;
+  const d = stageResize;
+  stageResize = null;
+  d.el.classList.remove('dragging');
+  try { d.el.releasePointerCapture(d.pointerId); } catch (err) { }
+  saveProject();
+}
+
+/* Teclado: el asa enfoca y las flechas agrandan de a 60 unidades. Sin esto,
+   agrandar el escenario era imposible sin ratón. */
+function keyStageResize(e, mode) {
+  const paso = e.shiftKey ? 240 : 60;
+  let dw = 0;
+  let dh = 0;
+  if (e.key === 'ArrowDown' && mode !== 'x') dh = paso;
+  else if (e.key === 'ArrowUp' && mode !== 'x') dh = -paso;
+  else if (e.key === 'ArrowRight' && mode !== 'y') dw = paso;
+  else if (e.key === 'ArrowLeft' && mode !== 'y') dw = -paso;
+  else return;
+  e.preventDefault();
+  resizeWorldBy(dw, dh);
+}
+
+function resizeWorldBy(dw, dh) {
+  const w0 = worldW;
+  const h0 = worldH;
+  worldW = clamp(worldW + dw, WORLD_MIN_W, WORLD_MAX_W);
+  worldH = clamp(worldH + dh, WORLD_MIN_H, WORLD_MAX_H);
+  if (worldW === w0 && worldH === h0) return;
+  applyWorldSize();
+  sprites.concat(clones).forEach(clampToWorld);
+  renderSprites();
+  saveProject();
+}
+
+/* Vuelve al tamaño de fábrica (480x360). Los personajes que habían quedado en
+   el espacio nuevo se recortan al borde: si no, quedarían fuera de la vista
+   pero seguirían contando para los choques y para «tocar el borde». */
+function resetWorldSize() {
+  if (worldW === WORLD_W0 && worldH === WORLD_H0) return;
+  worldW = WORLD_W0;
+  worldH = WORLD_H0;
+  applyWorldSize();
+  sprites.concat(clones).forEach(clampToWorld);
+  renderSprites();
+  renderProps();
+  saveProject();
+  toast(UI[lang].stageSizeResetDone);
 }
 
 /* ---------------- expressions ----------------
@@ -3463,13 +3627,12 @@ function changeBg() {
 
 /* ---------------- engine ---------------- */
 /* ---------------- colisiones ----------------
-   El escenario mide 480x360 unidades y cada personaje se aproxima con un
-   círculo de radio fijo escalado por su tamaño. No es pixel-perfect como
-   Scratch, pero alcanza para rebotar y detectar choques sin medir el DOM en
-   cada paso de la ejecución (que sería caro y frágil). */
+   El mundo mide 480x360 unidades de fábrica (se puede agrandar) y cada
+   personaje se aproxima con un círculo de radio fijo escalado por su tamaño.
+   No es pixel-perfect como Scratch, pero alcanza para rebotar y detectar
+   choques sin medir el DOM en cada paso de la ejecución (que sería caro y
+   frágil). */
 const SPRITE_RADIUS = 26;
-const STAGE_W = 240;
-const STAGE_H = 180;
 
 function spriteRadius(s) {
   const size = Math.max(10, Math.min(300, Number(s.size) || 100));
@@ -3479,8 +3642,8 @@ function spriteRadius(s) {
 function touchingEdge(s) {
   if (!s) return false;
   const r = spriteRadius(s);
-  return s.x <= -STAGE_W + r || s.x >= STAGE_W - r ||
-    s.y <= -STAGE_H + r || s.y >= STAGE_H - r;
+  return s.x <= worldLeft() + r || s.x >= worldRight() - r ||
+    s.y <= worldBottom() + r || s.y >= worldTop() - r;
 }
 
 function touchingOther(s) {
@@ -3506,10 +3669,10 @@ function bounceSprite(s) {
   const r = spriteRadius(s);
   let hitX = false;
   let hitY = false;
-  if (s.x <= -STAGE_W + r) { s.x = -STAGE_W + r; hitX = true; }
-  else if (s.x >= STAGE_W - r) { s.x = STAGE_W - r; hitX = true; }
-  if (s.y <= -STAGE_H + r) { s.y = -STAGE_H + r; hitY = true; }
-  else if (s.y >= STAGE_H - r) { s.y = STAGE_H - r; hitY = true; }
+  if (s.x <= worldLeft() + r) { s.x = worldLeft() + r; hitX = true; }
+  else if (s.x >= worldRight() - r) { s.x = worldRight() - r; hitX = true; }
+  if (s.y <= worldBottom() + r) { s.y = worldBottom() + r; hitY = true; }
+  else if (s.y >= worldTop() - r) { s.y = worldTop() - r; hitY = true; }
   if (!hitX && !hitY) return false;
   if (hitX && hitY) s.dir = normDir(s.dir + 180);
   else if (hitX) s.dir = normDir(-s.dir);
@@ -3549,8 +3712,8 @@ async function execBlock(node, sprite) {
     case 'move': {
       const steps = num(v, 10);
       const rad = sprite.dir * Math.PI / 180;
-      sprite.x = clamp(sprite.x + steps * Math.sin(rad), -240, 240);
-      sprite.y = clamp(sprite.y + steps * Math.cos(rad), -180, 180);
+      sprite.x = clamp(sprite.x + steps * Math.sin(rad), worldLeft(), worldRight());
+      sprite.y = clamp(sprite.y + steps * Math.cos(rad), worldBottom(), worldTop());
       updateSpriteEl(sprite);
       await sleep(180);
       return;
@@ -3568,8 +3731,8 @@ async function execBlock(node, sprite) {
     case 'go_xy': {
       /* node.val guarda "x,y"; una casilla vacía o inválida vale 0. */
       const xy = String(v == null ? '' : v).split(',');
-      sprite.x = clamp(num(xy[0], 0), -240, 240);
-      sprite.y = clamp(num(xy[1], 0), -180, 180);
+      sprite.x = clamp(num(xy[0], 0), worldLeft(), worldRight());
+      sprite.y = clamp(num(xy[1], 0), worldBottom(), worldTop());
       updateSpriteEl(sprite);
       await sleep(180);
       return;
@@ -4967,11 +5130,12 @@ async function exportSb3() {
     a.download = clean + '.sb3';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    if (built.dropped.length) {
-      toast(t.sb3Done + ' · ' + built.dropped.length + ' ' + t.sb3Dropped);
-    } else {
-      toast(t.sb3Done);
-    }
+    /* Dos avisos posibles: bloques que no existen en Scratch y un escenario
+       más grande que el de Scratch, que siempre mide 480x360. */
+    const avisos = [];
+    if (built.dropped.length) avisos.push(built.dropped.length + ' ' + t.sb3Dropped);
+    if (Math.round(worldW) !== WORLD_W0 || Math.round(worldH) !== WORLD_H0) avisos.push(t.sb3WorldSize);
+    toast(avisos.length ? t.sb3Done + ' · ' + avisos.join(' · ') : t.sb3Done);
   } catch (e) {
     toast(t.sb3Fail || t.badFile);
   } finally {
@@ -5112,6 +5276,9 @@ function bindEvents() {
     if (suppressStageClick) { suppressStageClick = false; return; }
     if (e.target.closest('.sprite-wrap')) return;
     if (e.target.closest('#exitGame')) return;
+    /* Las asas de tamaño no son parte del juego: tocarlas no dispara el
+       «al tocar el escenario». */
+    if (e.target.closest('.stage-grip')) return;
     fireEvent('when_tap');
   });
 
@@ -5178,8 +5345,8 @@ function bindEvents() {
   const py = $('#propY');
   const pd = $('#propDir');
   const ps = $('#propSize');
-  px.addEventListener('input', () => { const s = selectedSprite(); if (s && px.value !== '') { s.x = clamp(num(px.value, s.x), -240, 240); updateSpriteEl(s); scheduleSave(); } });
-  py.addEventListener('input', () => { const s = selectedSprite(); if (s && py.value !== '') { s.y = clamp(num(py.value, s.y), -180, 180); updateSpriteEl(s); scheduleSave(); } });
+  px.addEventListener('input', () => { const s = selectedSprite(); if (s && px.value !== '') { s.x = clamp(num(px.value, s.x), worldLeft(), worldRight()); updateSpriteEl(s); scheduleSave(); } });
+  py.addEventListener('input', () => { const s = selectedSprite(); if (s && py.value !== '') { s.y = clamp(num(py.value, s.y), worldBottom(), worldTop()); updateSpriteEl(s); scheduleSave(); } });
   pd.addEventListener('input', () => { const s = selectedSprite(); if (s && pd.value !== '') { s.dir = clamp(num(pd.value, s.dir), -180, 180); updateSpriteEl(s); scheduleSave(); } });
   ps.addEventListener('input', () => { const s = selectedSprite(); if (s && ps.value !== '') { s.size = clamp(num(ps.value, s.size), 20, 200); updateSpriteEl(s); scheduleSave(); } });
   px.addEventListener('change', () => { const s = selectedSprite(); if (s) { px.value = fmt(s.x); saveProject(); } });
@@ -5276,16 +5443,19 @@ function bindEvents() {
     if (blockDrag) moveBlockDrag(e);
     if (spriteDrag) moveSpriteDrag(e);
     if (paletteDrag) movePaletteDrag(e);
+    if (stageResize) moveStageResize(e);
   }, { passive: false });
   window.addEventListener('pointerup', e => {
     if (blockDrag) endBlockDrag(e, false);
     if (spriteDrag) endSpriteDrag(e, false);
     if (paletteDrag) endPaletteDrag(e, false);
+    if (stageResize) endStageResize(e);
   });
   window.addEventListener('pointercancel', e => {
     if (blockDrag) endBlockDrag(e, true);
     if (spriteDrag) endSpriteDrag(e, true);
     if (paletteDrag) endPaletteDrag(e, true);
+    if (stageResize) endStageResize(e);
   });
 
   /* ---- herramientas: zooms, deshacer/rehacer, fondo propio, reinicio ---- */
@@ -5295,6 +5465,15 @@ function bindEvents() {
   $('#stageZoomOutBtn').addEventListener('click', () => changeStageZoom(-ZOOM_STEP));
   $('#stageZoomInBtn').addEventListener('click', () => changeStageZoom(ZOOM_STEP));
   $('#stageZoomVal').addEventListener('click', resetStageZoom);
+  /* Tamaño del mundo: asas en el borde del escenario y botón de volver. */
+  const sizeResetBtn = $('#stageSizeReset');
+  if (sizeResetBtn) sizeResetBtn.addEventListener('click', resetWorldSize);
+  [['#gripY', 'y'], ['#gripX', 'x'], ['#gripCorner', 'xy']].forEach(pair => {
+    const el = $(pair[0]);
+    if (!el) return;
+    el.addEventListener('pointerdown', e => startStageResize(e, pair[1]));
+    el.addEventListener('keydown', e => keyStageResize(e, pair[1]));
+  });
   $('#resetStartBtn').addEventListener('click', resetToStart);
   $('#undoBtn').addEventListener('click', undo);
   $('#redoBtn').addEventListener('click', redo);
@@ -5491,6 +5670,9 @@ function bindEvents() {
 const pendingShare = loadProject();
 initProjects();
 bindEvents();
+/* El tamaño del mundo manda en el CSS del escenario: se publica antes del
+   primer render para que la caja no aparezca con el tamaño de fábrica y salte. */
+applyWorldSize();
 render();
 /* La primera instantánea es la línea base del historial. Si venimos de un
    link compartido, hydrateShared() la reemplaza al aplicar el proyecto. */

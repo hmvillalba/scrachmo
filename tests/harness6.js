@@ -42,18 +42,22 @@ window.addEventListener('load', function () {
       /* ============ 2. zoom del escenario y los personajes ============ */
       resetZoom(); resetStageZoom(); applyCodeZoom(); applyStageZoom(); render();
       const stage = $('#stage');
-      const h0 = stage.getBoundingClientRect().height;
-      const f0 = parseFloat(getComputedStyle($('.sprite-emoji')).fontSize);
+      const box0 = stage.getBoundingClientRect();
+      const h0 = box0.height;
+      const em0 = $('.sprite-emoji').getBoundingClientRect();
       check('zoom_esc_inicial', stageZoom === 1 && $('#stageZoomVal').textContent === '100%' &&
         stage.style.getPropertyValue('--stage-zoom') === '1');
       check('alto_base_valido', h0 > 150 && h0 < 320);
       $('#stageZoomInBtn').click();
-      const h1 = stage.getBoundingClientRect().height;
-      const f1 = parseFloat(getComputedStyle($('.sprite-emoji')).fontSize);
+      const box1 = stage.getBoundingClientRect();
+      const em1 = $('.sprite-emoji').getBoundingClientRect();
       check('zoom_esc_mas', stageZoom === 1.1 && $('#stageZoomVal').textContent === '110%' &&
         stage.style.getPropertyValue('--stage-zoom') === '1.1');
-      check('alto_escenario_crece', Math.abs(h1 - h0 * 1.1) < 2);
-      check('personaje_crece', Math.abs(f1 - f0 * 1.1) < 1);
+      /* El error que arreglamos: el zoom agrandaba la VENTANA. Ahora la caja
+         mide exactamente lo mismo y lo que crece es el contenido, que se
+         dibuja escalado (`.stage-world`). */
+      check('la_caja_no_cambia', Math.abs(box1.width - box0.width) < 1 && Math.abs(box1.height - box0.height) < 1);
+      check('personaje_crece', Math.abs(em1.width / em0.width - 1.1) < 0.02);
       check('posiciones_siguen_porcentuales', posLeft(sprites[0]) === 50 && posTop(sprites[0]) === 50);
       $('#stageZoomOutBtn').click();
       check('zoom_esc_menos', stageZoom === 1 && $('#stageZoomVal').textContent === '100%');

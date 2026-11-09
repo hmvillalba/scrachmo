@@ -38,8 +38,11 @@ window.addEventListener('load', function () {
         { kind: 'img', src: 'javascript:alert(1)' },
         { kind: 'img', src: IMG }
       ], '🐱');
-      check('rechaza_svg_y_urls', bad.length === 1 && bad[0].src === IMG);
-      check('isAllowedImage_svg_no', isAllowedImage({ name: 'x.svg', type: 'image/svg+xml' }) === false);
+      check('rechaza_svg_guardado_y_urls', bad.length === 1 && bad[0].src === IMG);
+      /* El SVG sí entra por el selector, pero se rasteriza al importarlo: en
+         los datos guardados nunca puede aparecer un data:image/svg+xml. */
+      check('isAllowedImage_svg_si', isAllowedImage({ name: 'x.svg', type: 'image/svg+xml' }) === true);
+      check('isAllowedImage_svgz_no', isAllowedImage({ name: 'x.svgz', type: 'image/svg+xml' }) === false);
       check('isAllowedImage_png_si', isAllowedImage({ name: 'x.png', type: 'image/png' }) === true);
 
       /* --- proyecto con 3 disfraces --- */

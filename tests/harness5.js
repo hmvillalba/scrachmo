@@ -248,9 +248,23 @@ window.addEventListener('load', function () {
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const file = new File([bytes], 'fondo.png', { type: 'image/png' });
       check('fondo_tipo_ok', isAllowedImage(file) === true);
-      const badFile = new File([bytes], 'x.svg', { type: 'image/svg+xml' });
-      await importBackdropFile(badFile);
-      check('fondo_rechaza_svg', stageBgImg === '' && isAllowedImage(badFile) === false);
+      /* Un SVG de fondo entra y se rasteriza: el fondo guardado sigue siendo
+         un mapa de bits, nunca un data:image/svg+xml. */
+      const svgFile = new File(['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 18">' +
+        '<rect width="32" height="18" fill="#0ea5e9"/></svg>'], 'cielo.svg', { type: 'image/svg+xml' });
+      check('fondo_acepta_svg', isAllowedImage(svgFile) === true);
+      await importBackdropFile(svgFile);
+      check('fondo_svg_se_rasteriza', /^data:image\/(webp|png);base64,/.test(stageBgImg) &&
+        validBackdrop(stageBgImg) === stageBgImg);
+      const dim = await new Promise(res => {
+        const im = new Image();
+        im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight });
+        im.onerror = () => res({ w: 0, h: 0 });
+        im.src = stageBgImg;
+      });
+      check('fondo_svg_conserva_proporcion', dim.w === BG_MAX_PX && Math.abs(dim.h - BG_MAX_PX * 18 / 32) < 2);
+      clearBackdrop();
+      check('fondo_limpio_tras_svg', stageBgImg === '');
       let imported = false;
       try { await importBackdropFile(file); imported = (stageBgImg !== '' && validBackdrop(stageBgImg) === stageBgImg); } catch (e) { }
       check('fondo_importa_real', imported);

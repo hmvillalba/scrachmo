@@ -79,6 +79,21 @@ if (!/function\s+stopCode\s*\([\s\S]{0,500}?stopAllSounds\(\)/.test(engine)) {
   ok = false; console.log('FAIL stopCode() no corta los sonidos');
 }
 
+/* Importación de imágenes: el SVG se acepta como entrada pero se rasteriza.
+   Si alguien mete `svg` en IMG_DATA_RE para «no tener que convertir», los
+   datos guardados pasarían a admitir SVG —que puede llevar script— y ninguna
+   otra prueba se enteraría. */
+if (!/const\s+IMG_DATA_RE\s*=\s*\/\^data:image\\\/\(webp\|png\|jpeg\|gif\);base64,/.test(engine)) {
+  ok = false; console.log('FAIL IMG_DATA_RE debe admitir sólo webp/png/jpeg/gif');
+}
+if (!/const\s+VECTOR_TYPE\s*=\s*'image\/svg\+xml'/.test(engine)) { ok = false; console.log('FAIL falta VECTOR_TYPE'); }
+['isSvgFile', 'svgBox', 'decodeImage', 'encodeImage', 'isAllowedImage'].forEach(fn => {
+  if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+    ok = false; console.log('FAIL falta ' + fn + '() de la importación de imágenes');
+  }
+});
+if (!/ACCEPT_IMAGE\.join\(/.test(engine)) { ok = false; console.log('FAIL los <input file> no usan ACCEPT_IMAGE'); }
+
 /* Exportación a .sb3: las piezas que no pueden faltar. El ZIP, el MD5 y el
    CRC32 son propios (no hay librerías), así que si alguien los borra el botón
    queda muerto sin que ninguna otra prueba se entere. */

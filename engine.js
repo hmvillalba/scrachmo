@@ -90,6 +90,11 @@ const MAX_IMG_CHARS = 400000;
 const COSTUME_MAX_PX = 256;
 const IMG_DATA_RE = /^data:image\/(webp|png|jpeg|gif);base64,[A-Za-z0-9+/=]+$/;
 const COSTUME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'];
+/* El SVG se acepta como entrada, pero nunca se guarda: se rasteriza a
+   WebP/PNG como cualquier otra imagen. IMG_DATA_RE sigue sin admitir
+   data:image/svg+xml, que podría llevar script adentro. */
+const VECTOR_TYPE = 'image/svg+xml';
+const ACCEPT_IMAGE = COSTUME_TYPES.concat([VECTOR_TYPE]);
 let storageWarned = false;
 
 /* Fondo propio: permitimos más resolución que en un disfraz, pero con tope
@@ -1904,13 +1909,47 @@ async function deleteCostume(index) {
   saveProject();
 }
 
+function isSvgFile(file) {
+  const type = String(file.type || '').toLowerCase();
+  if (type) return type === VECTOR_TYPE;
+  return /\.svg$/.test(String(file.name || '').toLowerCase());
+}
+
 function isAllowedImage(file) {
   const name = String(file.name || '').toLowerCase();
-  if (/\.svgz?$/.test(name)) return false;
+  /* .svgz viene comprimido en gzip: el navegador no lo abre como imagen. */
+  if (/\.svgz$/.test(name)) return false;
   const type = String(file.type || '').toLowerCase();
-  if (type && COSTUME_TYPES.indexOf(type) < 0) return false;
-  if (!type && !/\.(png|jpe?g|webp|gif|bmp)$/.test(name)) return false;
-  return true;
+  if (type) return ACCEPT_IMAGE.indexOf(type) >= 0;
+  return /\.(png|jpe?g|webp|gif|bmp|svg)$/.test(name);
+}
+
+/* Un SVG no trae píxeles: hay que deducir su proporción para rasterizarlo.
+   Mandan el width/height del propio <svg>; si faltan, el viewBox. */
+function svgBox(text) {
+  const tag = /<svg\b[^>]*>/i.exec(String(text || '').slice(0, 4000));
+  const attrs = tag ? tag[0] : '';
+  const attr = name => {
+    const re = new RegExp('(?:^|[\\s<])' + name + '\\s*=\\s*["\']([^"\']*)["\']', 'i');
+    const m = re.exec(attrs);
+    return m ? m[1] : '';
+  };
+  const num = v => {
+    const m = /^\s*(-?[\d.]+)\s*([a-z%]*)/i.exec(String(v || ''));
+    if (!m) return 0;
+    const n = parseFloat(m[1]);
+    if (!(n > 0)) return 0;
+    /* Un 100% no dice nada del tamaño real: mejor caer al viewBox. */
+    return m[2] === '%' ? 0 : n;
+  };
+  let w = num(attr('width'));
+  let h = num(attr('height'));
+  if (!w || !h) {
+    const p = attr('viewBox').trim().split(/[\s,]+/).map(parseFloat);
+    if (p.length === 4 && p[2] > 0 && p[3] > 0) { w = w || p[2]; h = h || p[3]; }
+  }
+  if (!w || !h) { w = 1; h = 1; }
+  return { w: w, h: h };
 }
 
 /* createImageBitmap es más rápido, pero en algunos navegadores puede
@@ -1935,32 +1974,63 @@ function loadBitmap(file) {
   });
 }
 
-function loadBitmapViaImg(file) {
+function loadImgUrl(url) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('imagen ilegible')); };
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('imagen ilegible'));
     img.src = url;
   });
 }
 
-/* Re-encode a WebP y achica la imagen. Nunca se guarda el archivo original:
-   así controlamos el peso y descartamos cualquier SVG. */
+function loadBitmapViaImg(file) {
+  const url = URL.createObjectURL(file);
+  return loadImgUrl(url).then(
+    img => { URL.revokeObjectURL(url); return img; },
+    err => { URL.revokeObjectURL(url); throw err; }
+  );
+}
+
+/* Devuelve algo dibujable más su tamaño lógico. Un SVG pasa por <img>, donde
+   el navegador lo dibuja en modo seguro (sin scripts ni recursos externos), y
+   se mide con su propio width/height/viewBox. */
+async function decodeImage(file) {
+  if (isSvgFile(file)) {
+    const box = svgBox(await file.text());
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await loadImgUrl(url);
+      return { src: img, w: box.w, h: box.h, vector: true, release: () => URL.revokeObjectURL(url) };
+    } catch (e) {
+      URL.revokeObjectURL(url);
+      throw e;
+    }
+  }
+  const bmp = await loadBitmap(file);
+  return {
+    src: bmp, w: bmp.width, h: bmp.height, vector: false,
+    release: () => { if (typeof bmp.close === 'function') bmp.close(); }
+  };
+}
+
+/* Re-encode a WebP y ajusta el tamaño. Nunca se guarda el archivo original:
+   así controlamos el peso y un SVG jamás llega al proyecto como SVG. */
 async function encodeImage(file, maxPx, maxChars, qBase, qStep) {
-  const bitmap = await loadBitmap(file);
+  const img = await decodeImage(file);
   try {
-    const max = Math.max(bitmap.width, bitmap.height) || 1;
-    const scale = Math.min(1, maxPx / max);
-    let w = Math.max(1, Math.round(bitmap.width * scale));
-    let h = Math.max(1, Math.round(bitmap.height * scale));
+    const max = Math.max(img.w, img.h) || 1;
+    /* Un vector se puede agrandar —para eso es vectorial—; un mapa de bits no,
+       porque sólo ganaríamos peso. */
+    const scale = img.vector ? maxPx / max : Math.min(1, maxPx / max);
+    let w = Math.max(1, Math.round(img.w * scale));
+    let h = Math.max(1, Math.round(img.h * scale));
     for (let attempt = 0; attempt < 3; attempt++) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
       ctx.clearRect(0, 0, w, h);
-      ctx.drawImage(bitmap, 0, 0, w, h);
+      ctx.drawImage(img.src, 0, 0, w, h);
       let out = canvas.toDataURL('image/webp', qBase - attempt * qStep);
       if (!/^data:image\/webp;base64,/.test(out)) out = canvas.toDataURL('image/png');
       if (out.length <= maxChars && IMG_DATA_RE.test(out)) return out;
@@ -1969,7 +2039,7 @@ async function encodeImage(file, maxPx, maxChars, qBase, qStep) {
     }
     return null;
   } finally {
-    if (typeof bitmap.close === 'function') bitmap.close();
+    img.release();
   }
 }
 
@@ -1984,7 +2054,7 @@ function imageToBackdrop(file) {
 function pickBackdropFile() {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = COSTUME_TYPES.join(',');
+  input.accept = ACCEPT_IMAGE.join(',');
   input.onchange = () => {
     const f = (input.files || [])[0];
     if (f) importBackdropFile(f);
@@ -2015,7 +2085,7 @@ function clearBackdrop() {
 function pickCostumeFiles(asNewSprite) {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = COSTUME_TYPES.join(',');
+  input.accept = ACCEPT_IMAGE.join(',');
   input.multiple = true;
   input.onchange = () => importCostumeFiles(Array.from(input.files || []), !!asNewSprite);
   input.click();

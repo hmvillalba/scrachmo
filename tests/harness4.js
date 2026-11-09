@@ -27,6 +27,22 @@ window.addEventListener('load', function () {
     return new File([bytes], name, { type: type });
   }
 
+  /* Un SVG de verdad: 24×12 con viewBox, para comprobar que se mide y se
+     agranda al rasterizarlo (24 px de ancho darían un disfraz diminuto). */
+  function makeSvg(name, attrs, inner) {
+    const text = '<svg xmlns="http://www.w3.org/2000/svg" ' + attrs + '>' + inner + '</svg>';
+    return new File([text], name, { type: 'image/svg+xml' });
+  }
+
+  function imageSize(src) {
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => res({ w: 0, h: 0 });
+      img.src = src;
+    });
+  }
+
   /* createImageBitmap puede colgarse en headless: cada imagen consume el
      temporizador de respaldo de 3 s del motor. Dejamos margen holgado. */
   const watchdog = setTimeout(() => {
@@ -77,11 +93,17 @@ window.addEventListener('load', function () {
 
       const png = await makeFile('nave-espacial.png', 'image/png', 400, 300);
       const jpg = await makeFile('auto 2.jpg', 'image/jpeg', 40, 40);
-      const svg = await makeFile('vector.svg', 'image/svg+xml', 20, 20);
+      const svg = makeSvg('vector.svg', 'width="24" height="12" viewBox="0 0 24 12"',
+        '<rect width="24" height="12" fill="#2563eb"/>');
+      const soloViewBox = makeSvg('cubo.svg', 'viewBox="0 0 40 40"',
+        '<rect width="40" height="40" fill="#16a34a"/>');
+      const svgz = makeSvg('comprimido.svgz', 'width="8" height="8"', '<rect width="8" height="8"/>');
       const falso = await makeFile('virus.png', 'text/html', 20, 20);
 
       check('archivo_es_file', png instanceof File && png.size > 0);
-      check('filtro_svg', isAllowedImage(svg) === false);
+      check('filtro_svg', isAllowedImage(svg) === true);
+      check('filtro_svg_sin_tipo', isAllowedImage(new File(['<svg/>'], 'sin-tipo.svg')) === true);
+      check('filtro_svgz', isAllowedImage(svgz) === false);
       check('filtro_tipo_falso', isAllowedImage(falso) === false);
       check('filtro_jpg', isAllowedImage(jpg) === true);
 
@@ -92,21 +114,45 @@ window.addEventListener('load', function () {
         return src.length < MAX_IMG_CHARS && src.length < png.size * 4;
       })());
 
+      /* El SVG entra y sale como mapa de bits: nunca se guarda el SVG. */
+      const svgSrc = await imageToCostume(svg);
+      check('svg_se_rasteriza', !!svgSrc && IMG_DATA_RE.test(svgSrc));
+      check('svg_no_queda_como_svg', /^data:image\/(webp|png);base64,/.test(svgSrc || ''));
+      const svgDim = await imageSize(svgSrc || 'data:image/png;base64,');
+      check('svg_se_agranda', svgDim.w === COSTUME_MAX_PX && svgDim.h === COSTUME_MAX_PX / 2);
+      check('svg_usa_el_viewbox', (() => {
+        const b = svgBox('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect/></svg>');
+        return b.w === 40 && b.h === 20;
+      })());
+      check('svgbox_ignora_porcentajes', (() => {
+        const b = svgBox('<svg width="100%" height="100%" viewBox="0 0 30 10"/>');
+        return b.w === 30 && b.h === 10;
+      })());
+      check('svgbox_no_confunde_stroke_width', (() => {
+        const b = svgBox('<svg width="12" height="6"><rect stroke-width="99"/></svg>');
+        return b.w === 12 && b.h === 6;
+      })());
+      const viewBoxSrc = await imageToCostume(soloViewBox);
+      const vbDim = await imageSize(viewBoxSrc || 'data:image/png;base64,');
+      check('svg_sin_width_usa_viewbox', vbDim.w === COSTUME_MAX_PX && vbDim.h === COSTUME_MAX_PX);
+
       await importCostumeFiles([png, jpg, svg, falso], false);
-      check('importa_solo_validos', s.costumes.length === 3);
-      check('nombres_desde_archivo', s.costumes[1].name === 'nave-espacial' && s.costumes[2].name === 'auto 2');
+      check('importa_solo_validos', s.costumes.length === 4);
+      check('nombres_desde_archivo', s.costumes[1].name === 'nave-espacial' &&
+        s.costumes[2].name === 'auto 2' && s.costumes[3].name === 'vector');
       check('selecciona_primer_nuevo', s.costumeIndex === 1);
-      check('importa_y_renderiza', document.querySelectorAll('#costumeStrip .costume-thumb').length === 3);
+      check('importa_y_renderiza', document.querySelectorAll('#costumeStrip .costume-thumb').length === 4);
       check('importa_imagen_en_escenario', !!document.querySelector('#spritesLayer img.costume-img'));
       check('importa_persiste', (() => {
         const raw = store.get('scrachmo_v8');
         return !!raw && raw.indexOf('nave-espacial') > -1;
       })());
+      check('svg_importado_es_mapa_de_bits', /^data:image\/(webp|png);base64,/.test(s.costumes[3].src));
 
       /* El disfraz importado sobrevive a un round-trip de guardado. */
       check('importa_roundtrip', (() => {
         const p = serializeProject();
-        const ok = applyPayload(p) === true && sprites[0].costumes.length === 3 &&
+        const ok = applyPayload(p) === true && sprites[0].costumes.length === 4 &&
           IMG_DATA_RE.test(sprites[0].costumes[1].src);
         s = sprites[0];
         return ok;
@@ -146,7 +192,7 @@ window.addEventListener('load', function () {
       askConfirm = async () => true;
       const activoId = currentCostume(s).id;
       await deleteCostume(0);
-      check('borra_un_disfraz', s.costumes.length === 2);
+      check('borra_un_disfraz', s.costumes.length === 3);
       check('borra_conserva_activo', currentCostume(s).id === activoId);
       for (let i = 0; i < 6; i++) await deleteCostume(0);
       askConfirm = realAsk;

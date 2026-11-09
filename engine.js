@@ -751,6 +751,13 @@ function persistProject() {
   const ok = store.set('scrachmo_v8', JSON.stringify(serializeProject()));
   if (!ok && !storageWarned) { storageWarned = true; toast(UI[lang].storageFull); }
   if (ok) storageWarned = false;
+  /* El payload no se copia acá: el proyecto activo vive en `scrachmo_v8` y sólo
+     se respalda en su propio slot al cambiar de proyecto. Duplicarlo en cada
+     guardado dejaría la mitad del cupo libre para las imágenes. */
+  if (ok && activeProjectId) {
+    const p = activeProject();
+    if (p) { p.updatedAt = Date.now(); writeProjects(); }
+  }
   return ok;
 }
 
@@ -762,6 +769,319 @@ function saveProject() {
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveProject, 400);
+}
+
+/* ---------------- biblioteca de proyectos ----------------
+   El proyecto activo sigue viviendo en `scrachmo_v8`: el arranque, los links
+   y todo lo ya probado no cambian. Encima va un índice liviano con el nombre
+   de cada proyecto y una copia de cada uno en su propia clave. Así abrir otro
+   proyecto no pisa el anterior. */
+
+const PROJECTS_KEY = 'scrachmo_projects';
+const ACTIVE_KEY = 'scrachmo_active';
+const PROJECT_PREFIX = 'scrachmo_proj_';
+const MAX_PROJECTS = 24;
+
+let projects = [];
+let activeProjectId = '';
+
+function projectKey(id) { return PROJECT_PREFIX + id; }
+
+function readProjects() {
+  try {
+    const list = JSON.parse(store.get(PROJECTS_KEY) || '[]');
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter(p => p && typeof p.id === 'string' && p.id)
+      .map(p => ({
+        id: p.id,
+        name: String(p.name || '').slice(0, 40),
+        updatedAt: Number(p.updatedAt) || 0
+      }));
+  } catch (e) { return []; }
+}
+
+function writeProjects() {
+  store.set(PROJECTS_KEY, JSON.stringify(projects));
+  store.set(ACTIVE_KEY, activeProjectId);
+}
+
+function activeProject() {
+  return projects.find(p => p.id === activeProjectId) || null;
+}
+
+/* Al arrancar: si no hay índice, el proyecto que ya estaba guardado pasa a ser
+   el primero, así no se pierde nada de lo que el usuario tenía. */
+function initProjects() {
+  projects = readProjects();
+  activeProjectId = store.get(ACTIVE_KEY) || '';
+  if (!projects.length) {
+    activeProjectId = uid('p');
+    projects = [{ id: activeProjectId, name: UI[lang].untitledProject, updatedAt: Date.now() }];
+    writeProjects();
+    persistProject();
+    return;
+  }
+  if (!projects.some(p => p.id === activeProjectId)) activeProjectId = projects[0].id;
+  writeProjects();
+  /* Caso borde: si alguien limpió la clave compartida pero el slot del activo
+     sigue ahí, se recupera en vez de arrancar con un proyecto vacío. */
+  if (!store.get('scrachmo_v8') && store.get(projectKey(activeProjectId))) {
+    const raw = store.get(projectKey(activeProjectId));
+    try {
+      if (applyPayload(JSON.parse(raw))) store.set('scrachmo_v8', raw);
+    } catch (e) { }
+  }
+  /* Si el slot del activo quedó vacío, se repone con lo que hay en memoria. */
+  if (!store.get(projectKey(activeProjectId))) persistProject();
+}
+
+function projectLabel(p) {
+  if (!p.updatedAt) return '';
+  try {
+    const d = new Date(p.updatedAt);
+    return d.toLocaleDateString(lang, { day: '2-digit', month: 'short' }) + ' · ' +
+      d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return ''; }
+}
+
+function updateProjectName() {
+  const el = $('#projName');
+  if (!el) return;
+  const p = activeProject();
+  el.textContent = p ? p.name : '';
+}
+
+function renderProjects() {
+  const box = $('#projList');
+  if (!box) return;
+  const t = UI[lang];
+  box.textContent = '';
+  if (!projects.length) {
+    const empty = document.createElement('p');
+    empty.className = 'proj-empty';
+    empty.textContent = t.projectsEmpty;
+    box.appendChild(empty);
+    return;
+  }
+
+  const action = (kind, label, icon, id) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'proj-act';
+    b.dataset.projAct = kind;
+    b.dataset.projId = id;
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'ic');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', icon);
+    svg.appendChild(use);
+    b.appendChild(svg);
+    return b;
+  };
+
+  projects.slice().sort((a, b) => b.updatedAt - a.updatedAt).forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'proj-item' + (p.id === activeProjectId ? ' active' : '');
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'proj-open';
+    open.dataset.projOpen = p.id;
+    const name = document.createElement('b');
+    name.textContent = p.name;
+    const meta = document.createElement('small');
+    meta.textContent = projectLabel(p) +
+      (p.id === activeProjectId ? ' · ' + t.currentProject : '');
+    open.appendChild(name);
+    open.appendChild(meta);
+
+    const acts = document.createElement('div');
+    acts.className = 'proj-acts';
+    acts.appendChild(action('rename', t.renameProject, '#i-edit', p.id));
+    acts.appendChild(action('duplicate', t.duplicateProject, '#i-copy', p.id));
+    acts.appendChild(action('delete', t.deleteProject, '#i-trash', p.id));
+
+    row.appendChild(open);
+    row.appendChild(acts);
+    box.appendChild(row);
+  });
+}
+
+function openProjects() {
+  const modal = $('#projModal');
+  if (!modal) return;
+  renderProjects();
+  modal.hidden = false;
+  updateModalLock();
+}
+
+function closeProjects() {
+  const modal = $('#projModal');
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  updateModalLock();
+}
+
+function newProject() {
+  const t = UI[lang];
+  if (projects.length >= MAX_PROJECTS) { toast(t.projectLimit); return; }
+  /* Se respalda el actual antes de soltar la referencia. */
+  if (!persistProject()) return;
+  if (!stashActiveProject()) return;
+  const id = uid('p');
+  projects.unshift({
+    id: id,
+    name: t.untitledProject + ' ' + (projects.length + 1),
+    updatedAt: Date.now()
+  });
+  activeProjectId = id;
+  writeProjects();
+  stopCode();
+  resetProjectData(true);
+  resetHistory();
+  render();
+  persistProject();
+  updateProjectName();
+  renderProjects();
+  toast(t.projectCreated);
+}
+
+/* Respalda el proyecto activo en su propio slot antes de pisar la clave
+   compartida. Devuelve false si el dispositivo se quedó sin cupo. */
+function stashActiveProject() {
+  if (!activeProjectId) return true;
+  const raw = store.get('scrachmo_v8');
+  if (!raw) return true;
+  if (store.set(projectKey(activeProjectId), raw)) return true;
+  if (!storageWarned) { storageWarned = true; toast(UI[lang].storageFull); }
+  return false;
+}
+
+function openProject(id) {
+  const t = UI[lang];
+  if (!id || id === activeProjectId) { closeProjects(); return; }
+  const target = projects.find(p => p.id === id);
+  if (!target) return;
+  if (!persistProject()) return;
+  const raw = store.get(projectKey(id));
+  let payload = null;
+  try { payload = JSON.parse(raw || 'null'); } catch (e) { payload = null; }
+  if (!payload) { toast(t.badFile); return; }
+  if (!stashActiveProject()) return;
+  stopCode();
+  if (!applyPayload(payload)) { toast(t.badFile); return; }
+  activeProjectId = id;
+  writeProjects();
+  /* El nuevo activo pasa a vivir en la clave de siempre. */
+  store.set('scrachmo_v8', raw);
+  store.del(projectKey(id));
+  varFormOpen = false;
+  resetHistory();
+  render();
+  updateProjectName();
+  closeProjects();
+  toast(t.projectOpened);
+}
+
+async function renameProject(id) {
+  const t = UI[lang];
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  const name = await askText(t.projectName, p.name, t.projectNameHint);
+  if (name === null) return;
+  const clean = String(name).replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!clean) return;
+  p.name = clean;
+  p.updatedAt = Date.now();
+  writeProjects();
+  updateProjectName();
+  renderProjects();
+  toast(t.projectRenamed);
+}
+
+function duplicateProject(id) {
+  const t = UI[lang];
+  if (projects.length >= MAX_PROJECTS) { toast(t.projectLimit); return; }
+  const src = projects.find(p => p.id === id);
+  if (!src) return;
+  if (id === activeProjectId && !persistProject()) return;
+  /* El activo vive en `scrachmo_v8`; los demás, en su propio slot. */
+  const raw = (id === activeProjectId) ? store.get('scrachmo_v8') : store.get(projectKey(id));
+  if (!raw) { toast(t.badFile); return; }
+  const nid = uid('p');
+  projects.unshift({
+    id: nid,
+    name: (src.name.slice(0, 34) + ' (2)'),
+    updatedAt: Date.now()
+  });
+  store.set(projectKey(nid), raw);
+  writeProjects();
+  renderProjects();
+  toast(t.projectDuplicated);
+}
+
+async function deleteProject(id) {
+  const t = UI[lang];
+  if (projects.length <= 1) { toast(t.onlyOneProject); return; }
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  const sure = await askConfirm(t.deleteProject + ': «' + p.name + '»?');
+  if (!sure) return;
+
+  const wasActive = id === activeProjectId;
+  projects = projects.filter(x => x.id !== id);
+
+  if (wasActive) {
+    const next = projects[0];
+    const raw = store.get(projectKey(next.id));
+    let payload = null;
+    try { payload = JSON.parse(raw || 'null'); } catch (e) { payload = null; }
+    stopCode();
+    activeProjectId = next.id;
+    if (payload && applyPayload(payload)) {
+      store.set('scrachmo_v8', raw);
+      store.del(projectKey(next.id));
+      resetHistory();
+      render();
+    } else {
+      resetProjectData(true);
+      persistProject();
+    }
+    updateProjectName();
+  }
+  writeProjects();
+  store.del(projectKey(id));
+  renderProjects();
+  toast(t.projectDeleted);
+}
+
+function bindProjects() {
+  const btn = $('#projectsBtn');
+  if (btn) btn.addEventListener('click', openProjects);
+  const close = $('#projClose');
+  if (close) close.addEventListener('click', closeProjects);
+  const fresh = $('#projNew');
+  if (fresh) fresh.addEventListener('click', newProject);
+
+  const modal = $('#projModal');
+  if (!modal) return;
+  modal.addEventListener('click', e => {
+    if (e.target === modal) { closeProjects(); return; }
+    const open = e.target.closest('[data-proj-open]');
+    if (open) { openProject(open.dataset.projOpen); return; }
+    const act = e.target.closest('[data-proj-act]');
+    if (!act) return;
+    if (act.dataset.projAct === 'rename') renameProject(act.dataset.projId);
+    else if (act.dataset.projAct === 'duplicate') duplicateProject(act.dataset.projId);
+    else if (act.dataset.projAct === 'delete') deleteProject(act.dataset.projId);
+  });
+  document.addEventListener('keydown', e => {
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeProjects(); }
+  });
 }
 
 /* ---------------- basic UI ---------------- */
@@ -1034,8 +1354,9 @@ function closeSpriteModal() {
 function updateModalLock() {
   const ask = $('#askModal');
   const rep = $('#repPicker');
+  const proj = $('#projModal');
   const anyOpen = !$('#shareModal').hidden || !$('#spriteModal').hidden ||
-    !!(ask && !ask.hidden) || !!(rep && !rep.hidden);
+    !!(ask && !ask.hidden) || !!(rep && !rep.hidden) || !!(proj && !proj.hidden);
   document.body.classList.toggle('modal-open', anyOpen);
 }
 
@@ -2115,6 +2436,7 @@ function render() {
   applyStageZoom();
   updateResetButton();
   updateHistoryButtons();
+  updateProjectName();
 }
 
 /* ---------------- collapsed sections ---------------- */
@@ -3431,6 +3753,7 @@ function ensureMotionPermission() {
 function bindEvents() {
   bindAskModal();
   bindRepPicker();
+  bindProjects();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {
       lang = btn.dataset.lang;
@@ -3823,6 +4146,7 @@ function bindEvents() {
 
 /* ---------------- start ---------------- */
 const pendingShare = loadProject();
+initProjects();
 bindEvents();
 render();
 /* La primera instantánea es la línea base del historial. Si venimos de un

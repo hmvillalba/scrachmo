@@ -10,7 +10,8 @@ const { pathToFileURL } = require('url');
 const SRC = path.resolve(__dirname, '..');
 const HARNESS = [
   'harness.js', 'harness2.js', 'harness3.js', 'harness4.js',
-  'harness5.js', 'harness6.js', 'harness7.js', 'harness8.js', 'harness9.js'
+  'harness5.js', 'harness6.js', 'harness7.js', 'harness8.js',
+  'harness9.js', 'harness10.js'
 ];
 
 function build() {

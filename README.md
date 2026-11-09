@@ -55,6 +55,7 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 
 ### Proyectos
 
+- **Varios proyectos con nombre**: la tarjeta *Proyecto* tiene **Mis proyectos**, con la lista de todo lo guardado en el dispositivo. Desde ahí podés **crear**, **abrir**, **renombrar**, **duplicar** y **borrar** (hasta 24), y el botón muestra siempre el nombre del proyecto abierto. Abrir otro ya no pisa el anterior: cada uno se guarda aparte y el que estaba abierto se respalda antes de cambiar. No se puede borrar el último.
 - Guardado automático en el dispositivo (localStorage), incluyendo puntaje, estado de la opción multijugador, todos los disfraces y el fondo propio. Las preferencias de la interfaz (paneles colapsados, zoom de bloques y zoom del escenario) se guardan aparte en `scrachmo_ui`, aceptando el formato viejo. Si se llena el espacio del dispositivo, la app avisa en vez de fallar en silencio.
 - **Compartir**: genera un link con el proyecto adentro (`?p=...`) para mandar a amigos; al abrirlo, el proyecto se carga solo. El JSON se **comprime con gzip** (`g1.`) y se codifica en base64url, así que los disfraces viajan en un link bastante más corto. Si el navegador no tiene `CompressionStream`, cae a JSON sin comprimir (`j1.`), y los links viejos en base64 plano se siguen abriendo igual.
 - Si el link supera los 8000 caracteres, la app avisa que algunos chats pueden cortarlo y conviene usar menos imágenes o exportar el `.scmo`.
@@ -117,7 +118,7 @@ La app que se abre en el navegador son esos tres archivos más el manifest, el s
 
 ## Verificación
 
-Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **472 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
+Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite ahora vive **dentro del repo** (`tests/`) y corre también en CI. **519 comprobaciones, 0 fallos**, repetidas en corridas independientes e idénticas para descartar resultados intermitentes:
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
@@ -131,6 +132,7 @@ Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless.
 | Parser, diálogos y topes | 65 | Aritmética sin `eval` (precedencia, paréntesis, potencia, decimales, errores de sintaxis), `evalExpr()` con `score`, variables y `aleatorio()`, condiciones, modal propio en modo confirmación y texto con traducciones en 4 idiomas, cancelación por `Escape`, flujos reales de borrado sin diálogos nativos, y recorte de proyectos con 40 niveles / 2000 nodos / 8 MB. |
 | Reporteros | 71 | Catálogo de 10 y 4 idiomas, `node.reps` sin cambiar `node.val`, rechazo de reporteros sueltos o dentro de sombreros, tope de una casilla por hueco, anidado, serialización, clonado y deshacer, evaluación de los 10, ejecución real de `mover`, `ir a x: y:`, `repetir`, `si` y `decir`, y el selector `ƒ` con chip, borrado, texto conservado y casilla de nombre sin anidado. |
 | Link al arrancar | 12 | Una página abierta con `?p=g1.…` carga proyecto, disfraces, puntaje, fondo y el bloque `ir a x: y:` con sus dos casillas, y renderiza la imagen en el escenario. |
+| Proyectos con nombre | 47 | Migración del proyecto que ya existía, crear, abrir (y que el anterior quede intacto), renombrar con cancelación, duplicar, borrar cancelado y confirmado, salto al borrar el activo, no poder quedarse sin proyectos, límite de 24, la lista y el modal, los textos en 4 idiomas y la relectura del índice al arrancar. |
 
 Aparte de la suite de navegador hay **90 comprobaciones de PWA** que no necesitan Chrome:
 
@@ -146,12 +148,12 @@ node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
-node tests/run.js mi-corrida     # 10 escenarios en Chrome headless
+node tests/run.js mi-corrida     # 11 escenarios en Chrome headless
 ```
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
 
-Además: los 4 idiomas tienen las mismas 153 claves de texto (51 de `UI_EXTRA`) y los 40 bloques activos más 10 reporteros; los 60 `data-t` y 11 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()` y el tope `MAX_CODE_DEPTH`, y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero y el ícono de la app también se revisaron en capturas reales a 500 px de ancho.
+Además: los 4 idiomas tienen las mismas 173 claves de texto (71 de `UI_EXTRA`) y los 40 bloques activos más 10 reporteros; los 64 `data-t` y 11 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()` y el tope `MAX_CODE_DEPTH`, y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app y el modal de proyectos también se revisaron en capturas reales a 500 px de ancho.
 
 Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve DOM ni capturas por línea de comando); se usó Chrome con `--headless=new --dump-dom`. En el decodificador de imágenes de Chrome headless se detectó un cuelgue intermitente de `createImageBitmap`, por lo que el motor ahora cae a `<img>` si tarda más de 3 segundos.
 
@@ -167,7 +169,8 @@ Mejor honesto que vendedor:
 - Los links `?p=` siguen llevando todo el proyecto adentro de la URL. Con muchos disfraces grandes pueden volverse demasiado largos para WhatsApp o para el navegador; en ese caso conviene exportar el `.scmo`. Publicarlo en un hosting estático no cambia esto: haría falta un backend con almacenamiento para tener links cortos.
 - **La instalación y el modo offline necesitan `https` o `localhost`**: son requisitos del navegador para los service workers, no una decisión de la app. Abierta con doble clic (`file://`) ScrachMo funciona igual, pero sin ícono instalable ni caché.
 - La caché de la PWA se invalida a mano: `sw.js` lleva una `VERSION` (`scrachmo-v1`) y, al cambiarla, `activate` borra la anterior. Si se edita `index.html` sin subir la versión, el celular puede seguir mostrando la copia vieja hasta la siguiente visita con red.
-- Un solo proyecto por dispositivo: el autoguardado pisa siempre el mismo slot; no hay lista de proyectos con nombre.
+- Un proyecto abierto desde un link `?p=` o desde un `.scmo` se carga **en el proyecto actual**, así que reemplaza lo que había ahí. Si querés conservarlo, creá uno nuevo antes de abrirlo.
+- El nombre del proyecto vive en la biblioteca del dispositivo: no viaja dentro del `.scmo` ni del link `?p=`. Tampoco hay carpetas ni orden manual: la lista se ordena por último cambio.
 - El "multijugador" usa `localStorage`: los mensajes llegan a los sprites del mismo navegador (y a otras pestañas del mismo origen), pero no a otros dispositivos. Para eso haría falta un servicio externo.
 - Hay zoom del área de bloques y del escenario, pero todavía no hay layout específico para pantalla horizontal.
 

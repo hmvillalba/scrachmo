@@ -12,7 +12,7 @@ const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n :
 const L = (es, en, pt, fr) => ({ es, en, pt, fr });
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { } }
 };
 
@@ -267,6 +267,14 @@ const BLOCKS = [
     n: L('Apuntar en dirección {v}', 'Point in direction {v}', 'Apontar na direção {v}', 'Pointer en direction {v}'),
     d: L('Deja el personaje mirando hacia ese ángulo (0 = arriba, 90 = derecha).', 'Points the character in that angle (0 = up, 90 = right).', 'Deixa o personagem olhando nesse ângulo (0 = cima, 90 = direita).', 'Oriente le personnage vers cet angle (0 = haut, 90 = droite).')
   },
+  /* Dos huecos en la etiqueta ({x} e {y}) pero un solo val escalar con
+     formato "x,y". Así no cambia el formato de los proyectos ni de los
+     links compartidos: makeNode, normalizeNodes y cloneNodeTree siguen igual. */
+  {
+    id: 'go_xy', cat: 'motion', icon: 'target', def: '0,0', w: 58, num: 1,
+    n: L('Ir a x: {x} y: {y}', 'Go to x: {x} y: {y}', 'Ir para x: {x} y: {y}', 'Aller à x : {x} y : {y}'),
+    d: L('Salta directo a esa coordenada. x va de -240 a 240 e y de -180 a 180.', 'Jumps straight to that coordinate. x goes from -240 to 240 and y from -180 to 180.', 'Vai direto para essa coordenada. x vai de -240 a 240 e y de -180 a 180.', 'Va directement à cette coordonnée. x va de -240 à 240 et y de -180 à 180.')
+  },
   {
     id: 'go_random', cat: 'motion', icon: 'shuffle',
     n: L('Ir a un lugar al azar', 'Go somewhere random', 'Ir a um lugar aleatório', 'Aller au hasard'),
@@ -301,6 +309,16 @@ const BLOCKS = [
     id: 'change_bg', cat: 'looks', icon: 'palette',
     n: L('Cambiar fondo', 'Change background', 'Mudar fundo', 'Changer le fond'),
     d: L('Cambia el color del escenario.', 'Changes the stage color.', 'Muda a cor do palco.', 'Change la couleur de la scène.')
+  },
+  {
+    id: 'next_costume', cat: 'looks', icon: 'shuffle',
+    n: L('Siguiente disfraz', 'Next costume', 'Próximo traje', 'Costume suivant'),
+    d: L('Pasa al disfraz siguiente. Con «repetir» y «mover» simula una animación.', 'Switches to the next costume. Combine with repeat and move to animate.', 'Vai para o próximo traje. Com repetir e mover simula uma animação.', 'Passe au costume suivant. Avec répéter et avancer, simule une animation.')
+  },
+  {
+    id: 'switch_costume', cat: 'looks', icon: 'palette', def: 1, w: 116, costume: 1,
+    n: L('Cambiar disfraz a {v}', 'Switch costume to {v}', 'Mudar traje para {v}', 'Changer de costume : {v}'),
+    d: L('Muestra el disfraz que elijas.', 'Shows the costume you pick.', 'Mostra o traje escolhido.', 'Affiche le costume choisi.')
   },
   {
     id: 'meow', cat: 'sound', icon: 'volume',
@@ -442,6 +460,61 @@ const BLOCKS = [
     n: L('Enviar mensaje', 'Send message', 'Enviar mensagem', 'Envoyer un message'),
     d: L('Avisa a los otros jugadores por la red local.', 'Sends a message to other players.', 'Avisa os outros jogadores.', 'Préviens les autres joueurs.')
   },
+  /* ---------------- reporteros ----------------
+     Un reportero NO es un enunciado: devuelve un valor y vive dentro de la
+     casilla de otro bloque (node.reps[i]). No aparecen en la paleta normal,
+     sino en el selector que abre el botón ƒ de cada casilla. Tienen rep: 1,
+     pueden tener huecos propios y por eso se pueden anidar. */
+  {
+    id: 'rep_score', cat: 'ops', icon: 'trophy', rep: 1,
+    n: L('Puntos', 'Score', 'Pontos', 'Score'),
+    d: L('Devuelve el puntaje actual.', 'Returns the current score.', 'Devolve a pontuação atual.', 'Renvoie le score actuel.')
+  },
+  {
+    id: 'rep_x', cat: 'ops', icon: 'target', rep: 1,
+    n: L('Posición x', 'X position', 'Posição x', 'Position x'),
+    d: L('Devuelve la coordenada x del personaje.', 'Returns the character’s x coordinate.', 'Devolve a coordenada x do personagem.', 'Renvoie la coordonnée x du personnage.')
+  },
+  {
+    id: 'rep_y', cat: 'ops', icon: 'target', rep: 1,
+    n: L('Posición y', 'Y position', 'Posição y', 'Position y'),
+    d: L('Devuelve la coordenada y del personaje.', 'Returns the character’s y coordinate.', 'Devolve a coordenada y do personagem.', 'Renvoie la coordonnée y du personnage.')
+  },
+  {
+    id: 'rep_var', cat: 'ops', icon: 'box', rep: 1, repName: 1, def: 'vidas', w: 76,
+    n: L('Variable {v}', 'Variable {v}', 'Variável {v}', 'Variable {v}'),
+    d: L('Devuelve el valor de la variable que escribas.', 'Returns the value of the variable you type.', 'Devolve o valor da variável que você escrever.', 'Renvoie la valeur de la variable indiquée.')
+  },
+  {
+    id: 'rep_random', cat: 'ops', icon: 'dice', rep: 1, def: '1,10', w: 52,
+    n: L('Al azar {x} a {y}', 'Random {x} to {y}', 'Aleatório {x} a {y}', 'Aléatoire {x} à {y}'),
+    d: L('Devuelve un número entero entre los dos valores.', 'Returns a whole number between the two values.', 'Devolve um número inteiro entre os dois valores.', 'Renvoie un entier entre les deux valeurs.')
+  },
+  {
+    id: 'rep_add', cat: 'ops', icon: 'plus', rep: 1, def: '1,1', w: 46,
+    n: L('{x} + {y}', '{x} + {y}', '{x} + {y}', '{x} + {y}'),
+    d: L('Suma los dos valores.', 'Adds the two values.', 'Soma os dois valores.', 'Additionne les deux valeurs.')
+  },
+  {
+    id: 'rep_sub', cat: 'ops', icon: 'minus', rep: 1, def: '1,1', w: 46,
+    n: L('{x} − {y}', '{x} − {y}', '{x} − {y}', '{x} − {y}'),
+    d: L('Resta los dos valores.', 'Subtracts the two values.', 'Subtrai os dois valores.', 'Soustrait les deux valeurs.')
+  },
+  {
+    id: 'rep_mul', cat: 'ops', icon: 'close', rep: 1, def: '1,1', w: 46,
+    n: L('{x} × {y}', '{x} × {y}', '{x} × {y}', '{x} × {y}'),
+    d: L('Multiplica los dos valores.', 'Multiplies the two values.', 'Multiplica os dois valores.', 'Multiplie les deux valeurs.')
+  },
+  {
+    id: 'rep_div', cat: 'ops', icon: 'calculator', rep: 1, def: '1,1', w: 46,
+    n: L('{x} ÷ {y}', '{x} ÷ {y}', '{x} ÷ {y}', '{x} ÷ {y}'),
+    d: L('Divide los dos valores (dividir por cero da 0).', 'Divides the two values (dividing by zero gives 0).', 'Divide os dois valores (dividir por zero dá 0).', 'Divise les deux valeurs (diviser par zéro donne 0).')
+  },
+  {
+    id: 'rep_gt', cat: 'ops', icon: 'branch', rep: 1, def: '1,0', w: 46,
+    n: L('{x} > {y}', '{x} > {y}', '{x} > {y}', '{x} > {y}'),
+    d: L('Devuelve verdadero si el primero es mayor; sirve para «Si {v} entonces».', 'Returns true if the first is greater; for «If {v} then».', 'Devolve verdadeiro se o primeiro for maior; para «Se {v} então».', 'Renvoie vrai si le premier est plus grand ; pour « Si {v} alors ».')
+  },
   {
     id: 'show2', cat: 'multi', icon: 'eye', legacy: 1,
     n: L('Mostrar amigo', 'Show friend', 'Mostrar amigo', 'Montrer l’ami'),
@@ -459,4 +532,333 @@ const BLOCKS = [
   }
 ];
 const BYID = Object.fromEntries(BLOCKS.map(b => [b.id, b]));
-const PALETTE_BLOCKS = BLOCKS.filter(b => !b.legacy);
+/* La paleta sigue mostrando los 40 enunciados de siempre: los reporteros
+   se eligen desde el botón ƒ y nunca se agregan como bloque suelto. */
+const PALETTE_BLOCKS = BLOCKS.filter(b => !b.legacy && !b.rep);
+const REPORTER_BLOCKS = BLOCKS.filter(b => b.rep);
+
+/* Casillas que aceptan un reportero. Se excluyen los sombreros (el sombrero
+   de puntaje se sondea cada 300 ms), el selector de disfraces, «al azar»
+   (su texto es un par "a,b") y los bloques nombre=valor. */
+const REPORTER_HOSTS = [
+  'move', 'turn', 'point_dir', 'go_xy', 'say', 'size', 'wait',
+  'repeat', 'if_score', 'if_cond', 'if_else', 'vibrate',
+  'score_add', 'score_set', 'op_calc'
+];
+BLOCKS.forEach(b => { if (REPORTER_HOSTS.indexOf(b.id) >= 0) b.repOk = 1; });
+
+/* ---------------- textos extra (v2.1 + disfraces) ---------------- */
+const UI_EXTRA = {
+  es: {
+    spriteSearch: 'Buscar personaje…',
+    spriteNoResults: 'No encontramos personajes con ese nombre.',
+    motionDenied: 'Activá el movimiento en los permisos del navegador',
+    costumesTitle: 'Disfraces',
+    costumesHint: 'Subí PNG, JPG o WebP para darle varios disfraces. Usá «siguiente disfraz» para animarlo.',
+    costumeAdd: 'Agregar disfraces',
+    costumeDelete: 'Borrar disfraz',
+    confirmDeleteCostume: '¿Borrar este disfraz?',
+    cantDeleteCostume: 'Tiene que quedar al menos un disfraz',
+    costumeLimit: 'Máximo 12 disfraces por personaje',
+    costumeBadType: 'Solo PNG, JPG, WebP o GIF (nada de SVG)',
+    costumeTooBig: 'Esa imagen pesa demasiado, probá con una más chica',
+    costumeEmpty: 'No se pudo leer esa imagen',
+    costumeAdded: 'Disfraces agregados',
+    costumeDefault: 'Disfraz',
+    costumeMissing: 'Ese disfraz ya no existe',
+    importSprite: 'Importar mis imágenes…',
+    shareDesc: 'Copiá este link y mandalo por WhatsApp. El proyecto entero, con sus disfraces, viaja adentro del link.',
+    shareTooLong: 'El link quedó muy largo: algunos chats lo cortan. Probá con menos imágenes.',
+    storageFull: 'No queda espacio en el dispositivo: borrá disfraces o exportá el proyecto.',
+    generatingLink: 'Generando link…',
+    sharedLoaded: 'Proyecto compartido cargado',
+    zoomOut: 'Achicar bloques',
+    zoomIn: 'Agrandar bloques',
+    zoomReset: 'Volver al tamaño normal',
+    undo: 'Deshacer',
+    redo: 'Rehacer',
+    undoNone: 'Nada para deshacer',
+    duplicated: 'Bloque duplicado',
+    duplicateBlock: 'Duplicar bloque',
+    blockDropped: 'Bloque colocado',
+    paletteHint: 'Tocá para agregar al final, o arrastrá desde el ícono para soltarlo donde quieras.',
+    bgCustom: 'Usar mi imagen de fondo',
+    bgClear: 'Quitar mi fondo',
+    bgAdded: 'Fondo cambiado',
+    bgRemoved: 'Fondo quitado',
+    bgBadType: 'Elegí un PNG, JPG o WebP para el fondo',
+    bgTooBig: 'Esa imagen pesa demasiado para el fondo',
+    stageZoom: 'Escenario',
+    stageZoomOut: 'Achicar escenario y personajes',
+    stageZoomIn: 'Agrandar escenario y personajes',
+    stageZoomReset: 'Volver al tamaño normal del escenario',
+    backToStart: 'Volver al inicio',
+    startRestored: 'Personajes en su posición inicial',
+    confirmTitle: 'Confirmar',
+    accept: 'Aceptar',
+    projectTooBig: 'El proyecto es demasiado grande: se recortaron bloques para poder abrirlo.',
+    repPickerTitle: 'Elegí un reportero',
+    repPickerDesc: 'Un reportero devuelve un valor que se usa dentro del bloque. Tocá ƒ para ponerlo y × para volver al texto.',
+    repInsert: 'Poner un reportero en esta casilla',
+    repRemove: 'Quitar el reportero'
+  },
+  en: {
+    spriteSearch: 'Search characters…',
+    spriteNoResults: 'No characters match that search.',
+    motionDenied: 'Enable motion access in your browser settings',
+    costumesTitle: 'Costumes',
+    costumesHint: 'Upload PNG, JPG or WebP to give it several costumes. Use "next costume" to animate it.',
+    costumeAdd: 'Add costumes',
+    costumeDelete: 'Delete costume',
+    confirmDeleteCostume: 'Delete this costume?',
+    cantDeleteCostume: 'A sprite needs at least one costume',
+    costumeLimit: 'Up to 12 costumes per sprite',
+    costumeBadType: 'PNG, JPG, WebP or GIF only (no SVG)',
+    costumeTooBig: 'That image is too big, try a smaller one',
+    costumeEmpty: 'Could not read that image',
+    costumeAdded: 'Costumes added',
+    costumeDefault: 'Costume',
+    costumeMissing: 'That costume no longer exists',
+    importSprite: 'Import my images…',
+    shareDesc: 'Copy this link and send it on WhatsApp. The whole project, costumes included, travels inside the link.',
+    shareTooLong: 'This link is very long: some chat apps may cut it. Try fewer images.',
+    storageFull: 'Device storage is full: delete costumes or export the project.',
+    generatingLink: 'Generating link…',
+    sharedLoaded: 'Shared project loaded',
+    zoomOut: 'Shrink blocks',
+    zoomIn: 'Enlarge blocks',
+    zoomReset: 'Back to normal size',
+    undo: 'Undo',
+    redo: 'Redo',
+    undoNone: 'Nothing to undo',
+    duplicated: 'Block duplicated',
+    duplicateBlock: 'Duplicate block',
+    blockDropped: 'Block placed',
+    paletteHint: 'Tap to add at the end, or drag from the grip to drop it anywhere.',
+    bgCustom: 'Use my own backdrop',
+    bgClear: 'Remove my backdrop',
+    bgAdded: 'Backdrop changed',
+    bgRemoved: 'Backdrop removed',
+    bgBadType: 'Pick a PNG, JPG or WebP for the backdrop',
+    bgTooBig: 'That image is too big for a backdrop',
+    stageZoom: 'Stage',
+    stageZoomOut: 'Shrink stage and sprites',
+    stageZoomIn: 'Enlarge stage and sprites',
+    stageZoomReset: 'Back to normal stage size',
+    backToStart: 'Back to start',
+    startRestored: 'Sprites back at their start position',
+    confirmTitle: 'Confirm',
+    accept: 'OK',
+    projectTooBig: 'This project is too big: some blocks were trimmed so it could open.',
+    repPickerTitle: 'Pick a reporter',
+    repPickerDesc: 'A reporter returns a value used inside the block. Tap ƒ to add one and × to go back to text.',
+    repInsert: 'Put a reporter in this slot',
+    repRemove: 'Remove the reporter'
+  },
+  pt: {
+    spriteSearch: 'Buscar personagem…',
+    spriteNoResults: 'Nenhum personagem com esse nome.',
+    motionDenied: 'Ative o movimento nas permissões do navegador',
+    costumesTitle: 'Trajes',
+    costumesHint: 'Envie PNG, JPG ou WebP para dar vários trajes. Use «próximo traje» para animar.',
+    costumeAdd: 'Adicionar trajes',
+    costumeDelete: 'Excluir traje',
+    confirmDeleteCostume: 'Excluir este traje?',
+    cantDeleteCostume: 'Precisa ficar pelo menos um traje',
+    costumeLimit: 'Máximo de 12 trajes por personagem',
+    costumeBadType: 'Apenas PNG, JPG, WebP ou GIF (nada de SVG)',
+    costumeTooBig: 'Essa imagem é grande demais, tente uma menor',
+    costumeEmpty: 'Não foi possível ler essa imagem',
+    costumeAdded: 'Trajes adicionados',
+    costumeDefault: 'Traje',
+    costumeMissing: 'Esse traje não existe mais',
+    importSprite: 'Importar minhas imagens…',
+    shareDesc: 'Copie este link e envie no WhatsApp. O projeto inteiro, com os trajes, vai dentro do link.',
+    shareTooLong: 'O link ficou muito longo: alguns apps podem cortá-lo. Tente menos imagens.',
+    storageFull: 'Sem espaço no dispositivo: exclua trajes ou exporte o projeto.',
+    generatingLink: 'Gerando link…',
+    sharedLoaded: 'Projeto compartilhado carregado',
+    zoomOut: 'Diminuir blocos',
+    zoomIn: 'Aumentar blocos',
+    zoomReset: 'Voltar ao tamanho normal',
+    undo: 'Desfazer',
+    redo: 'Refazer',
+    undoNone: 'Nada para desfazer',
+    duplicated: 'Bloco duplicado',
+    duplicateBlock: 'Duplicar bloco',
+    blockDropped: 'Bloco colocado',
+    paletteHint: 'Toque para adicionar no fim, ou arraste pela alça para soltar onde quiser.',
+    bgCustom: 'Usar minha imagem de fundo',
+    bgClear: 'Remover meu fundo',
+    bgAdded: 'Fundo alterado',
+    bgRemoved: 'Fundo removido',
+    bgBadType: 'Escolha um PNG, JPG ou WebP para o fundo',
+    bgTooBig: 'Essa imagem é grande demais para o fundo',
+    stageZoom: 'Cenário',
+    stageZoomOut: 'Diminuir cenário e personagens',
+    stageZoomIn: 'Aumentar cenário e personagens',
+    stageZoomReset: 'Voltar ao tamanho normal do cenário',
+    backToStart: 'Voltar ao início',
+    startRestored: 'Personagens na posição inicial',
+    confirmTitle: 'Confirmar',
+    accept: 'Aceitar',
+    projectTooBig: 'O projeto é grande demais: alguns blocos foram cortados para abrir.',
+    repPickerTitle: 'Escolha um repórter',
+    repPickerDesc: 'Um repórter devolve um valor usado dentro do bloco. Toque em ƒ para colocá-lo e em × para voltar ao texto.',
+    repInsert: 'Colocar um repórter nesta casela',
+    repRemove: 'Remover o repórter'
+  },
+  fr: {
+    spriteSearch: 'Chercher un personnage…',
+    spriteNoResults: 'Aucun personnage pour cette recherche.',
+    motionDenied: 'Activez le mouvement dans les permissions du navigateur',
+    costumesTitle: 'Costumes',
+    costumesHint: 'Ajoutez des PNG, JPG ou WebP pour plusieurs costumes. Utilisez « costume suivant » pour animer.',
+    costumeAdd: 'Ajouter des costumes',
+    costumeDelete: 'Supprimer le costume',
+    confirmDeleteCostume: 'Supprimer ce costume ?',
+    cantDeleteCostume: 'Il faut au moins un costume',
+    costumeLimit: 'Jusqu’à 12 costumes par personnage',
+    costumeBadType: 'PNG, JPG, WebP ou GIF seulement (pas de SVG)',
+    costumeTooBig: 'Cette image est trop lourde, essayez plus petit',
+    costumeEmpty: 'Impossible de lire cette image',
+    costumeAdded: 'Costumes ajoutés',
+    costumeDefault: 'Costume',
+    costumeMissing: 'Ce costume n’existe plus',
+    importSprite: 'Importer mes images…',
+    shareDesc: 'Copiez ce lien et envoyez-le sur WhatsApp. Tout le projet, costumes compris, voyage dans le lien.',
+    shareTooLong: 'Le lien est très long : certaines applis le coupent. Essayez avec moins d’images.',
+    storageFull: 'Stockage plein : supprimez des costumes ou exportez le projet.',
+    generatingLink: 'Génération du lien…',
+    sharedLoaded: 'Projet partagé chargé',
+    zoomOut: 'Réduire les blocs',
+    zoomIn: 'Agrandir les blocs',
+    zoomReset: 'Revenir à la taille normale',
+    undo: 'Annuler',
+    redo: 'Rétablir',
+    undoNone: 'Rien à annuler',
+    duplicated: 'Bloc dupliqué',
+    duplicateBlock: 'Dupliquer le bloc',
+    blockDropped: 'Bloc placé',
+    paletteHint: 'Touchez pour ajouter à la fin, ou glissez par la poignée pour déposer où vous voulez.',
+    bgCustom: 'Utiliser mon image de fond',
+    bgClear: 'Retirer mon fond',
+    bgAdded: 'Fond changé',
+    bgRemoved: 'Fond retiré',
+    bgBadType: 'Choisissez un PNG, JPG ou WebP pour le fond',
+    bgTooBig: 'Cette image est trop lourde pour un fond',
+    stageZoom: 'Scène',
+    stageZoomOut: 'Réduire la scène et les personnages',
+    stageZoomIn: 'Agrandir la scène et les personnages',
+    stageZoomReset: 'Revenir à la taille normale de la scène',
+    backToStart: 'Revenir au départ',
+    startRestored: 'Personnages à leur position de départ',
+    confirmTitle: 'Confirmer',
+    accept: 'Valider',
+    projectTooBig: 'Ce projet est trop grand : des blocs ont été coupés pour pouvoir l’ouvrir.',
+    repPickerTitle: 'Choisir un rapporteur',
+    repPickerDesc: 'Un rapporteur renvoie une valeur utilisée dans le bloc. Touchez ƒ pour l’ajouter et × pour revenir au texte.',
+    repInsert: 'Mettre un rapporteur dans cette case',
+    repRemove: 'Retirer le rapporteur'
+  }
+};
+Object.keys(UI_EXTRA).forEach(k => Object.assign(UI[k], UI_EXTRA[k]));
+
+/* ---------------- catálogo de personajes ----------------
+   Cada item es 'emoji|palabras clave'. La búsqueda usa fold(),
+   así que ignora tildes y mayúsculas en los 4 idiomas. */
+const SPRITE_GROUPS = [
+  {
+    name: L('Animales', 'Animals', 'Animais', 'Animaux'),
+    items: [
+      '🐱|gato cat gato chat', '🐶|perro dog cao chien', '🐭|raton mouse rato souris',
+      '🐹|hamster hamster', '🐰|conejo rabbit coelho lapin', '🦊|zorro fox raposa renard',
+      '🐻|oso bear urso ours', '🐼|panda panda', '🐨|koala koala', '🐯|tigre tiger tigre',
+      '🦁|leon lion leao lion', '🐮|vaca cow vaca vache', '🐷|cerdo pig porco cochon',
+      '🐸|rana frog sapo grenouille', '🐵|mono monkey macaco singe', '🐔|gallina chicken galinha poule',
+      '🐧|pinguino penguin pinguim pingouin', '🐦|pajaro bird passaro oiseau ave',
+      '🦆|pato duck pato canard', '🦅|aguila eagle aguia aigle ave', '🦉|buho owl coruja hibou',
+      '🦇|murcielago bat morcego', '🐺|lobo wolf lobo loup', '🐴|caballo horse cavalo cheval',
+      '🦄|unicornio unicorn unicornio licorne', '🐝|abeja bee abelha abeille',
+      '🦋|mariposa butterfly borboleta papillon', '🐙|pulpo octopus polvo pieuvre',
+      '🦀|cangrejo crab caranguejo crabe', '🐠|pez fish peixe poisson',
+      '🐬|delfin dolphin golfinho dauphin', '🐳|ballena whale baleia baleine',
+      '🦖|dinosaurio dinosaur dinossauro dinosaure', '🐲|dragon dragon dragao'
+    ]
+  },
+  {
+    name: L('Espacio', 'Space', 'Espaço', 'Espace'),
+    items: [
+      '🚀|cohete rocket foguete fusee', '🛸|ovni ufo disco soucoupe',
+      '🛰️|satelite satellite satelite', '🌕|luna llena moon lua', '🌙|luna moon lua lune',
+      '⭐|estrella star estrela etoile', '🌟|estrella star brillo', '✨|brillo sparkle magia',
+      '☄️|cometa comet cometa comete', '🌍|tierra earth planeta terra', '🪐|planeta planet saturno',
+      '👽|alien extraterrestre alienigena', '🤖|robot robot robo', '🌞|sol sun sol soleil',
+      '🔭|telescopio telescope telescopio', '🌌|galaxia galaxy galaxia', '🌠|estrella fugaz shooting star'
+    ]
+  },
+  {
+    name: L('Vehículos', 'Vehicles', 'Veículos', 'Véhicules'),
+    items: [
+      '🚗|auto coche car carro voiture', '🚕|taxi taxi', '🚙|camioneta suv jeep',
+      '🚌|autobus bus onibus', '🏎️|auto carrera race car formula', '🚓|policia police',
+      '🚑|ambulancia ambulance', '🚒|bomberos fire truck', '🚚|camion truck caminhao camion',
+      '🚲|bicicleta bici bike bicicleta velo', '🏍️|moto motocicleta motorcycle',
+      '✈️|avion aviao plane avion', '🚁|helicoptero helicopter helicoptere',
+      '⛵|velero barco boat voilier', '🚤|lancha speedboat barco', '🚂|tren train trem',
+      '🛵|scooter motoneta', '🚜|tractor tractor trator'
+    ]
+  },
+  {
+    name: L('Juegos y deportes', 'Games and sports', 'Jogos e esportes', 'Jeux et sports'),
+    items: [
+      '⚽|pelota futbol soccer ball ballon', '🏀|basquet basketball basket', '🎾|tenis tennis',
+      '🏈|futbol americano football', '🎱|billar pool', '🎈|globo balloon ballon',
+      '🎁|regalo gift cadeau', '🎮|joystick consola videogame', '🎲|dado dice',
+      '🧩|rompecabezas puzzle', '🎯|diana dardo target', '🪁|cometa kite papalote',
+      '🛡️|escudo shield', '⚔️|espadas sword', '🏆|trofeo trophy', '🎪|circo circus'
+    ]
+  },
+  {
+    name: L('Comida', 'Food', 'Comida', 'Nourriture'),
+    items: [
+      '🍎|manzana apple maca pomme', '🍌|banana platano banane', '🍇|uvas grapes',
+      '🍓|frutilla fresa strawberry morango fraise', '🍕|pizza pizza', '🍔|hamburguesa burger',
+      '🍩|dona donut rosquilla', '🍪|galleta cookie biscuit', '🍉|sandia melancia watermelon pasteque',
+      '🥑|palta aguacate avocado abacate', '🌽|maiz choclo corn milho', '🍄|hongo seta mushroom',
+      '🧁|cupcake magdalena pastel', '🍦|helado ice cream glace'
+    ]
+  },
+  {
+    name: L('Naturaleza', 'Nature', 'Natureza', 'Nature'),
+    items: [
+      '🌳|arbol tree arvore arbre', '🌲|pino pine', '🌵|cactus cacto',
+      '🌻|girasol sunflower girassol', '🌸|flor flower fleur', '🍀|trebol clover trevo',
+      '🌈|arcoiris rainbow', '☀️|sol sun soleil', '🌊|ola wave vague',
+      '🔥|fuego fire feu', '❄️|nieve snow neige', '🍁|hoja leaf',
+      '🌴|palmera palm palmeira', '🌋|volcan volcano'
+    ]
+  },
+  {
+    name: L('Fantasía', 'Fantasy', 'Fantasia', 'Fantaisie'),
+    items: [
+      '🧙|mago wizard magicien', '🧚|hada fairy fee', '🧛|vampiro vampire',
+      '🦸|superheroe heroe superhero', '🧝|elfo elf', '👻|fantasma ghost fantome',
+      '💀|calavera skull caveira', '🎃|calabaza halloween pumpkin', '🦹|villano villain',
+      '🧟|zombie zombi', '👑|corona crown couronne', '💎|diamante diamond',
+      '🔮|bola cristal crystal ball', '🗡️|espada sword epee', '🏰|castillo castle chateau',
+      '🐉|dragon dragon dragao'
+    ]
+  },
+  {
+    name: L('Objetos', 'Objects', 'Objetos', 'Objets'),
+    items: [
+      '🔑|llave key cle', '💡|lampara bombilla light lampe', '📦|caja box boite',
+      '🔔|campana bell', '⏰|reloj despertador alarm clock', '📱|celular telefono phone',
+      '💻|computadora laptop ordinateur', '🎵|musica nota music note', '📚|libros books livre',
+      '✏️|lapiz pencil', '🚪|puerta door', '🧭|brujula compass',
+      '⚙️|engranaje gear', '🪙|moneda coin'
+    ]
+  }
+];
+const SPRITE_CHOICES = SPRITE_GROUPS.reduce((out, g) => out.concat(g.items.map(it => it.split('|')[0])), []);

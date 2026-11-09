@@ -19,6 +19,9 @@
   --shadow:0 1px 2px rgba(15,23,42,.05),0 14px 30px -22px rgba(15,23,42,.45);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* Importante: varios componentes definen display:grid/flex, que gana al
+   [hidden] del navegador. Sin esta regla los botones ocultos se ven igual. */
+[hidden]{display:none!important}
 html{scroll-behavior:smooth}
 body{
   margin:0;min-height:100dvh;overflow-x:clip;
@@ -86,7 +89,7 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 10px 2px}
 .status.on .status-dot{background:#10b981;animation:pulse 1.2s infinite}
 
 .stage{
-  position:relative;width:100%;height:clamp(200px,30vh,260px);border-radius:18px;overflow:hidden;cursor:pointer;
+  position:relative;width:100%;height:calc(clamp(200px,30vh,260px) * var(--stage-zoom,1));border-radius:18px;overflow:hidden;cursor:pointer;
   touch-action:manipulation;
   background:
     radial-gradient(150px 100px at 14% 16%,rgba(255,255,255,.95),rgba(255,255,255,0) 65%),
@@ -439,6 +442,12 @@ footer{padding:18px 20px 8px;text-align:center;font-size:10.5px;color:var(--mute
   background:#f8fafc;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   font-size:16px;color:var(--ink-2);outline:none;
 }
+.ask-input{
+  width:100%;padding:11px;border-radius:12px;border:1.5px solid var(--line);
+  background:#f8fafc;font:inherit;font-size:16px;color:var(--ink-2);outline:none;
+}
+.ask-input[hidden]{display:none}
+.modal-card p.ask-message{margin:6px 0 2px;font-size:13px;color:var(--ink-2)}
 .modal-actions{display:flex;gap:8px;margin-top:12px}
 .m-btn{
   flex:1;height:44px;border:0;border-radius:12px;font-size:13px;font-weight:800;
@@ -447,6 +456,17 @@ footer{padding:18px 20px 8px;text-align:center;font-size:10.5px;color:var(--mute
 .m-btn.primary{background:#4f46e5;color:#fff;box-shadow:0 10px 20px -12px rgba(79,70,229,.9)}
 .m-btn.ghost{background:#f1f5f9;color:#475569}
 .m-btn .ic{width:16px;height:16px}
+
+/* Selector de reporteros: dos columnas, legible a 500 px. */
+.rep-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 2px}
+.rep-choice{
+  display:flex;flex-direction:column;gap:2px;text-align:left;padding:10px 11px;
+  border:1.5px solid var(--line);border-radius:12px;background:#f8fafc;cursor:pointer;
+  color:var(--ink-2);font:inherit;
+}
+.rep-choice:active,.rep-choice:focus-visible{background:#eef2ff;border-color:#4f46e5;outline:none}
+.rep-choice b{font-size:12.5px;font-weight:800}
+.rep-choice small{font-size:10.5px;line-height:1.35;color:var(--muted)}
 
 .toast{
   position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));z-index:90;
@@ -467,6 +487,7 @@ body.game-mode #toolsCard,
 body.game-mode footer,
 body.game-mode .stage-top,
 body.game-mode .stage-actions,
+body.game-mode .stage-bottom,
 body.game-mode .stage-hint{display:none}
 body.game-mode .app{max-width:none;min-height:100dvh;background:#dbeafe;box-shadow:none;padding:0}
 body.game-mode main{padding:0;margin:0;gap:0}
@@ -515,26 +536,33 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
 .sprite-wrap.selected{z-index:60}
 .sprite-wrap.off{display:none}
 .sprite-wrap.selected::before{
-  content:"";position:absolute;left:-40px;top:-40px;width:80px;height:80px;
+  content:"";position:absolute;
+  left:calc(-40px * var(--stage-zoom,1));top:calc(-40px * var(--stage-zoom,1));
+  width:calc(80px * var(--stage-zoom,1));height:calc(80px * var(--stage-zoom,1));
   border:2px dashed rgba(79,70,229,.5);border-radius:50%;pointer-events:none;
 }
 .sprite-wrap.dragging{cursor:grabbing}
 .sprite-wrap.dragging .sprite-emoji{transition:none}
 .sprite-emoji{
   position:absolute;left:0;top:0;transform-origin:50% 50%;
-  font-size:clamp(48px,15vw,68px);line-height:1;
+  font-size:calc(clamp(48px,15vw,68px) * var(--stage-zoom,1));line-height:1;
   transform:translate(-50%,-50%) rotate(0deg) scale(1);
   filter:drop-shadow(0 12px 14px rgba(15,23,42,.24));
   transition:transform .2s ease;
   pointer-events:auto;cursor:grab;user-select:none;
   display:block;animation:none;
 }
+/* El .sprite-wrap tiene ancho 0: sin width:max-content un hijo absoluto
+   se encoge al ancho de una letra y el «¡Hola!» se lee en vertical. */
 .sprite-bubble{
-  position:absolute;left:0;bottom:36px;transform:translateX(-50%);z-index:5;
-  max-width:152px;background:#fff;border:1.5px solid #cbd5e1;border-radius:12px;
-  padding:5px 8px;font-size:12px;font-weight:700;line-height:1.3;color:#1e293b;
+  position:absolute;left:0;bottom:calc(36px * var(--stage-zoom,1));transform:translateX(-50%);z-index:5;
+  width:max-content;min-width:calc(38px * var(--stage-zoom,1));
+  max-width:calc(152px * var(--stage-zoom,1));box-sizing:border-box;
+  background:#fff;border:1.5px solid #cbd5e1;border-radius:12px;
+  padding:5px 8px;font-size:calc(12px * var(--stage-zoom,1));font-weight:700;line-height:1.3;color:#1e293b;
+  text-align:center;overflow-wrap:anywhere;word-break:normal;
   box-shadow:0 8px 18px -10px rgba(15,23,42,.35);
-  display:none;word-break:break-word;pointer-events:none;
+  display:none;pointer-events:none;
 }
 .sprite-bubble.show{display:block;animation:pop .16s ease}
 .sprite-bubble::after{
@@ -621,7 +649,16 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
 .rot-seg .ic{width:16px;height:16px}
 
 /* ---------- sprite chooser ---------- */
-.sprite-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 4px}
+.sprite-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 4px}
+.sprite-search{
+  width:100%;padding:10px 12px;margin-top:4px;border:1.5px solid var(--line);
+  border-radius:12px;background:#f8fafc;font-family:inherit;font-size:15px;
+  color:var(--ink);outline:none;
+}
+.sprite-search:focus{border-color:#a5b4fc;background:#fff}
+.sprite-group{margin-top:12px}
+.sprite-group-title{font-size:11px;font-weight:700;color:var(--muted);margin:0 0 2px}
+.sprite-empty{padding:18px 8px;text-align:center;font-size:12px;color:var(--muted)}
 .sprite-choice{
   aspect-ratio:1;border:1.5px solid var(--line);border-radius:14px;background:#fff;
   font-size:30px;line-height:1;display:grid;place-items:center;cursor:pointer;
@@ -660,6 +697,15 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
   user-select:none;text-shadow:0 1px 0 rgba(0,0,0,.12);
 }
 .sb.hat{border-radius:10px 10px 5px 5px;padding-top:7px;padding-bottom:7px}
+.sb::before{
+  content:"";position:absolute;left:18px;top:-6px;width:30px;height:7px;
+  background:var(--c);border:1px solid rgba(0,0,0,.10);border-bottom:0;
+  border-radius:6px 6px 0 0;
+}
+.sb.running{
+  box-shadow:0 0 0 3px #fff,0 0 0 6px var(--c),0 6px 16px -6px rgba(15,23,42,.5);
+  filter:brightness(1.08);z-index:2;
+}
 .sb.hat::before{display:none}
 .code-list > .stack-item:first-child > .sb::before,
 .c-slot > .stack-item:first-child > .sb::before{display:none}
@@ -686,13 +732,83 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
   color:#1a1a1a;font-size:12.5px;font-weight:700;box-shadow:inset 0 1px 2px rgba(0,0,0,.12);
   text-shadow:none;
 }
-.sb-del{
+/* Reporteros: ƒ abre el selector y el chip redondo muestra el valor anidado.
+   Todo vive dentro de .sb-content, así que el ancho se controla acá. */
+.sb-slot{display:inline-flex;align-items:center;gap:3px;min-width:0;vertical-align:middle}
+.rep-fx{
+  width:20px;height:24px;flex:none;border:1px solid rgba(0,0,0,.18);border-radius:5px;
+  background:rgba(255,255,255,.88);color:#4338ca;font-size:13px;font-weight:900;
+  line-height:1;cursor:pointer;padding:0;
+}
+.rep-fx:active,.rep-fx:focus-visible{background:#e0e7ff;outline:none}
+.rep-chip{
+  display:inline-flex;align-items:center;gap:3px;max-width:100%;
+  padding:1px 3px 1px 5px;border-radius:999px;background:#fff;color:#1a1a1a;
+  border:1px solid rgba(0,0,0,.16);box-shadow:0 1px 2px rgba(0,0,0,.10);
+  text-shadow:none;font-size:11.5px;font-weight:700;white-space:nowrap;
+}
+.rep-chip > .sb-content{gap:3px;font-size:11.5px;white-space:nowrap}
+/* Dentro del chip las casillas van en gris claro: así se distinguen del
+   fondo blanco del reportero y se ve dónde se puede escribir. */
+.rep-chip .sb-input{
+  height:20px;min-width:24px;font-size:11.5px;padding:0 3px;
+  background:#f8fafc;border:1px solid rgba(0,0,0,.12);
+}
+.rep-chip .rep-fx{opacity:.85}
+.rep-chip .rep-fx{width:17px;height:20px;font-size:11px}
+.rep-chip .sb-value{height:20px;min-width:20px;padding:0 5px;font-size:11px}
+.rep-name{padding:0 3px;color:#4338ca;font-weight:800}
+.rep-del{
+  width:16px;height:16px;flex:none;border:0;border-radius:50%;
+  background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:900;
+  line-height:1;cursor:pointer;padding:0;
+}
+.sb-del,.sb-dup{
   width:18px;height:18px;border:0;border-radius:50%;background:rgba(0,0,0,.14);
   color:rgba(255,255,255,.85);display:grid;place-items:center;flex:none;padding:0;
   cursor:pointer;margin-left:1px;opacity:.8;
 }
-.sb-del .ic{width:11px;height:11px}
-.sb-del:active{background:rgba(0,0,0,.30);opacity:1}
+.sb-del .ic,.sb-dup .ic{width:11px;height:11px}
+.sb-del:active,.sb-dup:active{background:rgba(0,0,0,.30);opacity:1}
+
+/* Barra de herramientas del área de código */
+.code-tools{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin:0 2px 8px}
+.tool-group{
+  display:flex;align-items:center;gap:2px;padding:2px;
+  background:#f1f5f9;border:1px solid var(--line);border-radius:999px;
+}
+.mini-btn{
+  width:28px;height:28px;flex:none;border:0;border-radius:50%;background:transparent;
+  color:var(--ink-2);display:grid;place-items:center;cursor:pointer;padding:0;
+}
+.mini-btn .ic{width:15px;height:15px}
+.mini-btn:active:not(:disabled){background:#dbe3ee}
+.mini-btn:disabled{opacity:.32;cursor:default}
+.zoom-val{
+  min-width:44px;padding:0 3px;border:0;background:transparent;cursor:pointer;
+  font-family:inherit;font-size:11px;font-weight:800;color:var(--ink-2);text-align:center;
+}
+.stage-tools{display:flex;align-items:center;gap:3px;margin-left:auto}
+/* Fila propia para el zoom del escenario y «Volver al inicio»: en la
+   cabecera no entran junto al título, el estado y los botones de fondo. */
+.stage-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;min-height:30px}
+.stage-bottom .tool-group{flex:none}
+.stage-zoom-label{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding:0 5px}
+.reset-start{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  height:30px;padding:0 10px;border:1.5px solid var(--line);border-radius:999px;
+  background:#fff;color:var(--ink-2);font-family:inherit;font-size:11px;font-weight:800;
+  cursor:pointer;white-space:nowrap;
+}
+.reset-start .ic{width:13px;height:13px}
+.reset-start:active{background:#eef2ff}
+.palette-hint{display:block;margin:4px 0 0 3px;font-size:10.5px;line-height:1.45;color:var(--muted);opacity:.9}
+.p-block .sb-grip{
+  display:grid;pointer-events:auto;touch-action:none;cursor:grab;
+  color:rgba(255,255,255,.72);width:18px;height:22px;
+}
+.p-block .sb-grip:active{cursor:grabbing}
+.p-block.is-dragging{opacity:.4}
 
 /* C blocks */
 .stack-item.c-item{width:fit-content;max-width:100%}
@@ -746,7 +862,7 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
 }
 .p-block .stack-item{cursor:pointer}
 .p-block:active .sb{filter:brightness(1.06)}
-.p-block .sb-grip,.p-block .sb-del{display:none}
+.p-block .sb-del,.p-block .sb-dup{display:none}
 .p-block .c-slot{min-height:18px}
 .p-block .p-desc{
   margin:0 0 0 3px;font-size:10.5px;font-weight:500;color:var(--muted);
@@ -758,8 +874,51 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
 body.game-mode #spritesCard{display:none}
 body.game-mode .sprite-wrap.selected::before{display:none}
 body.game-mode .sprite-wrap{cursor:default}
-body.game-mode .sprite-emoji{font-size:clamp(64px,20vw,120px)}
-body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
+body.game-mode .sprite-emoji{font-size:calc(clamp(64px,20vw,120px) * var(--stage-zoom,1))}
+body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:calc(46px * var(--stage-zoom,1))}
+
+/* ---------------- disfraces ---------------- */
+.costume-img{width:1em;height:1em;object-fit:contain;display:block;vertical-align:middle}
+.costume-row{margin-top:10px;border-top:1px solid var(--line);padding-top:9px}
+.costume-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.costume-count{font-size:9px;font-weight:800;color:var(--muted-2)}
+.costume-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.costume-thumb{
+  position:relative;flex:none;width:52px;height:52px;border-radius:11px;border:2px solid var(--line);
+  background:#f8fafc;display:grid;place-items:center;font-size:27px;line-height:1;cursor:pointer;
+  padding:0;transition:border-color .15s,transform .15s;
+}
+.costume-thumb.active{border-color:#4f46e5;background:#eef2ff}
+.costume-thumb:active{transform:scale(.94)}
+.costume-thumb .costume-img{width:38px;height:38px}
+.costume-thumb .costume-name{
+  position:absolute;left:0;right:0;bottom:0;font-size:7px;font-weight:800;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.86);
+  border-radius:0 0 8px 8px;padding:1px 2px;pointer-events:none;
+}
+.costume-thumb .costume-del{
+  position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;border:0;
+  background:#e2e8f0;color:#475569;display:grid;place-items:center;padding:0;cursor:pointer;
+  opacity:.72;box-shadow:0 1px 4px rgba(15,23,42,.22);
+}
+.costume-thumb.active .costume-del{opacity:1}
+.costume-thumb .costume-del .ic{width:10px;height:10px}
+.costume-add{
+  flex:none;width:52px;height:52px;border-radius:11px;border:2px dashed var(--line);
+  background:#fff;color:var(--muted);display:grid;place-items:center;cursor:pointer;
+  font-size:24px;font-weight:800;padding:0;
+}
+.costume-add:active{background:#f1f5f9}
+.costume-hint{margin:4px 0 0;font-size:10px;line-height:1.45;color:var(--muted)}
+.costume-row .m-btn{margin-top:8px;width:100%}
+.sb-select{
+  height:26px;max-width:150px;border:1px solid rgba(0,0,0,.22);border-radius:5px;background:#fff;
+  color:#1a1a1a;font-family:inherit;font-size:13px;font-weight:700;padding:0 4px;outline:none;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.12);text-overflow:ellipsis;
+}
+.sb-select:focus{border-color:#4f46e5;box-shadow:0 0 0 2px rgba(255,255,255,.55)}
+.sprite-avatar .costume-img{width:34px;height:34px}
+.sprite-tile .tile-emoji .costume-img{width:28px;height:28px}
 
 @media(max-width:359px){
   .sprite-tile{width:64px;height:70px}
@@ -796,6 +955,14 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
     <section class="card" id="stageCard">
       <div class="stage-top">
         <span class="eyebrow" data-t="stage">Escenario</span>
+        <div class="stage-tools">
+          <button type="button" class="mini-btn" id="bgCustomBtn" data-tt="bgCustom" aria-label="Usar mi imagen de fondo">
+            <svg class="ic" aria-hidden="true"><use href="#i-upload"></use></svg>
+          </button>
+          <button type="button" class="mini-btn" id="bgClearBtn" data-tt="bgClear" aria-label="Quitar mi fondo" hidden>
+            <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
+          </button>
+        </div>
         <span class="status" id="status" aria-live="polite">
           <span class="status-dot"></span><span id="statusText" data-t="ready">Listo</span>
         </span>
@@ -813,6 +980,22 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
         <button type="button" class="exit-game" id="exitGame">
           <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
           <span data-t="exit">Salir</span>
+        </button>
+      </div>
+      <div class="stage-bottom">
+        <div class="tool-group">
+          <span class="stage-zoom-label" data-t="stageZoom">Escenario</span>
+          <button type="button" class="mini-btn" id="stageZoomOutBtn" data-tt="stageZoomOut" aria-label="Achicar escenario">
+            <svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg>
+          </button>
+          <button type="button" class="zoom-val" id="stageZoomVal" data-tt="stageZoomReset" aria-label="Volver al tamaño normal">100%</button>
+          <button type="button" class="mini-btn" id="stageZoomInBtn" data-tt="stageZoomIn" aria-label="Agrandar escenario">
+            <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>
+          </button>
+        </div>
+        <button type="button" class="reset-start" id="resetStartBtn" data-tt="backToStart" aria-label="Volver al inicio" hidden>
+          <svg class="ic" aria-hidden="true"><use href="#i-rotate-ccw"></use></svg>
+          <span data-t="backToStart">Volver al inicio</span>
         </button>
       </div>
       <div class="stage-actions">
@@ -894,6 +1077,18 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
               </button>
             </div>
           </div>
+          <div class="costume-row">
+            <div class="costume-head">
+              <span class="prop-label" data-t="costumesTitle">Disfraces</span>
+              <span class="costume-count" id="costumeCount">1/12</span>
+            </div>
+            <div class="costume-strip" id="costumeStrip"></div>
+            <p class="costume-hint" data-t="costumesHint">Subí PNG, JPG o WebP para darle varios disfraces. Usá «siguiente disfraz» para animarlo.</p>
+            <button type="button" class="m-btn ghost" id="addCostumeBtn">
+              <svg class="ic" aria-hidden="true"><use href="#i-upload"></use></svg>
+              <span data-t="costumeAdd">Agregar disfraces</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -910,6 +1105,25 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
         <svg class="ic chev" aria-hidden="true"><use href="#i-chevron"></use></svg>
       </button>
       <div class="section-body" id="codeBody">
+        <div class="code-tools">
+          <div class="tool-group">
+            <button type="button" class="mini-btn" id="undoBtn" data-tt="undo" aria-label="Deshacer" disabled>
+              <svg class="ic" aria-hidden="true"><use href="#i-rotate-ccw"></use></svg>
+            </button>
+            <button type="button" class="mini-btn" id="redoBtn" data-tt="redo" aria-label="Rehacer" disabled>
+              <svg class="ic" aria-hidden="true"><use href="#i-rotate"></use></svg>
+            </button>
+          </div>
+          <div class="tool-group">
+            <button type="button" class="mini-btn" id="zoomOutBtn" data-tt="zoomOut" aria-label="Achicar bloques">
+              <svg class="ic" aria-hidden="true"><use href="#i-minus"></use></svg>
+            </button>
+            <button type="button" class="zoom-val" id="zoomVal" data-tt="zoomReset" aria-label="Volver al tamaño normal">100%</button>
+            <button type="button" class="mini-btn" id="zoomInBtn" data-tt="zoomIn" aria-label="Agrandar bloques">
+              <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>
+            </button>
+          </div>
+        </div>
         <div class="scratch-workspace">
           <div class="code-list" id="codeList"></div>
         </div>
@@ -1003,7 +1217,7 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
           <span class="s-title" data-t="blocks">Bloques</span>
           <span class="s-sub" data-t="blocksHint">Tocá un bloque para agregarlo</span>
         </span>
-        <span class="badge" id="blocksCount">39</span>
+        <span class="badge" id="blocksCount">40</span>
         <svg class="ic chev" aria-hidden="true"><use href="#i-chevron"></use></svg>
       </button>
       <div class="section-body" id="blocksBody">
@@ -1013,6 +1227,7 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
         </div>
         <div class="cats" id="catChips" role="group" aria-label="Categorías de bloques"></div>
         <div class="palette" id="palette"></div>
+        <p class="palette-hint" data-t="paletteHint">Tocá para agregar al final, o arrastrá desde el ícono para soltarlo donde quieras.</p>
       </div>
     </section>
 
@@ -1050,9 +1265,40 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
       <h3 id="spriteModalTitle" data-t="chooseSprite">Elegí un personaje</h3>
     </div>
     <p data-t="chooseSpriteDesc">Tocá uno para agregarlo. Después podés cambiarle el nombre.</p>
-    <div class="sprite-choices" id="spriteChoices"></div>
+    <input id="spriteSearch" class="sprite-search" type="search" autocomplete="off" spellcheck="false">
+    <div id="spriteChoices"></div>
     <div class="modal-actions">
+      <button type="button" class="m-btn ghost" id="importSpriteBtn" data-t="importSprite">Importar mis imágenes…</button>
       <button type="button" class="m-btn ghost" id="closeSpriteModal" data-t="close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="askModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+    <div class="modal-head">
+      <span class="modal-icon"><svg class="ic" aria-hidden="true"><use href="#i-branch"></use></svg></span>
+      <h3 id="askTitle">Confirmar</h3>
+    </div>
+    <p id="askMessage" class="ask-message"></p>
+    <input id="askInput" class="ask-input" type="text" autocomplete="off" spellcheck="false" hidden>
+    <div class="modal-actions">
+      <button type="button" class="m-btn primary" id="askOk"><span data-t="accept">Aceptar</span></button>
+      <button type="button" class="m-btn ghost" id="askCancel"><span data-t="cancel">Cancelar</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="repPicker" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="repPickerTitle">
+    <div class="modal-head">
+      <span class="modal-icon"><svg class="ic" aria-hidden="true"><use href="#i-calculator"></use></svg></span>
+      <h3 id="repPickerTitle" data-t="repPickerTitle">Elegí un reportero</h3>
+    </div>
+    <p data-t="repPickerDesc">Un reportero devuelve un valor que se usa dentro del bloque.</p>
+    <div id="repChoices" class="rep-choices"></div>
+    <div class="modal-actions">
+      <button type="button" class="m-btn ghost" id="repPickerClose"><span data-t="cancel">Cancelar</span></button>
     </div>
   </div>
 </div>

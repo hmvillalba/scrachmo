@@ -17,6 +17,7 @@ let selectedSpriteId = null;
 let variables = {};
 let hiddenVars = {};
 let stageBg = 0;
+let stageBgImg = '';
 let showScore = false;
 let score = 0;
 let isRunning = false;
@@ -29,17 +30,65 @@ let varsSig = '';
 let uidCounter = 0;
 let blockDrag = null;
 let paletteDrag = null;
-let palettePress = null;
-let paletteTimer = null;
 let spriteDrag = null;
+let lastPaletteDragAt = 0;
 let audioCtx = null;
-let scoreFired = false;
 let gameScrollY = 0;
 let suppressStageClick = false;
 let toastTimer = null;
 let saveTimer = null;
 const sayTimers = new Map();
 const sayTexts = new Map();
+
+/* runtime: un hilo por guion, con su propio estado de condición */
+const runThreads = new Set();
+const glowCounts = new Map();
+const firedScoreHats = new Set();
+let runActive = false;
+let runtimeSnapshot = null;
+let threadSeq = 0;
+let lastShakeAt = 0;
+let lastMsgAt = 0;
+let motionRequested = false;
+let spriteSearchTerm = '';
+
+/* disfraces: límites pensados para no reventar el guardado local (5 MB)
+   ni los links compartidos. Un dataURL de ~300 KB por disfraz como tope. */
+const MAX_COSTUMES = 12;
+const MAX_IMG_CHARS = 400000;
+const COSTUME_MAX_PX = 256;
+const IMG_DATA_RE = /^data:image\/(webp|png|jpeg|gif);base64,[A-Za-z0-9+/=]+$/;
+const COSTUME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'];
+let storageWarned = false;
+
+/* Fondo propio: permitimos más resolución que en un disfraz, pero con tope
+   propio para no reventar localStorage ni los links compartidos. */
+const BG_MAX_PX = 1280;
+const MAX_BG_CHARS = 900000;
+
+/* Topes al abrir un proyecto ageno (link ?p=, .scmo o guardado viejo).
+   Un árbol muy profundo desbordaría la pila de normalizeNodes() y un JSON
+   gigante congelaría el hilo principal al descomprimirlo. */
+const MAX_CODE_DEPTH = 40;
+const MAX_CODE_NODES = 2000;
+const MAX_PAYLOAD_CHARS = 8000000;
+let importNodeCount = 0;
+let importTruncated = false;
+const payloadTooBig = text => String(text).length > MAX_PAYLOAD_CHARS;
+
+/* Dos zooms independientes: el del área de código y el del escenario
+   (éste escala la altura de la escena y el tamaño de los personajes).
+   Ninguno de los dos forma parte del proyecto: son preferencias de UI. */
+const ZOOM_MIN = 0.7;
+const ZOOM_MAX = 1.6;
+const ZOOM_STEP = 0.1;
+const HISTORY_MAX = 60;
+let codeZoom = 1;
+let stageZoom = 1;
+const undoStack = [];
+const redoStack = [];
+let lastHistoryState = null;
+let historyMuted = false;
 
 const VAR_COLORS = [
   { v: '#4f46e5', t: '#eef2ff' },
@@ -58,7 +107,12 @@ const BG = [
   ['#1e293b', '#334155']
 ];
 
-const SPRITE_CHOICES = ['🐱', '🐶', '🐸', '🐼', '🦊', '🐰', '🐵', '🐧', '🦄', '🐲', '🤖', '⭐', '🚀', '🍎', '⚽', '🎈'];
+/* SPRITE_GROUPS y SPRITE_CHOICES viven en data.js */
+
+/* Sólo aceptamos imágenes raster embebidas: ni SVG ni URLs externas. */
+function validBackdrop(src) {
+  return (typeof src === 'string' && src.length <= MAX_BG_CHARS && IMG_DATA_RE.test(src)) ? src : '';
+}
 
 /* ---------------- helpers ---------------- */
 function uid(prefix) {
@@ -118,8 +172,69 @@ function posLeft(s) { return 50 + (s.x / 4.8); }
 function posTop(s) { return 50 - (s.y / 3.6); }
 
 /* ---------------- project ---------------- */
+/* Links compartidos:
+     'g1.' + gzip(JSON) en base64url  (nuevo, comprimido)
+     'j1.' + JSON en base64url        (fallback sin CompressionStream)
+     base64 plano                     (links viejos, se siguen leyendo)
+   Prefijo de 3 caracteres con un punto: un base64 plano jamás lo tiene,
+   así que no hay ambigüedad al distinguir formatos. base64url evita el
+   '+' que los query strings convierten en espacio. */
+function bytesToB64Url(bytes) {
+  let bin = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  }
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64UrlToBytes(s) {
+  const b = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
+  return out;
+}
+
 function decodeShare(s) {
-  try { return JSON.parse(decodeURIComponent(escape(atob(s)))); } catch (e) { return null; }
+  if (payloadTooBig(s)) return null;
+  try {
+    const text = decodeURIComponent(escape(atob(s)));
+    if (payloadTooBig(text)) return null;
+    return JSON.parse(text);
+  } catch (e) { return null; }
+}
+
+async function encodeSharePayload(payload) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  if (typeof CompressionStream === 'function') {
+    try {
+      const gz = new Uint8Array(await new Response(
+        new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))
+      ).arrayBuffer());
+      return 'g1.' + bytesToB64Url(gz);
+    } catch (e) { }
+  }
+  return 'j1.' + bytesToB64Url(bytes);
+}
+
+async function decodeShareAsync(code) {
+  if (!code) return null;
+  const kind = code.slice(0, 3);
+  if (kind !== 'g1.' && kind !== 'j1.') return decodeShare(code);
+  /* Freno antes de atob()/descomprimir: un link hostil no debe congelar la UI. */
+  if (payloadTooBig(code)) return null;
+  try {
+    let bytes = b64UrlToBytes(code.slice(3));
+    if (kind === 'g1.') {
+      if (typeof DecompressionStream !== 'function') return null;
+      bytes = new Uint8Array(await new Response(
+        new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+      ).arrayBuffer());
+    }
+    const text = new TextDecoder().decode(bytes);
+    if (payloadTooBig(text)) return null;
+    return JSON.parse(text);
+  } catch (e) { return null; }
 }
 
 function hiddenList() {
@@ -155,45 +270,191 @@ function defaultCode() {
 }
 
 function createSpriteData(emoji, name, code) {
-  return {
+  const s = {
     id: uid('s'),
     name: name,
-    emoji: emoji || '🐱',
     x: 0, y: 0, dir: 90, size: 100, visible: true, rot: 'all',
+    costumes: normalizeCostumes(null, emoji || '🐱'),
+    costumeIndex: 0,
     code: code || []
   };
+  syncCostume(s);
+  return s;
 }
 
-function normalizeNodes(list, seen) {
+/* ---------------- disfraces ----------------
+   Cada sprite tiene 1..12 disfraces {id, name, kind, src}.
+   kind 'emoji' guarda el emoji; kind 'img' guarda un dataURL raster
+   validado. s.emoji y s.img son campos DERIVADOS: se mantienen para
+   que el render y los proyectos viejos sigan funcionando. */
+function makeCostume(kind, src, name) {
+  return { id: uid('c'), kind: kind === 'img' ? 'img' : 'emoji', src: src, name: name };
+}
+
+function currentCostume(s) {
+  if (!s || !Array.isArray(s.costumes) || !s.costumes.length) return null;
+  return s.costumes[clamp(Math.floor(num(s.costumeIndex, 0)), 0, s.costumes.length - 1)] || s.costumes[0];
+}
+
+function syncCostume(s) {
+  const c = currentCostume(s);
+  s.emoji = c && c.kind === 'emoji' ? c.src : '';
+  s.img = c && c.kind === 'img' ? c.src : '';
+}
+
+function costumeHTML(c) {
+  if (!c) return '';
+  if (c.kind === 'img') return '<img class="costume-img" alt="" draggable="false" src="' + esc(c.src) + '">';
+  return '<span class="costume-emoji">' + esc(c.src) + '</span>';
+}
+
+function costumeFaceHTML(s) {
+  return costumeHTML(currentCostume(s));
+}
+
+function normalizeCostume(raw, i, used) {
+  if (!raw || typeof raw !== 'object') return null;
+  const kind = raw.kind === 'img' ? 'img' : 'emoji';
+  let src = typeof raw.src === 'string' ? raw.src : '';
+  if (kind === 'img') {
+    /* Ni SVG, ni URLs externas, ni esquemas raros: sólo raster embebido.
+       Los links ?p= son datos que vienen de afuera. */
+    if (!IMG_DATA_RE.test(src) || src.length > MAX_IMG_CHARS) return null;
+  } else {
+    src = src.slice(0, 8) || '🐱';
+  }
+  let id = (typeof raw.id === 'string' && raw.id) ? raw.id : uid('c');
+  if (used.has(id)) id = uid('c');
+  used.add(id);
+  const name = (typeof raw.name === 'string' && raw.name.trim())
+    ? raw.name.trim().slice(0, 24)
+    : (UI[lang].costumeDefault + ' ' + (i + 1));
+  return { id: id, kind: kind, src: src, name: name };
+}
+
+function normalizeCostumes(raw, fallbackEmoji) {
+  const used = new Set();
+  let list = [];
+  if (Array.isArray(raw)) {
+    raw.slice(0, MAX_COSTUMES).forEach((c, i) => {
+      const n = normalizeCostume(c, i, used);
+      if (n) list.push(n);
+    });
+  }
+  if (!list.length) list = [makeCostume('emoji', fallbackEmoji || '🐱', UI[lang].costumeDefault + ' 1')];
+  return list;
+}
+
+function updateCostumeEl(s) {
+  const el = findSpriteEl(s.id);
+  const face = el && el.querySelector('.sprite-emoji');
+  if (!face) { renderSprites(); return; }
+  face.innerHTML = costumeFaceHTML(s);
+  face.style.transform = spriteTransform(s);
+}
+
+function setCostume(s, index) {
+  if (!s || !Array.isArray(s.costumes) || !s.costumes.length) return;
+  const n = s.costumes.length;
+  const i = ((Math.floor(num(index, 0)) % n) + n) % n;
+  if (i === s.costumeIndex) return;
+  s.costumeIndex = i;
+  syncCostume(s);
+  updateCostumeEl(s);
+  renderTray();
+  renderProps();
+}
+
+/* Los bloques guardan el nombre (estable si se borra o reordena la tira).
+   El índice 1-based se acepta sólo por compatibilidad con proyectos viejos. */
+function findCostumeIndex(s, value) {
+  if (!s || !Array.isArray(s.costumes) || !s.costumes.length) return -1;
+  const str = String(value == null ? '' : value).trim();
+  const byName = s.costumes.findIndex(c => c.name === str);
+  if (byName >= 0) return byName;
+  const n = Math.floor(num(str, NaN));
+  if (Number.isFinite(n)) return clamp(n - 1, 0, s.costumes.length - 1);
+  return -1;
+}
+
+/* Un reportero es un nodo que devuelve un valor y vive en node.reps[i],
+   dentro de una casilla de otro bloque. node.val sigue siendo el escalar de
+   siempre: los proyectos viejos no tienen reps y no cambian de formato.
+   Los ids de los reporteros también son únicos en todo el árbol. */
+function normalizeOneNode(raw, seen, depth, wantRep) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (importNodeCount >= MAX_CODE_NODES) { importTruncated = true; return null; }
+  const type = raw.type || raw.id;
+  const def = BYID[type];
+  if (!def) return null;
+  /* Los reporteros no son enunciados y los enunciados no son reporteros. */
+  if (wantRep ? !def.rep : def.rep) return null;
+  if (type === 'show2' || type === 'hide2' || type === 'move2') return null;
+  let id = (typeof raw.id === 'string' && raw.id && raw.id !== type) ? raw.id : uid('b');
+  if (seen.has(id)) id = uid('b');
+  seen.add(id);
+  importNodeCount++;
+  const node = {
+    id: id,
+    type: type,
+    val: raw.val !== undefined ? raw.val : (def.def !== undefined ? def.def : 0)
+  };
+  /* Sólo los bloques declarados como anfitriones (y los propios reporteros,
+     para poder anidar) aceptan casillas con reportero. Ignorar reps en
+     sombreros o en bloques de texto evita estados imposibles al importar. */
+  if ((def.repOk || def.rep) && !def.repName) {
+    const label = def.n[lang] || def.n.es || '';
+    const count = (label.match(/\{(?:v|x|y)\}/g) || []).length;
+    const reps = normalizeReps(raw.reps, seen, depth + 1, count);
+    if (reps) node.reps = reps;
+  }
+  if (def.c) {
+    node.body = normalizeNodes(raw.body, seen, depth + 1);
+    if (def.else || Array.isArray(raw.elseBody)) node.elseBody = normalizeNodes(raw.elseBody, seen, depth + 1);
+  }
+  return node;
+}
+
+function normalizeReps(raw, seen, depth, count) {
+  if (!Array.isArray(raw)) return null;
+  if (depth >= MAX_CODE_DEPTH) {
+    if (raw.length) importTruncated = true;
+    return null;
+  }
+  /* Una casilla por hueco: los reps de más se descartan en silencio
+     (son datos inválidos, no un proyecto grande). */
+  const limit = Math.min(raw.length, count === undefined ? raw.length : count);
+  const out = [];
+  let any = false;
+  for (let i = 0; i < limit; i++) {
+    const n = raw[i] ? normalizeOneNode(raw[i], seen, depth, true) : null;
+    out[i] = n;
+    if (n) any = true;
+  }
+  return any ? out : null;
+}
+
+function normalizeNodes(list, seen, depth) {
   if (!Array.isArray(list)) return [];
   if (!seen) seen = new Set();
+  if (depth === undefined) depth = 0;
   const out = [];
+  if (depth >= MAX_CODE_DEPTH) {
+    if (list.length) importTruncated = true;
+    return out;
+  }
   list.forEach(raw => {
-    if (!raw || typeof raw !== 'object') return;
-    const type = raw.type || raw.id;
-    const def = BYID[type];
-    if (!def) return;
-    if (type === 'show2' || type === 'hide2' || type === 'move2') return;
-    let id = (typeof raw.id === 'string' && raw.id && raw.id !== type) ? raw.id : uid('b');
-    if (seen.has(id)) id = uid('b');
-    seen.add(id);
-    const node = {
-      id: id,
-      type: type,
-      val: raw.val !== undefined ? raw.val : (def.def !== undefined ? def.def : 0)
-    };
-    if (def.c) {
-      node.body = normalizeNodes(raw.body, seen);
-      if (def.else || Array.isArray(raw.elseBody)) node.elseBody = normalizeNodes(raw.elseBody, seen);
-    }
-    out.push(node);
+    const node = normalizeOneNode(raw, seen, depth, false);
+    if (node) out.push(node);
   });
   return out;
 }
 
 function migrateOldCode(flat) {
   if (!Array.isArray(flat)) return [];
-  const list = flat.filter(b => b && BYID[b.id] && b.id !== 'show2' && b.id !== 'hide2' && b.id !== 'move2');
+  const list = flat.filter(b => b && BYID[b.id] && !BYID[b.id].rep &&
+    b.id !== 'show2' && b.id !== 'hide2' && b.id !== 'move2');
+  if (list.length > MAX_CODE_NODES) { importTruncated = true; list.length = MAX_CODE_NODES; }
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const b = list[i];
@@ -213,7 +474,7 @@ function migrateOldCode(flat) {
     const def = BYID[b.id];
     if (def.c) {
       if (b.id === 'forever') {
-        const rest = list.slice(i + 1).filter(x => x.id !== 'sino');
+        const rest = list.slice(i + 1).filter(x => x.id !== 'sino' && !BYID[x.id].rep);
         node.body = rest.map(x => makeNode(x.id, x.val)).filter(Boolean);
         out.push(node);
         break;
@@ -242,31 +503,53 @@ function normalizeSprites(list) {
         ? raw.name.trim().slice(0, 20)
         : (UI[lang].spriteDefault + ' ' + (i + 1));
       const emoji = (typeof raw.emoji === 'string' && raw.emoji) ? raw.emoji : '🐱';
-      out.push({
+      const costumes = normalizeCostumes(raw.costumes, emoji);
+      const s = {
         id: id,
         name: name,
-        emoji: emoji,
         x: clamp(num(raw.x, 0), -240, 240),
         y: clamp(num(raw.y, 0), -180, 180),
         dir: normDir(num(raw.dir, 90)),
         size: clamp(num(raw.size, 100), 20, 200),
         visible: raw.visible !== false,
         rot: normRot(raw.rot),
+        costumes: costumes,
+        costumeIndex: clamp(Math.floor(num(raw.costumeIndex, 0)), 0, costumes.length - 1),
         code: normalizeNodes(raw.code, new Set())
-      });
+      };
+      syncCostume(s);
+      out.push(s);
     });
   }
   return out.length ? out : [createSpriteData('🐱', 'Gato', defaultCode())];
 }
 
 function applyPayload(payload) {
+  const ok = applyPayloadInner(payload);
+  /* Diferimos el aviso: applyPayload() también corre durante el arranque,
+     antes de que bindEvents() y render() dejen el DOM listo. */
+  if (ok && importTruncated) setTimeout(() => toast(UI[lang].projectTooBig), 0);
+  return ok;
+}
+
+function applyPayloadInner(payload) {
   if (!payload) return false;
+  /* Cada proyecto importado arranca con presupuesto limpio de nodos. */
+  importNodeCount = 0;
+  importTruncated = false;
+  /* Un proyecto nuevo (guardado, link, importación o deshacer) no arrastra
+     la posición inicial de una corrida anterior. */
+  runtimeSnapshot = null;
+  updateResetButton();
+  score = clamp(num(payload.score, 0), -1000000, 1000000);
+  multiOn = !!payload.multiOn;
 
   if (payload && Array.isArray(payload.sprites)) {
     sprites = normalizeSprites(payload.sprites);
     variables = (payload.variables && typeof payload.variables === 'object' && !Array.isArray(payload.variables)) ? payload.variables : {};
     loadHidden(payload.hidden);
     stageBg = clamp(Math.floor(num(payload.stageBg, 0)), 0, BG.length - 1);
+    stageBgImg = validBackdrop(payload.stageBgImg);
     showScore = !!payload.showScore;
     selectedSpriteId = (typeof payload.selected === 'string' && sprites.some(s => s.id === payload.selected))
       ? payload.selected
@@ -291,6 +574,7 @@ function applyPayload(payload) {
   loadHidden(oldHidden);
   Object.keys(hiddenVars).forEach(k => { if (!(k in variables)) delete hiddenVars[k]; });
   stageBg = 0;
+  stageBgImg = '';
   showScore = false;
   return true;
 }
@@ -301,10 +585,17 @@ function resetProjectData(withCode) {
   variables = {};
   hiddenVars = {};
   stageBg = 0;
+  stageBgImg = '';
   showScore = false;
   score = 0;
-  scoreFired = false;
+  multiOn = false;
   isRunning = false;
+  runActive = false;
+  runtimeSnapshot = null;
+  runThreads.forEach(t => { t.cancelled = true; });
+  runThreads.clear();
+  firedScoreHats.clear();
+  glowCounts.clear();
   sayTexts.clear();
   sayTimers.forEach(t => clearTimeout(t));
   sayTimers.clear();
@@ -312,9 +603,17 @@ function resetProjectData(withCode) {
 
 function loadProject() {
   let payload = null;
+  let pendingShare = null;
   try {
     const shared = new URLSearchParams(location.search).get('p');
-    if (shared) payload = decodeShare(shared.replace(/ /g, '+'));
+    if (shared) {
+      const code = shared.replace(/ /g, '+');
+      const kind = code.slice(0, 3);
+      /* La descompresión es asíncrona: devolvemos el código y lo aplicamos
+         apenas termina el arranque, sin bloquear el primer render. */
+      if (kind === 'g1.' || kind === 'j1.') pendingShare = code;
+      else payload = decodeShare(code);
+    }
   } catch (e) { }
 
   if (!payload) {
@@ -331,7 +630,26 @@ function loadProject() {
 
   if (!payload || !applyPayload(payload)) resetProjectData(true);
 
-  try { collapsed = JSON.parse(store.get('scrachmo_ui') || '{}') || {}; } catch (e) { collapsed = {}; }
+  /* scrachmo_ui antes guardaba sólo `collapsed`; aceptamos las dos formas. */
+  try {
+    const ui = JSON.parse(store.get('scrachmo_ui') || '{}') || {};
+    collapsed = (ui.collapsed && typeof ui.collapsed === 'object') ? ui.collapsed : ui;
+    codeZoom = clamp(num(ui.codeZoom, 1), ZOOM_MIN, ZOOM_MAX);
+    stageZoom = clamp(num(ui.stageZoom, 1), ZOOM_MIN, ZOOM_MAX);
+  } catch (e) { collapsed = {}; codeZoom = 1; stageZoom = 1; }
+  return pendingShare;
+}
+
+async function hydrateShared(code) {
+  const payload = await decodeShareAsync(code);
+  const t = UI[lang];
+  if (!payload) { toast(t.badFile); return; }
+  stopCode();
+  if (!applyPayload(payload)) { toast(t.badFile); return; }
+  varFormOpen = false;
+  render();
+  resetHistory();
+  toast(t.sharedLoaded);
 }
 
 function serializeProject() {
@@ -347,18 +665,98 @@ function serializeProject() {
       size: Math.round(s.size * 10) / 10,
       visible: !!s.visible,
       rot: normRot(s.rot),
+      costumes: s.costumes,
+      costumeIndex: s.costumeIndex,
       code: s.code
     })),
     variables: variables,
     hidden: hiddenList(),
     stageBg: stageBg,
+    stageBgImg: stageBgImg,
     showScore: showScore,
+    score: score,
+    multiOn: multiOn,
     selected: selectedSpriteId
   };
 }
 
+/* ---------------- historial de deshacer / rehacer ----------------
+   Guardamos instantáneas del proyecto de diseño. Engancharlo a saveProject()
+   cubre todas las mutaciones (agregar, borrar, arrastrar, escribir valores,
+   disfraces, fondo, variables) sin tener que tocar cada función por separado. */
+function resetHistory() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  lastHistoryState = JSON.stringify(serializeProject());
+  undoStack.push(lastHistoryState);
+  updateHistoryButtons();
+}
+
+function recordHistory() {
+  if (historyMuted) return;
+  const snap = JSON.stringify(serializeProject());
+  if (snap === lastHistoryState) return;
+  undoStack.push(snap);
+  if (undoStack.length > HISTORY_MAX) undoStack.shift();
+  redoStack.length = 0;
+  lastHistoryState = snap;
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+  const u = $('#undoBtn');
+  const r = $('#redoBtn');
+  if (u) u.disabled = undoStack.length < 2;
+  if (r) r.disabled = redoStack.length === 0;
+}
+
+function applyHistorySnapshot(snap) {
+  historyMuted = true;
+  try {
+    if (applyPayload(JSON.parse(snap))) {
+      varFormOpen = false;
+      render();
+      saveProject();
+    }
+  } catch (e) { }
+  historyMuted = false;
+  lastHistoryState = snap;
+  updateHistoryButtons();
+}
+
+function undo() {
+  if (undoStack.length < 2) { toast(UI[lang].undoNone); return; }
+  redoStack.push(undoStack.pop());
+  applyHistorySnapshot(undoStack[undoStack.length - 1]);
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  const snap = redoStack.pop();
+  undoStack.push(snap);
+  applyHistorySnapshot(snap);
+}
+
+function saveUI() {
+  store.set('scrachmo_ui', JSON.stringify({
+    collapsed: collapsed, codeZoom: codeZoom, stageZoom: stageZoom
+  }));
+}
+
+/* Escribir sin tocar el historial: lo usa el final de una corrida, que no
+   es una edición del usuario y no debe aparecer como paso de «Deshacer». */
+function persistProject() {
+  /* Con imágenes embebidas el dispositivo puede quedarse sin cupo:
+     avisar una sola vez en vez de fallar en silencio. */
+  const ok = store.set('scrachmo_v8', JSON.stringify(serializeProject()));
+  if (!ok && !storageWarned) { storageWarned = true; toast(UI[lang].storageFull); }
+  if (ok) storageWarned = false;
+  return ok;
+}
+
 function saveProject() {
-  store.set('scrachmo_v8', JSON.stringify(serializeProject()));
+  persistProject();
+  recordHistory();
 }
 
 function scheduleSave() {
@@ -601,12 +999,12 @@ function addSprite(emoji) {
   toast(t.spriteAdded);
 }
 
-function deleteSelectedSprite() {
+async function deleteSelectedSprite() {
   const t = UI[lang];
   if (sprites.length <= 1) { toast(t.cantDeleteSprite); return; }
   const s = selectedSprite();
   if (!s) return;
-  if (!confirm(t.confirmDeleteSprite)) return;
+  if (!(await askConfirm(t.confirmDeleteSprite, t.deleteSprite))) return;
   const idx = spriteIndex(s.id);
   sprites.splice(idx, 1);
   selectedSpriteId = sprites[Math.max(0, idx - 1)].id;
@@ -618,6 +1016,10 @@ function deleteSelectedSprite() {
 function openSpriteModal() {
   const modal = $('#spriteModal');
   if (!modal) return;
+  spriteSearchTerm = '';
+  const search = $('#spriteSearch');
+  if (search) search.value = '';
+  renderSpriteChoices();
   modal.hidden = false;
   updateModalLock();
 }
@@ -630,14 +1032,182 @@ function closeSpriteModal() {
 }
 
 function updateModalLock() {
-  const anyOpen = !$('#shareModal').hidden || !$('#spriteModal').hidden;
+  const ask = $('#askModal');
+  const rep = $('#repPicker');
+  const anyOpen = !$('#shareModal').hidden || !$('#spriteModal').hidden ||
+    !!(ask && !ask.hidden) || !!(rep && !rep.hidden);
   document.body.classList.toggle('modal-open', anyOpen);
+}
+
+/* ---------------- diálogos propios ----------------
+   Reemplazan prompt()/confirm(): mismos flujos, con el estilo de la app,
+   traducibles y sin bloquear el hilo de UI. askConfirm() devuelve boolean;
+   askText() devuelve el texto o null si se cancela. */
+let askResolver = null;
+let askMode = 'confirm';
+
+function askUser(opts) {
+  const modal = $('#askModal');
+  const o = opts || {};
+  const wantsText = o.value !== undefined;
+  if (!modal) return Promise.resolve(wantsText ? null : false);
+  /* Si otro diálogo quedó abierto, lo cancelamos antes de mostrar éste. */
+  if (askResolver) {
+    const prev = askResolver;
+    askResolver = null;
+    prev(wantsText ? null : false);
+  }
+  const t = UI[lang];
+  askMode = wantsText ? 'input' : 'confirm';
+  $('#askTitle').textContent = o.title || t.confirmTitle;
+  $('#askMessage').textContent = o.message || '';
+  const inp = $('#askInput');
+  inp.hidden = !wantsText;
+  inp.value = wantsText ? (o.value || '') : '';
+  inp.placeholder = o.placeholder || '';
+  inp.maxLength = o.maxLength || 60;
+  modal.hidden = false;
+  updateModalLock();
+  setTimeout(() => {
+    try {
+      if (askMode === 'input') { inp.focus(); inp.select(); }
+      else $('#askOk').focus();
+    } catch (e) { }
+  }, 60);
+  return new Promise(resolve => { askResolver = resolve; });
+}
+
+function closeAsk(value) {
+  const modal = $('#askModal');
+  if (modal) modal.hidden = true;
+  updateModalLock();
+  const resolve = askResolver;
+  askResolver = null;
+  if (resolve) resolve(value);
+}
+
+function askConfirm(message, title) {
+  return askUser({ message: message, title: title || UI[lang].confirmTitle })
+    .then(v => v === true);
+}
+
+function askText(title, value, message) {
+  return askUser({ title: title, value: value === undefined ? '' : value, message: message || '' })
+    .then(v => (typeof v === 'string' ? v : null));
+}
+
+function bindAskModal() {
+  const modal = $('#askModal');
+  if (!modal) return;
+  const inp = $('#askInput');
+  $('#askOk').addEventListener('click', () => closeAsk(askMode === 'input' ? inp.value : true));
+  $('#askCancel').addEventListener('click', () => closeAsk(null));
+  modal.addEventListener('click', e => { if (e.target === modal) closeAsk(null); });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); closeAsk(inp.value); }
+  });
+  document.addEventListener('keydown', e => {
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeAsk(null); }
+  });
+}
+
+/* ---------------- selector de reporteros ----------------
+   El reportero vive en node.reps[slot] del bloque anfitrión. Se elige desde
+   ƒ porque no es un enunciado: nunca se agrega suelto a la pila. */
+let repTarget = null;
+
+function setReporter(hostId, slot, type) {
+  const info = findNode(hostId);
+  const def = BYID[type];
+  if (!info || !def || !def.rep) return;
+  const hostDef = BYID[info.node.type];
+  if (!hostDef || !(hostDef.repOk || hostDef.rep) || hostDef.repName) return;
+  const count = ((hostDef.n[lang] || hostDef.n.es || '').match(/\{(?:v|x|y)\}/g) || []).length;
+  if (!(slot >= 0 && slot < count)) return;
+  if (!Array.isArray(info.node.reps)) info.node.reps = [];
+  info.node.reps[slot] = makeNode(type);
+  renderCode();
+  saveProject();
+}
+
+function removeReporter(hostId, slot) {
+  const info = findNode(hostId);
+  if (!info || !Array.isArray(info.node.reps)) return;
+  info.node.reps[slot] = null;
+  /* Si no queda ninguno, se borra el campo: el JSON guardado vuelve a ser
+     idéntico al de un proyecto sin reporteros. */
+  if (!info.node.reps.some(Boolean)) delete info.node.reps;
+  renderCode();
+  saveProject();
+}
+
+function renderRepChoices() {
+  const box = $('#repChoices');
+  if (!box) return;
+  const frag = document.createDocumentFragment();
+  REPORTER_BLOCKS.forEach(def => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rep-choice';
+    b.dataset.repPick = def.id;
+    const name = document.createElement('b');
+    name.textContent = blockPlainName(def);
+    const desc = document.createElement('small');
+    desc.textContent = def.d[lang] || def.d.es;
+    b.appendChild(name);
+    b.appendChild(desc);
+    frag.appendChild(b);
+  });
+  box.replaceChildren(frag);
+}
+
+function openRepPicker(hostId, slot) {
+  repTarget = { host: hostId, slot: slot };
+  renderRepChoices();
+  const modal = $('#repPicker');
+  if (!modal) return;
+  modal.hidden = false;
+  updateModalLock();
+}
+
+function closeRepPicker() {
+  repTarget = null;
+  const modal = $('#repPicker');
+  if (!modal) return;
+  modal.hidden = true;
+  updateModalLock();
+}
+
+function bindRepPicker() {
+  const modal = $('#repPicker');
+  if (!modal) return;
+  const close = $('#repPickerClose');
+  if (close) close.addEventListener('click', closeRepPicker);
+  modal.addEventListener('click', e => { if (e.target === modal) closeRepPicker(); });
+  const box = $('#repChoices');
+  if (box) box.addEventListener('click', e => {
+    const b = e.target.closest('[data-rep-pick]');
+    if (!b || !repTarget) return;
+    const target = repTarget;
+    setReporter(target.host, target.slot, b.dataset.repPick);
+    closeRepPicker();
+  });
+  document.addEventListener('keydown', e => {
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeRepPicker(); }
+  });
 }
 
 /* ---------------- stage and sprites ---------------- */
 function applyStageBg() {
   const stage = $('#stage');
   if (!stage) return;
+  const clearBtn = $('#bgClearBtn');
+  if (clearBtn) clearBtn.hidden = !stageBgImg;
+  if (stageBgImg) {
+    /* El dataURL ya pasó por IMG_DATA_RE: sólo caracteres seguros para CSS. */
+    stage.style.background = 'url("' + stageBgImg + '") center / cover no-repeat';
+    return;
+  }
   if (stageBg <= 0) {
     stage.style.background = '';
     return;
@@ -655,7 +1225,7 @@ function spriteHTML(s, index) {
     ' data-sprite="' + esc(s.id) + '"' +
     ' style="left:' + posLeft(s) + '%;top:' + posTop(s) + '%;z-index:' + (sel ? 60 : index + 1) + '">' +
     '<div class="sprite-bubble' + (bubble ? ' show' : '') + '">' + esc(bubble) + '</div>' +
-    '<div class="sprite-emoji" style="transform:' + spriteTransform(s) + '">' + esc(s.emoji) + '</div>' +
+    '<div class="sprite-emoji" style="transform:' + spriteTransform(s) + '">' + costumeFaceHTML(s) + '</div>' +
     '</div>';
 }
 
@@ -691,6 +1261,7 @@ function updateSpriteEl(s) {
     emoji.style.transform = spriteTransform(s);
   }
   updateBubbleEl(s);
+  if (s.id === selectedSpriteId) updatePropLive(s);
 }
 
 function updateBubbleEl(s) {
@@ -724,7 +1295,7 @@ function renderTray() {
     const sel = s.id === selectedSpriteId;
     return '<button type="button" class="sprite-tile' + (sel ? ' selected' : '') + (s.visible ? '' : ' off') + '"' +
       ' data-sprite="' + esc(s.id) + '" title="' + esc(s.name) + '">' +
-      '<span class="tile-emoji">' + esc(s.emoji) + '</span>' +
+      '<span class="tile-emoji">' + costumeFaceHTML(s) + '</span>' +
       '<span class="tile-name">' + esc(s.name) + '</span>' +
       (s.visible ? '' : icon('eye-off', 'tile-eye')) +
       '</button>';
@@ -741,7 +1312,7 @@ function renderProps() {
   if (!s) return;
   const t = UI[lang];
   const avatar = $('#propAvatar');
-  if (avatar) avatar.textContent = s.emoji;
+  if (avatar) avatar.innerHTML = costumeFaceHTML(s);
   const name = $('#propName');
   if (name) name.value = s.name;
   const px = $('#propX'); if (px) px.value = fmt(s.x);
@@ -771,6 +1342,221 @@ function renderProps() {
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   });
+  renderCostumeStrip();
+}
+
+/* ---------------- tira de disfraces ---------------- */
+function renderCostumeStrip() {
+  const box = $('#costumeStrip');
+  if (!box) return;
+  const s = selectedSprite();
+  if (!s) return;
+  const t = UI[lang];
+  const list = Array.isArray(s.costumes) ? s.costumes : [];
+  box.innerHTML = list.map((c, i) => {
+    const active = i === s.costumeIndex;
+    return '<button type="button" class="costume-thumb' + (active ? ' active' : '') + '"' +
+      ' data-costume="' + i + '" title="' + esc(c.name) + '"' +
+      ' aria-label="' + esc(c.name) + '" aria-pressed="' + active + '">' +
+      costumeHTML(c) +
+      '<span class="costume-name">' + esc(c.name) + '</span>' +
+      '<span class="costume-del" data-del-costume="' + i + '" role="button" tabindex="-1" aria-label="' + esc(t.costumeDelete) + '">' + icon('close') + '</span>' +
+      '</button>';
+  }).join('') + (list.length < MAX_COSTUMES
+    ? '<button type="button" class="costume-add" data-add-costume aria-label="' + esc(t.costumeAdd) +
+      '" title="' + esc(t.costumeAdd) + '">+</button>'
+    : '');
+  const count = $('#costumeCount');
+  if (count) count.textContent = list.length + '/' + MAX_COSTUMES;
+  const add = $('#addCostumeBtn');
+  if (add) add.disabled = list.length >= MAX_COSTUMES;
+}
+
+async function deleteCostume(index) {
+  const s = selectedSprite();
+  const t = UI[lang];
+  if (!s || !s.costumes || s.costumes.length <= 1) { toast(t.cantDeleteCostume); return; }
+  if (!(await askConfirm(t.confirmDeleteCostume, t.costumeDelete))) return;
+  const keep = currentCostume(s);
+  const keepId = keep ? keep.id : null;
+  s.costumes.splice(index, 1);
+  let next = s.costumes.findIndex(c => c.id === keepId);
+  if (next < 0) next = clamp(index, 0, s.costumes.length - 1);
+  s.costumeIndex = next;
+  syncCostume(s);
+  renderSprites();
+  renderTray();
+  renderProps();
+  renderCode();
+  saveProject();
+}
+
+function isAllowedImage(file) {
+  const name = String(file.name || '').toLowerCase();
+  if (/\.svgz?$/.test(name)) return false;
+  const type = String(file.type || '').toLowerCase();
+  if (type && COSTUME_TYPES.indexOf(type) < 0) return false;
+  if (!type && !/\.(png|jpe?g|webp|gif|bmp)$/.test(name)) return false;
+  return true;
+}
+
+/* createImageBitmap es más rápido, pero en algunos navegadores puede
+   quedarse colgado con un archivo concreto. Si tarda demasiado o falla,
+   caemos a <img> para que la importación nunca congele la interfaz. */
+function loadBitmap(file) {
+  if (typeof createImageBitmap !== 'function') return loadBitmapViaImg(file);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fallback = () => {
+      if (settled) return;
+      settled = true;
+      loadBitmapViaImg(file).then(resolve, reject);
+    };
+    const timer = setTimeout(fallback, 3000);
+    createImageBitmap(file).then(bmp => {
+      if (settled) { if (typeof bmp.close === 'function') bmp.close(); return; }
+      settled = true;
+      clearTimeout(timer);
+      resolve(bmp);
+    }).catch(() => { clearTimeout(timer); fallback(); });
+  });
+}
+
+function loadBitmapViaImg(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('imagen ilegible')); };
+    img.src = url;
+  });
+}
+
+/* Re-encode a WebP y achica la imagen. Nunca se guarda el archivo original:
+   así controlamos el peso y descartamos cualquier SVG. */
+async function encodeImage(file, maxPx, maxChars, qBase, qStep) {
+  const bitmap = await loadBitmap(file);
+  try {
+    const max = Math.max(bitmap.width, bitmap.height) || 1;
+    const scale = Math.min(1, maxPx / max);
+    let w = Math.max(1, Math.round(bitmap.width * scale));
+    let h = Math.max(1, Math.round(bitmap.height * scale));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      let out = canvas.toDataURL('image/webp', qBase - attempt * qStep);
+      if (!/^data:image\/webp;base64,/.test(out)) out = canvas.toDataURL('image/png');
+      if (out.length <= maxChars && IMG_DATA_RE.test(out)) return out;
+      w = Math.max(1, Math.round(w * 0.7));
+      h = Math.max(1, Math.round(h * 0.7));
+    }
+    return null;
+  } finally {
+    if (typeof bitmap.close === 'function') bitmap.close();
+  }
+}
+
+function imageToCostume(file) {
+  return encodeImage(file, COSTUME_MAX_PX, MAX_IMG_CHARS, 0.82, 0.12);
+}
+
+function imageToBackdrop(file) {
+  return encodeImage(file, BG_MAX_PX, MAX_BG_CHARS, 0.88, 0.10);
+}
+
+function pickBackdropFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = COSTUME_TYPES.join(',');
+  input.onchange = () => {
+    const f = (input.files || [])[0];
+    if (f) importBackdropFile(f);
+  };
+  input.click();
+}
+
+async function importBackdropFile(file) {
+  const t = UI[lang];
+  if (!isAllowedImage(file)) { toast(t.bgBadType); return; }
+  let src = null;
+  try { src = await imageToBackdrop(file); } catch (e) { }
+  if (!src) { toast(t.bgTooBig); return; }
+  stageBgImg = validBackdrop(src);
+  applyStageBg();
+  saveProject();
+  toast(t.bgAdded);
+}
+
+function clearBackdrop() {
+  if (!stageBgImg) return;
+  stageBgImg = '';
+  applyStageBg();
+  saveProject();
+  toast(UI[lang].bgRemoved);
+}
+
+function pickCostumeFiles(asNewSprite) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = COSTUME_TYPES.join(',');
+  input.multiple = true;
+  input.onchange = () => importCostumeFiles(Array.from(input.files || []), !!asNewSprite);
+  input.click();
+}
+
+async function importCostumeFiles(files, asNewSprite) {
+  const t = UI[lang];
+  if (!files || !files.length) return;
+  closeSpriteModal();
+  const base = selectedSprite();
+  const room = asNewSprite ? MAX_COSTUMES : Math.max(0, MAX_COSTUMES - (base && base.costumes ? base.costumes.length : 0));
+  if (room <= 0) { toast(t.costumeLimit); return; }
+  if (files.length > room) toast(t.costumeLimit);
+  const picked = files.slice(0, room);
+  const added = [];
+  for (const file of picked) {
+    if (!isAllowedImage(file)) { toast(t.costumeBadType); continue; }
+    try {
+      const src = await imageToCostume(file);
+      if (!src) { toast(t.costumeTooBig); continue; }
+      let label = String(file.name || '').replace(/\.[^.]+$/, '')
+        .replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 24);
+      if (!label) label = t.costumeDefault + ' ' + (added.length + 1);
+      /* Sin nombres repetidos: el bloque «cambiar disfraz a» apunta por nombre. */
+      const used = (asNewSprite ? [] : (base && base.costumes ? base.costumes : []))
+        .concat(added).map(c => c.name);
+      const baseLabel = label;
+      let suffix = 2;
+      while (used.indexOf(label) >= 0) {
+        const tail = ' ' + (suffix++);
+        label = baseLabel.slice(0, Math.max(1, 24 - tail.length)) + tail;
+      }
+      added.push(makeCostume('img', src, label));
+    } catch (err) { toast(t.costumeEmpty); }
+  }
+  if (!added.length) return;
+
+  if (asNewSprite) {
+    const s = createSpriteData('🐱', t.spriteDefault + ' ' + (sprites.length + 1), []);
+    s.costumes = added;
+    s.costumeIndex = 0;
+    syncCostume(s);
+    sprites.push(s);
+    selectedSpriteId = s.id;
+  } else {
+    if (!base) return;
+    const firstNew = base.costumes.length;
+    base.costumes = base.costumes.concat(added);
+    base.costumeIndex = firstNew;
+    syncCostume(base);
+  }
+  render();
+  saveProject();
+  toast(t.costumeAdded);
 }
 
 function updatePropPosition() {
@@ -780,12 +1566,38 @@ function updatePropPosition() {
   const py = $('#propY'); if (py) py.value = fmt(s.y);
 }
 
+/* Refleja en vivo lo que el programa le hace al personaje,
+   sin pisar el campo que el usuario esté editando. */
+function updatePropLive(s) {
+  if (!s) return;
+  const put = (sel, v) => {
+    const el = $(sel);
+    if (el && document.activeElement !== el) el.value = fmt(v);
+  };
+  put('#propX', s.x);
+  put('#propY', s.y);
+  put('#propDir', s.dir);
+  put('#propSize', s.size);
+}
+
 /* ---------------- code rendering ---------------- */
+function countReporters(reps) {
+  if (!Array.isArray(reps)) return 0;
+  let n = 0;
+  reps.forEach(r => {
+    if (!r) return;
+    n++;
+    n += countReporters(r.reps);
+  });
+  return n;
+}
+
 function countNodes(nodes) {
   if (!Array.isArray(nodes)) return 0;
   let n = 0;
   nodes.forEach(node => {
     n++;
+    if (node.reps) n += countReporters(node.reps);
     if (node.body) n += countNodes(node.body);
     if (node.elseBody) n += countNodes(node.elseBody);
   });
@@ -801,36 +1613,147 @@ function codeTitle() {
   if (count) count.textContent = String(s ? countNodes(s.code) : 0);
 }
 
+/* Un bloque puede tener uno o varios huecos ({v}, {x}, {y}). El valor del
+   nodo sigue siendo un único escalar: con varios huecos se guarda como
+   "x,y". Así los proyectos viejos, el historial y los links no cambian. */
+function blockValues(node, def, count) {
+  const raw = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
+  if (count < 2) return [raw];
+  const defs = String(def.def !== undefined ? def.def : '').split(',');
+  const parts = raw.split(',');
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(parts[i] !== undefined ? parts[i] : (defs[i] !== undefined ? defs[i] : '0'));
+  }
+  return out;
+}
+
 function blockContent(node, def, t) {
+  const opts = t || {};
+  const tr = UI[lang];
   const content = document.createElement('span');
   content.className = 'sb-content';
   const label = def.n[lang] || def.n.es;
-  const parts = label.split('{v}');
-  if (parts.length > 1) {
-    if (parts[0]) content.appendChild(document.createTextNode(parts[0]));
-    if (t && t.preview) {
+  const slots = label.match(/\{(?:v|x|y)\}/g) || [];
+  if (!slots.length) {
+    content.appendChild(document.createTextNode(label));
+    return content;
+  }
+  const parts = label.split(/\{(?:v|x|y)\}/);
+  const vals = blockValues(node, def, slots.length);
+  const plain = label.replace(/\{(?:v|x|y)\}/g, '').replace(/\s+/g, ' ').trim();
+  /* Los reporteros también admiten reporteros dentro: así se anidan. El
+     tope de 10 sólo protege el dibujado, no la ejecución. */
+  /* repName marca casillas que guardan un nombre (p. ej. «variable {v}»):
+     ahí no tiene sentido anidar un valor. */
+  const canRep = !!(def.repOk || def.rep) && !def.repName && !opts.preview && (opts.depth || 0) < 10;
+  slots.forEach((slot, i) => {
+    if (parts[i]) content.appendChild(document.createTextNode(parts[i]));
+    const cur = vals[i];
+    const slotName = slot === '{x}' ? 'x' : (slot === '{y}' ? 'y' : (parts[i].replace(/\s+$/, '') || def.id));
+    const aria = slots.length > 1 ? (plain + ' · ' + slotName) : slotName;
+    let field;
+    if (opts.preview) {
       const val = document.createElement('span');
       val.className = 'sb-value' + (def.bool ? ' bool' : '');
-      val.textContent = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
-      content.appendChild(val);
+      let shown = cur;
+      if (def.costume) {
+        const s = selectedSprite();
+        const list = s && s.costumes ? s.costumes : [];
+        const c = list[findCostumeIndex(s, cur)];
+        shown = c ? c.name : (UI[lang].costumeDefault + ' 1');
+      }
+      val.textContent = shown;
+      field = val;
+    } else if (def.costume) {
+      const sel = document.createElement('select');
+      sel.className = 'sb-input sb-select';
+      sel.dataset.input = node.id;
+      sel.style.maxWidth = (def.w || 110) + 'px';
+      sel.setAttribute('aria-label', aria);
+      const s = selectedSprite();
+      const list = s && Array.isArray(s.costumes) ? s.costumes : [];
+      let found = false;
+      list.forEach((c, j) => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = c.name;
+        /* Un valor numérico viejo se resuelve por su posición original. */
+        if (c.name === cur || String(j + 1) === cur) { opt.selected = true; found = true; }
+        sel.appendChild(opt);
+      });
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        opt.textContent = UI[lang].costumeMissing;
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+      field = sel;
     } else {
       const input = document.createElement('input');
       input.className = 'sb-input' + (def.bool ? ' bool' : '');
       input.type = 'text';
-      input.value = String(node.val !== undefined ? node.val : '');
+      input.value = cur;
       input.style.width = (def.w || 58) + 'px';
       input.dataset.input = node.id;
+      /* data-xy permite recomponer el par "x,y" al editar cualquiera de los dos. */
+      if (slots.length > 1) input.dataset.xy = String(i);
       input.setAttribute('inputmode', def.num ? 'decimal' : 'text');
-      input.setAttribute('aria-label', parts[0].replace(/\s+$/, '') || def.id);
+      input.setAttribute('aria-label', aria);
       input.autocomplete = 'off';
       input.spellcheck = false;
-      content.appendChild(input);
+      field = input;
     }
-    if (parts[1]) content.appendChild(document.createTextNode(parts[1]));
-  } else {
-    content.appendChild(document.createTextNode(label));
-  }
+    if (!canRep) { content.appendChild(field); return; }
+    /* Casilla con reportero: ƒ abre el selector y, si ya hay uno, el chip
+       reemplaza al input. El texto escrito se conserva en node.val por si
+       después se quita el reportero. */
+    const wrap = document.createElement('span');
+    wrap.className = 'sb-slot';
+    const fx = document.createElement('button');
+    fx.type = 'button';
+    fx.className = 'rep-fx';
+    fx.dataset.repHost = node.id;
+    fx.dataset.repSlot = String(i);
+    fx.textContent = 'ƒ';
+    fx.title = tr.repInsert;
+    fx.setAttribute('aria-label', tr.repInsert);
+    wrap.appendChild(fx);
+    const rep = node.reps && node.reps[i];
+    if (rep && BYID[rep.type] && BYID[rep.type].rep) {
+      wrap.appendChild(reporterChip(rep, node.id, i, (opts.depth || 0) + 1));
+    } else {
+      wrap.appendChild(field);
+    }
+    content.appendChild(wrap);
+  });
+  if (parts[parts.length - 1]) content.appendChild(document.createTextNode(parts[parts.length - 1]));
   return content;
+}
+
+/* Chip de un reportero dentro de una casilla: su etiqueta con casillas
+   anidadas y la × para volver al texto libre. */
+function reporterChip(rep, hostId, slot, depth) {
+  const tr = UI[lang];
+  const def = BYID[rep.type];
+  const chip = document.createElement('span');
+  chip.className = 'rep-chip';
+  chip.dataset.rep = rep.id;
+  const inner = blockContent(rep, def, { depth: depth });
+  if (!(def.n[lang] || def.n.es).match(/\{(?:v|x|y)\}/g)) inner.classList.add('rep-name');
+  chip.appendChild(inner);
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'rep-del';
+  del.dataset.repDel = rep.id;
+  del.dataset.repHost = hostId;
+  del.dataset.repSlot = String(slot);
+  del.textContent = '×';
+  del.title = tr.repRemove;
+  del.setAttribute('aria-label', tr.repRemove);
+  chip.appendChild(del);
+  return chip;
 }
 
 function makeSlot(node, slotName, cat, def) {
@@ -865,7 +1788,18 @@ function blockEl(node, opts) {
   head.dataset.id = node.id;
   head.style.setProperty('--c', cat.color);
 
-  if (!preview) {
+  if (preview) {
+    /* En la paleta la empuñadura es el punto de agarre táctil: el resto
+       del bloque sigue permitiendo desplazar la página con el dedo. */
+    const pgrip = document.createElement('button');
+    pgrip.type = 'button';
+    pgrip.className = 'sb-grip p-grip';
+    pgrip.tabIndex = -1;
+    pgrip.title = t.dragBlock;
+    pgrip.setAttribute('aria-label', t.dragBlock);
+    pgrip.innerHTML = icon('grip');
+    head.appendChild(pgrip);
+  } else {
     const grip = document.createElement('button');
     grip.type = 'button';
     grip.className = 'sb-grip';
@@ -878,6 +1812,17 @@ function blockEl(node, opts) {
 
   const content = blockContent(node, def, { preview: preview });
   head.appendChild(content);
+
+  if (!preview) {
+    const dup = document.createElement('button');
+    dup.type = 'button';
+    dup.className = 'sb-dup';
+    dup.dataset.dup = node.id;
+    dup.setAttribute('aria-label', t.duplicateBlock);
+    dup.title = t.duplicateBlock;
+    dup.innerHTML = icon('copy');
+    head.appendChild(dup);
+  }
 
   if (!preview) {
     const del = document.createElement('button');
@@ -946,6 +1891,63 @@ function renderCode() {
   updateStageHint();
 }
 
+/* ---------------- zoom del área de código ---------------- */
+function applyCodeZoom() {
+  const list = $('#codeList');
+  if (list) list.style.zoom = String(codeZoom);
+  const val = $('#zoomVal');
+  if (val) val.textContent = Math.round(codeZoom * 100) + '%';
+  const out = $('#zoomOutBtn');
+  const inn = $('#zoomInBtn');
+  if (out) out.disabled = codeZoom <= ZOOM_MIN + 0.001;
+  if (inn) inn.disabled = codeZoom >= ZOOM_MAX - 0.001;
+}
+
+function changeZoom(delta) {
+  const z = clamp(Math.round((codeZoom + delta) * 100) / 100, ZOOM_MIN, ZOOM_MAX);
+  if (z === codeZoom) return;
+  codeZoom = z;
+  applyCodeZoom();
+  saveUI();
+}
+
+function resetZoom() {
+  if (codeZoom === 1) return;
+  codeZoom = 1;
+  applyCodeZoom();
+  saveUI();
+}
+
+/* ---------------- zoom del escenario y los personajes ----------------
+   Una variable CSS escala la altura de la escena, el emoji/imagen de cada
+   sprite, el globo y el aro de selección. Las posiciones siguen siendo
+   porcentuales, así que arrastrar y los bloques de movimiento no cambian. */
+function applyStageZoom() {
+  const stage = $('#stage');
+  if (stage) stage.style.setProperty('--stage-zoom', String(stageZoom));
+  const val = $('#stageZoomVal');
+  if (val) val.textContent = Math.round(stageZoom * 100) + '%';
+  const out = $('#stageZoomOutBtn');
+  const inn = $('#stageZoomInBtn');
+  if (out) out.disabled = stageZoom <= ZOOM_MIN + 0.001;
+  if (inn) inn.disabled = stageZoom >= ZOOM_MAX - 0.001;
+}
+
+function changeStageZoom(delta) {
+  const z = clamp(Math.round((stageZoom + delta) * 100) / 100, ZOOM_MIN, ZOOM_MAX);
+  if (z === stageZoom) return;
+  stageZoom = z;
+  applyStageZoom();
+  saveUI();
+}
+
+function resetStageZoom() {
+  if (stageZoom === 1) return;
+  stageZoom = 1;
+  applyStageZoom();
+  saveUI();
+}
+
 function updateStageHint() {
   const hint = $('#stageHint');
   if (!hint) return;
@@ -982,6 +1984,19 @@ function previewNode(def) {
   return node;
 }
 
+/* Nombre accesible de la paleta: rellena todos los huecos con los valores
+   por defecto (un bloque de dos campos usa def "x,y"). */
+function blockPlainName(def) {
+  const label = def.n[lang] || def.n.es;
+  const defs = String(def.def !== undefined ? def.def : '').split(',');
+  let i = 0;
+  return label.replace(/\{(?:v|x|y)\}/g, () => {
+    const value = defs.length > 1 ? defs[i] : defs[0];
+    i++;
+    return value === undefined ? '' : value;
+  });
+}
+
 function renderPalette(t) {
   const pal = $('#palette');
   if (!pal) return;
@@ -999,7 +2014,7 @@ function renderPalette(t) {
   const frag = document.createDocumentFragment();
   items.forEach(def => {
     const cat = CATMAP[def.cat];
-    const name = (def.n[lang] || def.n.es).replace('{v}', def.def !== undefined ? String(def.def) : '');
+    const name = blockPlainName(def);
     const desc = def.d[lang] || def.d.es;
     const wrap = document.createElement('div');
     wrap.className = 'p-block';
@@ -1023,9 +2038,27 @@ function renderSpriteChoices() {
   const box = $('#spriteChoices');
   if (!box) return;
   const t = UI[lang];
-  box.innerHTML = SPRITE_CHOICES.map(e =>
-    '<button type="button" class="sprite-choice" data-emoji="' + esc(e) + '" aria-label="' + esc(t.addSprite + ' ' + e) + '">' + esc(e) + '</button>'
-  ).join('');
+  const q = fold(spriteSearchTerm.trim());
+  let shown = 0;
+  const html = SPRITE_GROUPS.map(g => {
+    const label = g.name[lang] || g.name.es;
+    const groupHit = q && (fold(label).indexOf(q) > -1 || fold(g.name.es).indexOf(q) > -1);
+    const items = g.items.filter(raw => {
+      if (!q || groupHit) return true;
+      const parts = raw.split('|');
+      return fold(parts[1] || '').indexOf(q) > -1 || fold(parts[0]).indexOf(q) > -1;
+    });
+    if (!items.length) return '';
+    shown += items.length;
+    return '<div class="sprite-group">' +
+      '<div class="sprite-group-title">' + esc(label) + '</div>' +
+      '<div class="sprite-choices">' + items.map(raw => {
+        const e = raw.split('|')[0];
+        return '<button type="button" class="sprite-choice" data-emoji="' + esc(e) +
+          '" aria-label="' + esc(t.addSprite + ' ' + e) + '">' + esc(e) + '</button>';
+      }).join('') + '</div></div>';
+  }).join('');
+  box.innerHTML = shown ? html : '<div class="sprite-empty">' + esc(t.spriteNoResults) + '</div>';
 }
 
 /* ---------------- render all ---------------- */
@@ -1037,6 +2070,13 @@ function render() {
     const key = el.dataset.t;
     if (t[key] != null) el.textContent = t[key];
   });
+  $$('[data-tt]').forEach(el => {
+    const key = el.dataset.tt;
+    if (t[key] != null) {
+      el.title = t[key];
+      el.setAttribute('aria-label', t[key]);
+    }
+  });
   $$('.lang-switch button').forEach(b => {
     const on = b.dataset.lang === lang;
     b.classList.toggle('active', on);
@@ -1044,6 +2084,11 @@ function render() {
   });
 
   $('#searchBlocks').placeholder = t.search;
+  const spSearch = $('#spriteSearch');
+  if (spSearch) {
+    spSearch.placeholder = t.spriteSearch;
+    spSearch.setAttribute('aria-label', t.spriteSearch);
+  }
   $('#blocksCount').textContent = String(PALETTE_BLOCKS.length);
   $('#multiSub').textContent = multiOn ? t.multiOn : t.multiOff;
   $('#multiBtn').classList.toggle('is-on', multiOn);
@@ -1055,6 +2100,7 @@ function render() {
   renderVars();
   renderCats(t);
   renderPalette(t);
+  renderRepChoices();
   renderSpriteChoices();
   applyStageBg();
   codeTitle();
@@ -1065,6 +2111,10 @@ function render() {
   updateHUD();
   updateStatus();
   applyCollapsed();
+  applyCodeZoom();
+  applyStageZoom();
+  updateResetButton();
+  updateHistoryButtons();
 }
 
 /* ---------------- collapsed sections ---------------- */
@@ -1087,7 +2137,14 @@ function findNode(id, list, parent, parentSlot) {
   }
   for (let i = 0; i < list.length; i++) {
     const node = list[i];
+    if (!node) continue;
     if (node.id === id) return { node: node, arr: list, index: i, parent: parent || null, parentSlot: parentSlot || null };
+    /* Los reporteros también tienen casillas con inputs: hay que poder
+       encontrarlos para que applyBlockValue() escriba en el nodo correcto. */
+    if (node.reps) {
+      const r = findNode(id, node.reps, node, 'reps');
+      if (r) return r;
+    }
     if (node.body) {
       const r = findNode(id, node.body, node, 'body');
       if (r) return r;
@@ -1103,6 +2160,7 @@ function findNode(id, list, parent, parentSlot) {
 function nodeContains(ancestor, id) {
   if (!ancestor) return false;
   if (ancestor.id === id) return true;
+  if (ancestor.reps && ancestor.reps.some(n => nodeContains(n, id))) return true;
   if (ancestor.body && ancestor.body.some(n => nodeContains(n, id))) return true;
   if (ancestor.elseBody && ancestor.elseBody.some(n => nodeContains(n, id))) return true;
   return false;
@@ -1127,6 +2185,31 @@ function deleteNode(id) {
   renderCode();
   saveProject();
   toast(UI[lang].deleted);
+}
+
+/* Clona el nodo y todo su subárbol con ids nuevos: dos bloques nunca
+   pueden compartir id, porque el drag y el resaltado buscan por id. */
+function cloneNodeTree(node) {
+  const copy = {};
+  Object.keys(node).forEach(k => {
+    if (k !== 'id' && k !== 'body' && k !== 'elseBody' && k !== 'reps') copy[k] = node[k];
+  });
+  copy.id = uid('b');
+  if (Array.isArray(node.reps)) {
+    copy.reps = node.reps.map(r => (r ? cloneNodeTree(r) : null));
+  }
+  if (Array.isArray(node.body)) copy.body = node.body.map(cloneNodeTree);
+  if (Array.isArray(node.elseBody)) copy.elseBody = node.elseBody.map(cloneNodeTree);
+  return copy;
+}
+
+function duplicateNode(id) {
+  const info = findNode(id);
+  if (!info) return;
+  info.arr.splice(info.index + 1, 0, cloneNodeTree(info.node));
+  renderCode();
+  saveProject();
+  toast(UI[lang].duplicated);
 }
 
 function focusGrip(id) {
@@ -1211,7 +2294,9 @@ function drawDropLine(target) {
       top = r.bottom - cr.top + 2;
     }
   }
-  line.style.top = top + 'px';
+  /* getBoundingClientRect devuelve píxeles visuales (ya escalados por zoom),
+     pero `top` se expresa en las unidades locales del contenedor. */
+  line.style.top = (top / (codeZoom || 1)) + 'px';
   container.appendChild(line);
 }
 
@@ -1338,6 +2423,116 @@ function endBlockDrag(e, cancelled) {
   toast(UI[lang].reordered);
 }
 
+/* ---------------- arrastrar desde la paleta ---------------- */
+function paletteDropContainer(e, def) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (!el) return null;
+  const slot = el.closest('.c-slot');
+  /* Sólo sirven los slots del área de código: los de la paleta son vistas previas. */
+  if (slot && slot.closest('#codeList')) {
+    return (def && def.hat) ? null : slot;
+  }
+  if (el.closest('#codeList') || el.closest('.scratch-workspace')) return $('#codeList');
+  return null;
+}
+
+function startPaletteDrag(e, item) {
+  if (paletteDrag || blockDrag || isRunning) return;
+  if (e.button !== undefined && e.button !== 0) return;
+  const defId = item.dataset.add;
+  const sb = item.querySelector('.stack-item');
+  if (!defId || !sb) return;
+  const rect = sb.getBoundingClientRect();
+  paletteDrag = {
+    defId: defId,
+    item: item,
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    moved: false,
+    ghost: null,
+    target: null
+  };
+  try { item.setPointerCapture(e.pointerId); } catch (err) { }
+}
+
+function movePaletteDrag(e) {
+  if (!paletteDrag || e.pointerId !== paletteDrag.pointerId) return;
+  const d = paletteDrag;
+  if (!d.moved && Math.abs(e.clientX - d.startX) < 5 && Math.abs(e.clientY - d.startY) < 5) return;
+  if (!d.moved) {
+    d.moved = true;
+    const sb = d.item.querySelector('.stack-item');
+    if (sb) {
+      const r = sb.getBoundingClientRect();
+      const ghost = sb.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      ghost.style.width = r.width + 'px';
+      document.body.appendChild(ghost);
+      d.ghost = ghost;
+    }
+    d.item.classList.add('is-dragging');
+    document.body.classList.add('is-dragging');
+  }
+  e.preventDefault();
+  if (d.ghost) {
+    d.ghost.style.left = (e.clientX - d.offsetX) + 'px';
+    d.ghost.style.top = (e.clientY - d.offsetY) + 'px';
+  }
+  const margin = 90;
+  if (e.clientY < margin) window.scrollBy(0, -10);
+  else if (e.clientY > window.innerHeight - margin) window.scrollBy(0, 10);
+
+  const container = paletteDropContainer(e, BYID[d.defId]);
+  d.target = container ? calcDropTarget(container, null, e.clientY) : null;
+  drawDropLine(d.target);
+}
+
+function endPaletteDrag(e, cancelled) {
+  if (!paletteDrag) return;
+  if (e && e.pointerId !== undefined && e.pointerId !== paletteDrag.pointerId) return;
+  const d = paletteDrag;
+  paletteDrag = null;
+  clearDrop();
+  document.body.classList.remove('is-dragging');
+  d.item.classList.remove('is-dragging');
+  if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+  try { d.item.releasePointerCapture(d.pointerId); } catch (err) { }
+  if (!d.moved) return;
+  /* pointerup genera un click en el item: lo ignoramos para no agregar de más. */
+  lastPaletteDragAt = Date.now();
+  if (!cancelled && d.target) insertNewBlock(d.defId, d.target);
+}
+
+function insertNewBlock(type, target) {
+  const def = BYID[type];
+  const s = selectedSprite();
+  if (!def || def.legacy || !s) return;
+  const node = makeNode(type);
+  if (!node) return;
+  let arr;
+  if (target.container.id === 'codeList') {
+    arr = s.code;
+  } else {
+    const ownerInfo = findNode(target.container.dataset.owner);
+    if (!ownerInfo || def.hat) return;
+    const slot = target.container.dataset.slot;
+    if (slot === 'elseBody') {
+      if (!ownerInfo.node.elseBody) ownerInfo.node.elseBody = [];
+      arr = ownerInfo.node.elseBody;
+    } else {
+      if (!ownerInfo.node.body) ownerInfo.node.body = [];
+      arr = ownerInfo.node.body;
+    }
+  }
+  arr.splice(clamp(target.index, 0, arr.length), 0, node);
+  renderCode();
+  saveProject();
+  toast(UI[lang].blockDropped);
+}
+
 /* ---------------- sprite dragging ---------------- */
 function startSpriteDrag(e, wrap) {
   if (document.body.classList.contains('game-mode')) return;
@@ -1397,7 +2592,67 @@ function endSpriteDrag(e, cancelled) {
   }
 }
 
-/* ---------------- expressions ---------------- */
+/* ---------------- expressions ----------------
+   Parser aritmético recursivo, sin eval ni Function(): compatible con un CSP
+   estricto. Resuelve lo mismo que el evaluador viejo: + - * / % (), decimales,
+   menos unario y ** (potencia, que Function() aceptaba por accidente).
+   Las variables y aleatorio(a,b) ya vienen sustituidas por números. */
+function calcExpr(src) {
+  let i = 0;
+  const ws = () => { while (i < src.length && /\s/.test(src[i])) i++; };
+  const finite = v => { if (!isFinite(v)) throw new Error('no finito'); return v; };
+
+  function primary() {
+    ws();
+    if (src[i] === '+') { i++; return primary(); }
+    if (src[i] === '-') { i++; return finite(-primary()); }
+    if (src[i] === '(') {
+      i++;
+      const v = sum();
+      ws();
+      if (src[i] !== ')') throw new Error('falta )');
+      i++;
+      return v;
+    }
+    const from = i;
+    while (i < src.length && /[0-9.]/.test(src[i])) i++;
+    if (from === i) throw new Error('falta número');
+    return finite(Number(src.slice(from, i)));
+  }
+  function power() {
+    const v = primary();
+    ws();
+    if (src[i] === '*' && src[i + 1] === '*') { i += 2; return finite(Math.pow(v, power())); }
+    return v;
+  }
+  function product() {
+    let v = power();
+    for (;;) {
+      ws();
+      const op = src[i];
+      if (op !== '*' && op !== '/' && op !== '%') return v;
+      i++;
+      const r = power();
+      v = finite(op === '*' ? v * r : op === '/' ? v / r : v % r);
+    }
+  }
+  function sum() {
+    let v = product();
+    for (;;) {
+      ws();
+      const op = src[i];
+      if (op !== '+' && op !== '-') return v;
+      i++;
+      const r = product();
+      v = finite(op === '+' ? v + r : v - r);
+    }
+  }
+  const value = sum();
+  ws();
+  if (i !== src.length) throw new Error('sobra texto');
+  return value;
+}
+
 function evalExpr(txt) {
   try {
     let s = String(txt).trim();
@@ -1416,7 +2671,7 @@ function evalExpr(txt) {
     });
     if (s.indexOf('@') > -1) return null;
     if (!/^[0-9+\-*/%().\s]+$/.test(s)) return null;
-    const r = Function('"use strict";return(' + s + ')')();
+    const r = calcExpr(s);
     return (typeof r === 'number' && isFinite(r)) ? r : null;
   } catch (e) { return null; }
 }
@@ -1473,6 +2728,68 @@ function resolveValue(raw) {
   return (ev === null) ? raw : ev;
 }
 
+/* ---------------- reporteros: valor de un nodo ----------------
+   node.val sigue siendo el texto de las casillas ("x,y" en bloques de dos
+   huecos). node.reps[i] guarda el reportero que reemplaza a esa casilla; si
+   no hay reportero se usa el texto. Así el formato guardado no cambia y los
+   proyectos viejos se abren igual. */
+function nodeVal(node, sprite, depth) {
+  const d = depth || 0;
+  const def = BYID[node.type];
+  if (!def) return '';
+  const raw = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
+  if (!node.reps || !node.reps.length) return raw;
+  const label = def.n[lang] || def.n.es || '';
+  const slots = label.match(/\{(?:v|x|y)\}/g) || [];
+  if (!slots.length) return raw;
+  const parts = raw.split(',');
+  const defs = String(def.def !== undefined ? def.def : '').split(',');
+  const out = [];
+  for (let i = 0; i < slots.length; i++) {
+    const rep = node.reps[i];
+    if (rep && BYID[rep.type] && BYID[rep.type].rep) {
+      out.push(String(evalReporter(rep, sprite, d + 1)));
+    } else {
+      out.push(parts[i] !== undefined ? parts[i] : (defs[i] !== undefined ? defs[i] : '0'));
+    }
+  }
+  return out.join(',');
+}
+
+/* Evalúa un reportero. Los anidados ya vienen resueltos por nodeVal(); el
+   tope de profundidad corta ciclos o datos manipulados. */
+function evalReporter(node, sprite, depth) {
+  const d = depth || 0;
+  if (!node || d > 12) return 0;
+  const def = BYID[node.type];
+  if (!def || !def.rep) return 0;
+  const v = nodeVal(node, sprite, d);
+  const parts = v.split(',');
+  const a = num(parts[0], 0);
+  const b = num(parts[1], 0);
+  switch (node.type) {
+    case 'rep_score': return score;
+    case 'rep_x': return sprite ? sprite.x : 0;
+    case 'rep_y': return sprite ? sprite.y : 0;
+    case 'rep_var': {
+      const key = String(v).trim();
+      if (key === 'score') return score;
+      return (key in variables) ? variables[key] : 0;
+    }
+    case 'rep_random': {
+      const lo = Math.floor(Math.min(a, b));
+      const hi = Math.floor(Math.max(a, b));
+      return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+    }
+    case 'rep_add': return a + b;
+    case 'rep_sub': return a - b;
+    case 'rep_mul': return a * b;
+    case 'rep_div': return b === 0 ? 0 : a / b;
+    case 'rep_gt': return a > b ? 1 : 0;
+    default: return 0;
+  }
+}
+
 function applyVar(node) {
   const txt = String(node.val === undefined ? '' : node.val);
   const eq = txt.indexOf('=');
@@ -1514,20 +2831,28 @@ function beep(freq, dur, type, sweep) {
 }
 
 function changeBg() {
-  stageBg = (stageBg + 1) % BG.length;
+  /* Si hay un fondo propio, el primer cambio vuelve a los gradientes. */
+  if (stageBgImg) {
+    stageBgImg = '';
+    stageBg = 1 % BG.length;
+  } else {
+    stageBg = (stageBg + 1) % BG.length;
+  }
   applyStageBg();
-  scheduleSave();
+  if (!runActive) scheduleSave();
 }
 
 /* ---------------- engine ---------------- */
-function checkNodeCondition(node) {
+function checkNodeCondition(node, sprite) {
   if (node.type === 'if_tilt') return Math.abs(window.lastTilt || 0) > 15;
-  if (node.type === 'if_score') return score > num(node.val, 5);
-  return evalCond(node.val);
+  if (node.type === 'if_score') return score > num(nodeVal(node, sprite), 5);
+  return evalCond(nodeVal(node, sprite));
 }
 
 async function execBlock(node, sprite) {
-  const v = node.val;
+  /* Con reporteros la casilla deja de ser texto fijo: nodeVal() sustituye
+     cada hueco por el valor calculado en el momento de ejecutar. */
+  const v = nodeVal(node, sprite);
   switch (node.type) {
     case 'when_flag': case 'when_tap': case 'when_key': case 'when_score':
     case 'when_shake': case 'when_msg':
@@ -1551,6 +2876,15 @@ async function execBlock(node, sprite) {
       updateSpriteEl(sprite);
       await sleep(150);
       return;
+    case 'go_xy': {
+      /* node.val guarda "x,y"; una casilla vacía o inválida vale 0. */
+      const xy = String(v == null ? '' : v).split(',');
+      sprite.x = clamp(num(xy[0], 0), -240, 240);
+      sprite.y = clamp(num(xy[1], 0), -180, 180);
+      updateSpriteEl(sprite);
+      await sleep(180);
+      return;
+    }
     case 'go_random':
       sprite.x = Math.round((Math.random() * 2 - 1) * 210);
       sprite.y = Math.round((Math.random() * 2 - 1) * 150);
@@ -1597,18 +2931,30 @@ async function execBlock(node, sprite) {
       sprite.visible = false;
       updateSpriteEl(sprite);
       renderTray();
+      renderProps();
       await sleep(120);
       return;
     case 'show':
       sprite.visible = true;
       updateSpriteEl(sprite);
       renderTray();
+      renderProps();
       await sleep(120);
       return;
     case 'change_bg':
       changeBg();
       await sleep(180);
       return;
+    case 'next_costume':
+      setCostume(sprite, sprite.costumeIndex + 1);
+      await sleep(150);
+      return;
+    case 'switch_costume': {
+      const idx = findCostumeIndex(sprite, v);
+      if (idx >= 0) setCostume(sprite, idx);
+      await sleep(150);
+      return;
+    }
     case 'score_add':
       score += num(v, 1);
       updateHUD();
@@ -1625,11 +2971,13 @@ async function execBlock(node, sprite) {
       await sleep(110);
       return;
     case 'create_var': {
-      const name = prompt(UI[lang].varName);
-      if (name && name.trim()) {
-        const clean = name.trim();
-        if (!(clean in variables)) variables[clean] = 0;
-      }
+      const name = await askText(UI[lang].varName, '', UI[lang].varNameHint);
+      if (!isRunning) return; /* Detener mientras el diálogo está abierto. */
+      const clean = typeof name === 'string' ? name.trim() : '';
+      /* El mismo criterio que el formulario de variables del editor. */
+      if (/^[A-Za-z_][A-Za-z0-9_]{0,15}$/.test(clean) &&
+        clean !== '__proto__' && clean !== 'constructor' && clean !== 'prototype' &&
+        clean !== 'score' && !(clean in variables)) variables[clean] = 0;
       updateHUD();
       await sleep(130);
       return;
@@ -1661,63 +3009,233 @@ async function execBlock(node, sprite) {
       await sleep(130);
       return;
     }
-    case 'send_msg':
+    case 'send_msg': {
       store.set('scrachmo_msg', JSON.stringify({ t: Date.now() }));
+      /* El evento storage no llega a la propia pestaña: reenviar el
+         mensaje adentro del proyecto, con tope para cortar cadenas. */
+      const now = Date.now();
+      if (now - lastMsgAt > 250) {
+        lastMsgAt = now;
+        setTimeout(() => fireEvent('when_msg'), 0);
+      }
       toast(UI[lang].msgSent);
       await sleep(150);
       return;
+    }
     default:
       await sleep(30);
   }
 }
 
-let lastCond = false;
+/* Un guion empieza en un bloque sombrero y termina antes del siguiente.
+   Los bloques sueltos (proyectos viejos sin sombrero) se tratan como
+   guion de bandera verde para no romper la compatibilidad. */
+function collectScripts() {
+  const out = [];
+  sprites.forEach(sprite => {
+    let cur = null;
+    (sprite.code || []).forEach(node => {
+      const def = BYID[node.type];
+      if (def && def.hat) {
+        if (cur && cur.nodes.length) out.push(cur);
+        cur = { sprite: sprite, hat: node, event: node.type, nodes: [] };
+      } else {
+        if (!cur) cur = { sprite: sprite, hat: null, event: 'when_flag', nodes: [] };
+        cur.nodes.push(node);
+      }
+    });
+    if (cur && cur.nodes.length) out.push(cur);
+  });
+  return out;
+}
 
+function scriptsFor(event, test) {
+  return collectScripts().filter(sc => sc.event === event && (!test || test(sc)));
+}
+
+function projectUsesMotion() {
+  const walk = nodes => (nodes || []).some(n =>
+    n.type === 'when_shake' || n.type === 'if_tilt' ||
+    walk(n.body) || walk(n.elseBody));
+  return sprites.some(s => walk(s.code));
+}
+
+function normKeyName(k) {
+  const s = String(k).trim().toLowerCase();
+  const map = {
+    espacio: ' ', space: ' ', enter: 'enter',
+    arriba: 'arrowup', abajo: 'arrowdown',
+    izquierda: 'arrowleft', derecha: 'arrowright'
+  };
+  return map[s] || s;
+}
+
+/* ---------------- estado de diseño vs ejecución ---------------- */
+function snapshotRuntime() {
+  return {
+    stageBg: stageBg,
+    stageBgImg: stageBgImg,
+    sprites: sprites.map(s => ({
+      id: s.id, x: s.x, y: s.y, dir: s.dir,
+      size: s.size, visible: s.visible, rot: s.rot,
+      costumeIndex: s.costumeIndex
+    }))
+  };
+}
+
+function restoreRuntime(snap) {
+  if (!snap) return;
+  snap.sprites.forEach(st => {
+    const s = getSprite(st.id);
+    if (!s) return;
+    s.x = st.x; s.y = st.y; s.dir = st.dir; s.size = st.size;
+    s.visible = st.visible; s.rot = st.rot;
+    if (typeof st.costumeIndex === 'number' && s.costumes && s.costumes.length) {
+      s.costumeIndex = clamp(Math.floor(st.costumeIndex), 0, s.costumes.length - 1);
+      syncCostume(s);
+    }
+  });
+  stageBg = snap.stageBg;
+  stageBgImg = validBackdrop(snap.stageBgImg);
+  renderSprites();
+  renderTray();
+  renderProps();
+  applyStageBg();
+}
+
+function clearSayBubbles() {
+  sayTexts.clear();
+  sayTimers.forEach(t => clearTimeout(t));
+  sayTimers.clear();
+  const layer = $('#spritesLayer');
+  if (layer) layer.querySelectorAll('.sprite-bubble').forEach(b => {
+    b.textContent = '';
+    b.classList.remove('show');
+  });
+}
+
+/* ---------------- posición final y «Volver al inicio» ----------------
+   Al terminar (o al detener) los sprites se quedan donde llegaron y ese
+   estado pasa a ser el de diseño: se guarda y es el punto de partida de
+   la próxima corrida. La instantánea del arranque se conserva para que
+   sea el usuario quien decida cuándo volver al inicio. */
+function updateResetButton() {
+  const b = $('#resetStartBtn');
+  if (b) b.hidden = !runtimeSnapshot || runActive;
+}
+
+function resetToStart() {
+  const snap = runtimeSnapshot;
+  if (!snap || runActive) return;
+  restoreRuntime(snap);
+  runtimeSnapshot = null;
+  updateResetButton();
+  saveProject();
+  toast(UI[lang].startRestored);
+}
+
+function beginRun() {
+  if (runActive) return;
+  runActive = true;
+  runtimeSnapshot = snapshotRuntime();
+  updateResetButton();
+}
+
+function finishRun() {
+  if (!runActive) return;
+  runActive = false;
+  isRunning = false;
+  runThreads.forEach(t => { t.cancelled = true; });
+  /* No limpiar firedScoreHats acá: el puntaje se conserva entre ejecuciones
+     y vaciarlo haría que el sombrero de puntaje se dispare cada 300 ms. */
+  clearSayBubbles();
+  clearGlows();
+  updateStatus();
+  updateHUD();
+  updateResetButton();
+  persistProject();
+}
+
+function runScripts(list) {
+  if (!list || !list.length) return;
+  beginRun();
+  list.forEach(startThread);
+}
+
+function fireEvent(event, test) {
+  const list = scriptsFor(event, test);
+  if (!list.length) return false;
+  runScripts(list);
+  return true;
+}
+
+async function startThread(sc) {
+  const ctx = { id: ++threadSeq, cancelled: false, lastCond: false };
+  runThreads.add(ctx);
+  isRunning = true;
+  updateStatus();
+  try {
+    await execStack(sc.nodes, sc.sprite, ctx);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    runThreads.delete(ctx);
+    if (!runThreads.size) finishRun();
+  }
+}
+
+/* ---------------- resaltado (con conteo por hilo) ---------------- */
 function glowOn(id) {
   const head = document.querySelector('#codeList .sb[data-id="' + id + '"]');
-  if (head) head.classList.add('running');
+  if (!head) return;
+  glowCounts.set(id, (glowCounts.get(id) || 0) + 1);
+  head.classList.add('running');
 }
 
 function glowOff(id) {
+  const n = (glowCounts.get(id) || 0) - 1;
+  if (n > 0) { glowCounts.set(id, n); return; }
+  glowCounts.delete(id);
   const head = document.querySelector('#codeList .sb[data-id="' + id + '"]');
   if (head) head.classList.remove('running');
 }
 
 function clearGlows() {
+  glowCounts.clear();
   $$('#codeList .sb.running').forEach(el => el.classList.remove('running'));
 }
 
-async function execNode(node, sprite) {
+/* ---------------- ejecución ---------------- */
+async function execNode(node, sprite, ctx) {
   const def = BYID[node.type];
   if (!def || def.hat) return;
+  const alive = () => isRunning && !(ctx && ctx.cancelled);
 
   glowOn(node.id);
   try {
     if (node.type === 'repeat') {
-      const times = Math.max(0, Math.min(2000, Math.floor(num(node.val, 4))));
-      for (let i = 0; i < times && isRunning; i++) {
-        await execStack(node.body || [], sprite);
-      }
+      const times = Math.max(0, Math.min(2000, Math.floor(num(nodeVal(node, sprite), 4))));
+      for (let i = 0; i < times && alive(); i++) await execStack(node.body || [], sprite, ctx);
       return;
     }
     if (node.type === 'forever') {
-      while (isRunning) {
+      while (alive()) {
         const body = node.body || [];
-        if (body.length) await execStack(body, sprite);
+        if (body.length) await execStack(body, sprite, ctx);
         else await sleep(120);
         await sleep(16);
       }
       return;
     }
     if (node.type === 'if_tilt' || node.type === 'if_score' || node.type === 'if_cond' || node.type === 'if_else') {
-      const ok = checkNodeCondition(node);
-      lastCond = ok;
-      if (ok) await execStack(node.body || [], sprite);
-      else if (node.elseBody) await execStack(node.elseBody, sprite);
+      const ok = checkNodeCondition(node, sprite);
+      if (ctx) ctx.lastCond = ok;
+      if (ok) await execStack(node.body || [], sprite, ctx);
+      else if (node.elseBody) await execStack(node.elseBody, sprite, ctx);
       return;
     }
     if (node.type === 'sino') {
-      if (!lastCond) await execStack(node.body || [], sprite);
+      if (ctx && !ctx.lastCond) await execStack(node.body || [], sprite, ctx);
       return;
     }
     await execBlock(node, sprite);
@@ -1726,33 +3244,31 @@ async function execNode(node, sprite) {
   }
 }
 
-async function execStack(nodes, sprite) {
+async function execStack(nodes, sprite, ctx) {
   if (!Array.isArray(nodes)) return;
   for (const node of nodes) {
+    if (ctx && ctx.cancelled) return;
     if (!isRunning) return;
-    await execNode(node, sprite);
+    await execNode(node, sprite, ctx);
   }
 }
 
-async function runAll() {
-  if (isRunning) return;
-  isRunning = true;
-  updateStatus();
-  try {
-    await Promise.all(sprites.map(s => execStack(s.code || [], s)));
-  } catch (err) {
-    console.error(err);
-  } finally {
-    isRunning = false;
-    clearGlows();
-    updateStatus();
-  }
+function runAll() {
+  /* La bandera verde corta los guiones anteriores pero no devuelve los
+     sprites a cero: arranca desde donde quedaron y beginRun() toma esa
+     posición como nuevo «inicio» para el botón Volver al inicio. */
+  stopCode();
+  runScripts(scriptsFor('when_flag'));
 }
 
 function stopCode() {
-  isRunning = false;
-  clearGlows();
-  updateStatus();
+  const wasRunning = runActive;
+  runThreads.forEach(t => { t.cancelled = true; });
+  finishRun();
+  runThreads.clear();
+  /* Un «crear variable» puede haber abierto un diálogo en medio de un guion:
+     al detener, lo cerramos para que el hilo no quede esperando para siempre. */
+  if (wasRunning && askResolver) closeAsk(null);
 }
 
 function findTopNode(type) {
@@ -1773,23 +3289,35 @@ function toggleMulti() {
   const t = UI[lang];
   $('#multiSub').textContent = multiOn ? t.multiOn : t.multiOff;
   $('#multiBtn').classList.toggle('is-on', multiOn);
+  saveProject();
   toast(multiOn ? t.multiOnMsg : t.multiOffMsg);
 }
 
-function shareProject() {
-  let encoded = '';
-  try {
-    encoded = btoa(unescape(encodeURIComponent(JSON.stringify(serializeProject()))));
-  } catch (e) {
-    toast(UI[lang].badFile);
+async function shareProject() {
+  const t = UI[lang];
+  const input = $('#shareLink');
+  const copyBtn = $('#copyLink');
+  /* Abrimos el modal ya mismo: gzip corre en un stream y no queremos
+     que el toque parezca ignorado. */
+  input.value = t.generatingLink;
+  if (copyBtn) copyBtn.disabled = true;
+  $('#shareModal').hidden = false;
+  updateModalLock();
+
+  let code = '';
+  try { code = await encodeSharePayload(serializeProject()); }
+  catch (e) {
+    toast(t.badFile);
+    if (copyBtn) copyBtn.disabled = false;
     return;
   }
   const base = (location.origin && location.origin !== 'null')
     ? location.origin + location.pathname
     : location.href.split('?')[0];
-  $('#shareLink').value = base + '?p=' + encodeURIComponent(encoded);
-  $('#shareModal').hidden = false;
-  updateModalLock();
+  const link = base + '?p=' + code;
+  input.value = link;
+  if (copyBtn) copyBtn.disabled = false;
+  if (link.length > 8000) toast(t.shareTooLong);
 }
 
 function closeShare() {
@@ -1817,15 +3345,19 @@ async function copyShare() {
   }
 }
 
-function exportProject() {
-  const name = prompt(UI[lang].projName, 'Mi Juego') || 'Mi Juego';
+async function exportProject() {
+  /* Cancelar ahora cancela de verdad: antes prompt() devolvía null y el
+     archivo se exportaba igual con el nombre por defecto. */
+  const name = (await askText(UI[lang].projName, 'Mi Juego')) || '';
+  if (!name.trim()) return;
+  const clean = name.trim();
   const project = serializeProject();
-  project.name = name;
+  project.name = clean;
   project.savedAt = new Date().toISOString();
   const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (name.replace(/[^a-z0-9_\-áéíóúñü ]/gi, '').trim() || 'proyecto') + '.scmo';
+  a.download = (clean.replace(/[^a-z0-9_\-áéíóúñü ]/gi, '').trim() || 'proyecto') + '.scmo';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -1840,6 +3372,7 @@ function importProject() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        if (payloadTooBig(reader.result)) { toast(UI[lang].projectTooBig); return; }
         const p = JSON.parse(reader.result);
         if (!applyPayload(p)) { toast(UI[lang].badFile); return; }
         varFormOpen = false;
@@ -1856,8 +3389,8 @@ function importProject() {
   input.click();
 }
 
-function clearProject() {
-  if (!confirm(UI[lang].confirmClear)) return;
+async function clearProject() {
+  if (!(await askConfirm(UI[lang].confirmClear))) return;
   stopCode();
   resetProjectData(false);
   varFormOpen = false;
@@ -1870,7 +3403,7 @@ function enterGame() {
   gameScrollY = window.scrollY || 0;
   document.body.classList.add('game-mode');
   window.scrollTo(0, 0);
-  if (hasTopNode('when_flag')) runAll();
+  runAll();
 }
 
 function exitGame() {
@@ -1880,7 +3413,24 @@ function exitGame() {
 }
 
 /* ---------------- events ---------------- */
+function ensureMotionPermission() {
+  if (motionRequested || !projectUsesMotion()) return;
+  const DME = window.DeviceMotionEvent;
+  if (!DME || typeof DME.requestPermission !== 'function') {
+    motionRequested = true;
+    return;
+  }
+  motionRequested = true;
+  try {
+    Promise.resolve(DME.requestPermission()).then(res => {
+      if (res !== 'granted') toast(UI[lang].motionDenied);
+    }).catch(() => { });
+  } catch (e) { }
+}
+
 function bindEvents() {
+  bindAskModal();
+  bindRepPicker();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {
       lang = btn.dataset.lang;
@@ -1898,8 +3448,7 @@ function bindEvents() {
     if (suppressStageClick) { suppressStageClick = false; return; }
     if (e.target.closest('.sprite-wrap')) return;
     if (e.target.closest('#exitGame')) return;
-    if (isRunning) return;
-    if (hasTopNode('when_tap')) runAll();
+    fireEvent('when_tap');
   });
 
   $('#spritesLayer').addEventListener('pointerdown', e => {
@@ -1920,6 +3469,23 @@ function bindEvents() {
     if (!b) return;
     addSprite(b.dataset.emoji);
   });
+  $('#spriteSearch').addEventListener('input', e => {
+    spriteSearchTerm = e.target.value;
+    renderSpriteChoices();
+  });
+  $('#importSpriteBtn').addEventListener('click', () => pickCostumeFiles(true));
+
+  $('#costumeStrip').addEventListener('click', e => {
+    const del = e.target.closest('[data-del-costume]');
+    if (del) { deleteCostume(Number(del.dataset.delCostume)); return; }
+    if (e.target.closest('[data-add-costume]')) { pickCostumeFiles(false); return; }
+    const thumb = e.target.closest('[data-costume]');
+    if (thumb) {
+      setCostume(selectedSprite(), Number(thumb.dataset.costume));
+      saveProject();
+    }
+  });
+  $('#addCostumeBtn').addEventListener('click', () => pickCostumeFiles(false));
 
   $('#closeSpriteModal').addEventListener('click', closeSpriteModal);
   $('#spriteModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSpriteModal(); });
@@ -1998,17 +3564,32 @@ function bindEvents() {
     saveProject();
   });
 
-  $('#codeList').addEventListener('input', e => {
-    const input = e.target.closest('input[data-input]');
+  const applyBlockValue = e => {
+    const input = e.target.closest('[data-input]');
     if (!input) return;
     const info = findNode(input.dataset.input);
-    if (info) {
+    if (!info) return;
+    if (input.dataset.xy !== undefined) {
+      /* Bloque de varios campos: node.val es "a,b". Se actualiza sólo el
+         índice editado para no pisar la otra casilla ni los reporteros. */
+      const parts = String(info.node.val === undefined ? '' : info.node.val).split(',');
+      parts[Number(input.dataset.xy)] = input.value;
+      info.node.val = parts.join(',');
+    } else {
       info.node.val = input.value;
-      scheduleSave();
     }
-  });
-  $('#codeList').addEventListener('change', saveProject);
+    scheduleSave();
+  };
+  $('#codeList').addEventListener('input', applyBlockValue);
+  /* Los <select> de «cambiar disfraz a» también disparan change. */
+  $('#codeList').addEventListener('change', e => { applyBlockValue(e); saveProject(); });
   $('#codeList').addEventListener('click', e => {
+    const fx = e.target.closest('.rep-fx');
+    if (fx) { openRepPicker(fx.dataset.repHost, Number(fx.dataset.repSlot)); return; }
+    const rdel = e.target.closest('.rep-del');
+    if (rdel) { removeReporter(rdel.dataset.repHost, Number(rdel.dataset.repSlot)); return; }
+    const dup = e.target.closest('.sb-dup');
+    if (dup) { duplicateNode(dup.dataset.dup); return; }
     const del = e.target.closest('.sb-del');
     if (!del) return;
     deleteNode(del.dataset.del);
@@ -2030,22 +3611,51 @@ function bindEvents() {
   window.addEventListener('pointermove', e => {
     if (blockDrag) moveBlockDrag(e);
     if (spriteDrag) moveSpriteDrag(e);
+    if (paletteDrag) movePaletteDrag(e);
   }, { passive: false });
   window.addEventListener('pointerup', e => {
     if (blockDrag) endBlockDrag(e, false);
     if (spriteDrag) endSpriteDrag(e, false);
+    if (paletteDrag) endPaletteDrag(e, false);
   });
   window.addEventListener('pointercancel', e => {
     if (blockDrag) endBlockDrag(e, true);
     if (spriteDrag) endSpriteDrag(e, true);
+    if (paletteDrag) endPaletteDrag(e, true);
   });
 
+  /* ---- herramientas: zooms, deshacer/rehacer, fondo propio, reinicio ---- */
+  $('#zoomOutBtn').addEventListener('click', () => changeZoom(-ZOOM_STEP));
+  $('#zoomInBtn').addEventListener('click', () => changeZoom(ZOOM_STEP));
+  $('#zoomVal').addEventListener('click', resetZoom);
+  $('#stageZoomOutBtn').addEventListener('click', () => changeStageZoom(-ZOOM_STEP));
+  $('#stageZoomInBtn').addEventListener('click', () => changeStageZoom(ZOOM_STEP));
+  $('#stageZoomVal').addEventListener('click', resetStageZoom);
+  $('#resetStartBtn').addEventListener('click', resetToStart);
+  $('#undoBtn').addEventListener('click', undo);
+  $('#redoBtn').addEventListener('click', redo);
+  $('#bgCustomBtn').addEventListener('click', pickBackdropFile);
+  $('#bgClearBtn').addEventListener('click', clearBackdrop);
+
+  /* ---- arrastrar desde la paleta ---- */
+  $('#palette').addEventListener('pointerdown', e => {
+    const item = e.target.closest('[data-add]');
+    if (!item) return;
+    /* En táctil se agarra sólo por la empuñadura para no bloquear el scroll;
+       con mouse se puede agarrar desde cualquier parte del bloque. */
+    if (e.pointerType === 'touch' && !e.target.closest('.p-grip')) return;
+    startPaletteDrag(e, item);
+  });
   $('#palette').addEventListener('click', e => {
+    /* pointerup tras un arrastre genera un click: lo descartamos. */
+    if (Date.now() - lastPaletteDragAt < 400) return;
+    if (e.target.closest('.p-grip')) return;
     const item = e.target.closest('[data-add]');
     if (!item) return;
     addBlock(item.dataset.add);
   });
   $('#palette').addEventListener('keydown', e => {
+    if (e.target.closest('.p-grip')) return;
     const item = e.target.closest('[data-add]');
     if (!item) return;
     if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -2071,7 +3681,7 @@ function bindEvents() {
   $('#goBlocks').addEventListener('click', () => {
     const card = $('#blocksCard');
     collapsed.blocksCard = false;
-    store.set('scrachmo_ui', JSON.stringify(collapsed));
+    saveUI();
     card.classList.remove('is-collapsed');
     const head = card.querySelector('[data-collapse]');
     if (head) head.setAttribute('aria-expanded', 'true');
@@ -2137,7 +3747,7 @@ function bindEvents() {
       card.classList.toggle('is-collapsed', on);
       btn.setAttribute('aria-expanded', String(!on));
       collapsed[id] = on;
-      store.set('scrachmo_ui', JSON.stringify(collapsed));
+      saveUI();
     });
   });
 
@@ -2145,28 +3755,29 @@ function bindEvents() {
     if (e.key === 'Escape') {
       if (blockDrag) { endBlockDrag(null, true); return; }
       if (spriteDrag) { endSpriteDrag(null, true); return; }
+      if (paletteDrag) { endPaletteDrag(null, true); return; }
       if (!$('#spriteModal').hidden) { closeSpriteModal(); return; }
       if (!$('#shareModal').hidden) { closeShare(); return; }
       if (document.body.classList.contains('game-mode')) exitGame();
       return;
     }
-    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-    if (isRunning) return;
-    const trigger = findTopNode('when_key');
-    if (!trigger) return;
-    const norm = k => {
-      const s = String(k).trim().toLowerCase();
-      const map = {
-        espacio: ' ', space: ' ', enter: 'enter',
-        arriba: 'arrowup', abajo: 'arrowdown', izquierda: 'arrowleft', derecha: 'arrowright'
-      };
-      return map[s] || s;
-    };
-    const key = e.key === ' ' ? ' ' : e.key.toLowerCase();
-    if (norm(trigger.val || 'espacio') === key) {
-      e.preventDefault();
-      runAll();
+    /* Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z y Ctrl/Cmd+Y. Dentro de un input
+       dejamos que el navegador deshaga el texto, no el proyecto. */
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'z' || k === 'y') {
+        if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+        e.preventDefault();
+        if (k === 'y' || e.shiftKey) redo(); else undo();
+        return;
+      }
     }
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const key = e.key === ' ' ? ' ' : e.key.toLowerCase();
+    const list = scriptsFor('when_key', sc => normKeyName(sc.hat.val || 'espacio') === key);
+    if (!list.length) return;
+    e.preventDefault();
+    runScripts(list);
   });
 
   window.addEventListener('devicemotion', e => {
@@ -2176,26 +3787,45 @@ function bindEvents() {
     const force = Math.sqrt(
       Math.pow(acc.x || 0, 2) + Math.pow(acc.y || 0, 2) + Math.pow(acc.z || 0, 2)
     );
-    if (force > 25 && !isRunning && hasTopNode('when_shake')) runAll();
+    const now = Date.now();
+    if (force > 25 && now - lastShakeAt > 900) {
+      lastShakeAt = now;
+      fireEvent('when_shake');
+    }
   });
 
   window.addEventListener('storage', e => {
-    if (e.key === 'scrachmo_msg' && multiOn && !isRunning && hasTopNode('when_msg')) runAll();
+    if (e.key === 'scrachmo_msg' && multiOn) fireEvent('when_msg');
   });
 
+  /* iOS 13+ exige pedir permiso dentro de un gesto del usuario y con HTTPS. */
+  document.addEventListener('pointerdown', ensureMotionPermission);
+
   setInterval(() => {
-    const trigger = findTopNode('when_score');
-    if (!trigger) { scoreFired = false; return; }
-    const target = num(trigger.val, 10);
-    if (score >= target) {
-      if (!isRunning && !scoreFired) { scoreFired = true; runAll(); }
-    } else {
-      scoreFired = false;
-    }
+    const scripts = scriptsFor('when_score');
+    if (!scripts.length) { firedScoreHats.clear(); return; }
+    const live = new Set();
+    scripts.forEach(sc => {
+      const target = num(sc.hat.val, 10);
+      /* El umbral forma parte de la clave: editarlo debe permitir
+         volver a disparar el sombrero. */
+      const key = (sc.hat.id || sc.sprite.id) + ':' + target;
+      live.add(key);
+      if (score >= target) {
+        if (!firedScoreHats.has(key)) { firedScoreHats.add(key); runScripts([sc]); }
+      } else {
+        firedScoreHats.delete(key);
+      }
+    });
+    firedScoreHats.forEach(k => { if (!live.has(k)) firedScoreHats.delete(k); });
   }, 300);
 }
 
 /* ---------------- start ---------------- */
-loadProject();
+const pendingShare = loadProject();
 bindEvents();
 render();
+/* La primera instantánea es la línea base del historial. Si venimos de un
+   link compartido, hydrateShared() la reemplaza al aplicar el proyecto. */
+resetHistory();
+if (pendingShare) hydrateShared(pendingShare);

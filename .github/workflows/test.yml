@@ -1,0 +1,37 @@
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sintaxis de los tres archivos activos
+        run: |
+          node --check data.js
+          node --check engine.js
+
+      - name: Paridad de textos y comprobaciones estáticas
+        run: node tests/check-parity.js
+
+      - name: Localizar Chrome
+        shell: bash
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "No se encontró Chrome ni Chromium en el runner" >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$CHROME" >> "$GITHUB_ENV"
+          "$CHROME" --version
+
+      - name: Pruebas de humo en Chrome headless
+        run: node tests/run.js ci

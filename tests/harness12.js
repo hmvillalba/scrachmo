@@ -236,12 +236,15 @@ window.addEventListener('load', function () {
       check('editor_id_desconocido', ghost && ghost.options.length === SOUND_LIB.length + 1 &&
         ghost.value === 'fantasma');
 
-      /* La paleta dibuja los cinco bloques con su nombre. */
+      /* La paleta dibuja los cinco bloques con su nombre. El idioma depende
+         del navegador (en CI arranca en inglés), así que la etiqueta se toma
+         del catálogo en el idioma activo, no escrita a mano. */
       currentFilter = 'sound';
       renderPalette(UI[lang]);
       check('paleta_dibuja_sonido', document.querySelectorAll('#palette .p-block').length === 7);
-      check('paleta_nombre_sonido',
-        $('#palette').textContent.indexOf('Reproducir sonido') > -1);
+      const etiqueta = BYID.play_sound.n[lang].split('{')[0].trim();
+      check('paleta_nombre_sonido', etiqueta.length > 0 &&
+        $('#palette').textContent.indexOf(etiqueta) > -1);
       currentFilter = 'all';
       renderPalette(UI[lang]);
 

@@ -13,6 +13,14 @@ let lang = (() => {
 })();
 
 let sprites = [];
+/* Clones: copias vivas de un personaje que existen SÓLO mientras dura la
+   ejecución. No están en `sprites` (eso es el estado de diseño y es lo que se
+   guarda) y no se serializan nunca. Cada clon es «parecido a un personaje»:
+   tiene id propio, posición, tamaño, dirección y disfraz propios, y comparte
+   el código y las variables con su original. */
+let clones = [];
+let cloneSeq = 0;
+const MAX_CLONES = 300;
 let selectedSpriteId = null;
 let variables = {};
 let hiddenVars = {};
@@ -552,6 +560,9 @@ function applyPayloadInner(payload) {
      la posición inicial de una corrida anterior. */
   runtimeSnapshot = null;
   updateResetButton();
+  /* Los clones pertenecen al proyecto que se estaba ejecutando: si se carga
+     otro (o se deshace), sus guiones apuntarían a personajes que ya no están. */
+  clearClones();
   /* Tampoco arrastra la música del proyecto anterior. */
   stopAllSounds();
   score = clamp(num(payload.score, 0), -1000000, 1000000);
@@ -617,6 +628,7 @@ function resetProjectData(withCode) {
   sayTexts.clear();
   sayTimers.forEach(t => clearTimeout(t));
   sayTimers.clear();
+  clearClones();
 }
 
 function loadProject() {
@@ -1608,8 +1620,69 @@ function spriteHTML(s, index) {
 function renderSprites() {
   const layer = $('#spritesLayer');
   if (!layer) return;
-  layer.innerHTML = sprites.map((s, i) => spriteHTML(s, i)).join('');
+  layer.innerHTML = sprites.concat(clones).map((s, i) => spriteHTML(s, i)).join('');
   applyStageBg();
+}
+
+/* ---------------- clones ----------------
+   Un clon se dibuja igual que un personaje y ejecuta el mismo código, pero su
+   estado es propio. Se crea y se borra en tiempo de ejecución, nunca se guarda. */
+function isClone(s) { return !!(s && s.isClone); }
+
+/* Índice dentro de la capa: sirve para el z-index, que en los clones no puede
+   salir de `spriteIndex()` porque no están en `sprites`. */
+function layerIndex(id) {
+  const i = sprites.findIndex(s => s.id === id);
+  if (i > -1) return i;
+  const j = clones.findIndex(c => c.id === id);
+  return j > -1 ? sprites.length + j : 0;
+}
+
+function makeClone(src) {
+  const c = {
+    id: 'cl' + (++cloneSeq),
+    srcId: src.id,
+    isClone: true,
+    dead: false,
+    name: src.name,
+    costumes: src.costumes || [],
+    costumeIndex: src.costumeIndex || 0,
+    x: src.x, y: src.y, dir: src.dir, size: src.size,
+    visible: src.visible, rot: src.rot,
+    code: src.code
+  };
+  /* El disfraz se recalcula: si el original usa una imagen, el clon necesita
+     su propio `img` y no el que tenía el original al copiarse. */
+  syncCostume(c);
+  return c;
+}
+
+function spawnClone(src) {
+  if (!src || clones.length >= MAX_CLONES) return null;
+  const c = makeClone(src);
+  clones.push(c);
+  const layer = $('#spritesLayer');
+  if (layer) layer.insertAdjacentHTML('beforeend', spriteHTML(c, layer.children.length));
+  scriptsFor('when_clone', sc => sc.sprite === c).forEach(startThread);
+  return c;
+}
+
+function deleteClone(c) {
+  if (!isClone(c) || c.dead) return;
+  c.dead = true;
+  const i = clones.indexOf(c);
+  if (i > -1) clones.splice(i, 1);
+  const el = findSpriteEl(c.id);
+  if (el) el.remove();
+  sayTexts.delete(c.id);
+  clearTimeout(sayTimers.get(c.id));
+  sayTimers.delete(c.id);
+}
+
+function clearClones() {
+  clones.slice().forEach(deleteClone);
+  clones = [];
+  cloneSeq = 0;
 }
 
 function updateStageSelection() {
@@ -1630,7 +1703,7 @@ function updateSpriteEl(s) {
   el.style.top = posTop(s) + '%';
   el.classList.toggle('off', !s.visible);
   el.classList.toggle('selected', s.id === selectedSpriteId);
-  el.style.zIndex = s.id === selectedSpriteId ? '60' : String(spriteIndex(s.id) + 1);
+  el.style.zIndex = s.id === selectedSpriteId ? '60' : String(layerIndex(s.id) + 1);
 
   const emoji = el.querySelector('.sprite-emoji');
   if (emoji) {
@@ -2061,7 +2134,7 @@ function blockContent(node, def, t) {
       if (!found) {
         const opt = document.createElement('option');
         opt.value = cur;
-        opt.textContent = UI[lang].soundMissing;
+        opt.textContent = def.pick === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing;
         opt.selected = true;
         sel.appendChild(opt);
       }
@@ -2390,13 +2463,25 @@ function previewNode(def) {
 /* Listas de nombres que se eligen con un <select>: sonidos y melodías.
    El bloque guarda el id (estable) y se muestra el nombre del idioma. */
 function pickList(kind) {
+  /* Los personajes son dinámicos: la lista sale del proyecto, no del catálogo.
+     El nombre de cada uno se repite en los 4 idiomas porque lo que se traduce
+     es «mí mismo», no el nombre que eligió el usuario. */
+  if (kind === 'sprites') {
+    const self = { id: 'self', name: {} };
+    ['es', 'en', 'pt', 'fr'].forEach(l => { self.name[l] = UI[l].cloneSelf; });
+    return [self].concat(sprites.map(s => {
+      const name = {};
+      ['es', 'en', 'pt', 'fr'].forEach(l => { name[l] = s.name; });
+      return { id: s.id, name: name };
+    }));
+  }
   return kind === 'melodies' ? MELODY_LIB : SOUND_LIB;
 }
 
 function pickLabel(kind, id) {
   const item = pickList(kind).find(x => x.id === id);
   if (item) return item.name[lang] || item.name.es;
-  return UI[lang].soundMissing || String(id);
+  return (kind === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing) || String(id);
 }
 
 function blockPlainName(def) {
@@ -3401,9 +3486,10 @@ function touchingEdge(s) {
 function touchingOther(s) {
   if (!s || !s.visible) return false;
   const r = spriteRadius(s);
-  for (let i = 0; i < sprites.length; i++) {
-    const o = sprites[i];
-    if (o === s || !o.visible) continue;
+  const all = sprites.concat(clones);
+  for (let i = 0; i < all.length; i++) {
+    const o = all[i];
+    if (o === s || !o.visible || o.dead) continue;
     const dx = o.x - s.x;
     const dy = o.y - s.y;
     const rr = r + spriteRadius(o);
@@ -3445,7 +3531,20 @@ async function execBlock(node, sprite) {
   const v = nodeVal(node, sprite);
   switch (node.type) {
     case 'when_flag': case 'when_tap': case 'when_key': case 'when_score':
-    case 'when_shake': case 'when_msg':
+    case 'when_shake': case 'when_msg': case 'when_clone':
+      return;
+    case 'create_clone': {
+      /* `self` clona al que ejecuta (que puede ser otro clon); si apunta a un
+         personaje, se clona ese. Un id que ya no existe no hace nada, igual
+         que en Scratch, en vez de clonar al azar. */
+      const key = String(v == null ? 'self' : v);
+      const src = (key === 'self' || key === '') ? sprite : getSprite(key);
+      if (src) spawnClone(src);
+      await sleep(20);
+      return;
+    }
+    case 'delete_clone':
+      deleteClone(sprite);
       return;
     case 'move': {
       const steps = num(v, 10);
@@ -3641,7 +3740,7 @@ async function execBlock(node, sprite) {
    guion de bandera verde para no romper la compatibilidad. */
 function collectScripts() {
   const out = [];
-  sprites.forEach(sprite => {
+  const add = sprite => {
     let cur = null;
     (sprite.code || []).forEach(node => {
       const def = BYID[node.type];
@@ -3654,8 +3753,13 @@ function collectScripts() {
       }
     });
     if (cur && cur.nodes.length) out.push(cur);
-  });
-  return out;
+  };
+  sprites.forEach(add);
+  clones.forEach(add);
+  /* El sombrero «al comenzar como clon» es sólo para los clones, y un clon no
+     arranca con la bandera ni con los demás sombreros: si no, cada clon haría
+     además todo lo que hace el original. */
+  return out.filter(sc => isClone(sc.sprite) ? sc.event === 'when_clone' : sc.event !== 'when_clone');
 }
 
 function scriptsFor(event, test) {
@@ -3736,6 +3840,7 @@ function updateResetButton() {
 function resetToStart() {
   const snap = runtimeSnapshot;
   if (!snap || runActive) return;
+  clearClones();
   restoreRuntime(snap);
   runtimeSnapshot = null;
   updateResetButton();
@@ -3818,7 +3923,7 @@ function clearGlows() {
 async function execNode(node, sprite, ctx) {
   const def = BYID[node.type];
   if (!def || def.hat) return;
-  const alive = () => isRunning && !(ctx && ctx.cancelled);
+  const alive = () => isRunning && !(ctx && ctx.cancelled) && !(sprite && sprite.dead);
 
   glowOn(node.id);
   try {
@@ -3856,6 +3961,9 @@ async function execNode(node, sprite, ctx) {
 async function execStack(nodes, sprite, ctx) {
   if (!Array.isArray(nodes)) return;
   for (const node of nodes) {
+    /* Un clon borrado con «borrar este clon» tiene que parar en seco: si no,
+       seguiría moviéndose invisible hasta terminar el guion. */
+    if (sprite && sprite.dead) return;
     if (ctx && ctx.cancelled) return;
     if (!isRunning) return;
     await execNode(node, sprite, ctx);
@@ -3878,6 +3986,9 @@ function stopCode() {
   /* Detener es también silencio: si no, una música en bucle seguiría sonando
      para siempre porque nadie más la corta. */
   stopAllSounds();
+  /* Detener borra los clones, como en Scratch. Terminar una corrida, en
+     cambio, los deja: el estado final es el que queda en pantalla. */
+  clearClones();
   /* Un «crear variable» puede haber abierto un diálogo en medio de un guion:
      al detener, lo cerramos para que el hilo no quede esperando para siempre. */
   if (wasRunning && askResolver) closeAsk(null);
@@ -4231,7 +4342,8 @@ function wavFromSteps(steps, rate) {
 /* ---------- bloques ---------- */
 const SB3_HATS = {
   when_flag: 'event_whenflagclicked',
-  when_tap: 'event_whenstageclicked'
+  when_tap: 'event_whenstageclicked',
+  when_clone: 'control_start_as_clone'
 };
 
 /* Bloques sin equivalente en Scratch. Se listan para poder avisar. */
@@ -4592,6 +4704,17 @@ function sb3SpriteBlocks(sprite, index) {
         blocks[bid].inputs.BROADCAST_INPUT = [1, [11, 'mensaje', SB3_MSG_ID]];
         return bid;
       }
+      /* Clones: los tres opcodes existen en Scratch, así que se exportan tal
+         cual. El menú lleva `_myself_` o el NOMBRE del personaje, no su id. */
+      case 'create_clone': {
+        const key = String(node.val == null ? 'self' : node.val).trim();
+        const other = key === 'self' || key === '' ? null : sprites.find(s => s.id === key);
+        const target = other ? other.name : '_myself_';
+        return id('control_create_clone_of', {
+          CLONE_OPTION: b => menu('control_create_clone_of_menu', 'CLONE_OPTION', target, b)
+        });
+      }
+      case 'delete_clone': return mk('control_delete_this_clone', parentId);
       default: return null;
     }
   }
@@ -4599,6 +4722,7 @@ function sb3SpriteBlocks(sprite, index) {
   function hatBlock(node) {
     if (node.type === 'when_flag') return mk('event_whenflagclicked', null);
     if (node.type === 'when_tap') return mk('event_whenstageclicked', null);
+    if (node.type === 'when_clone') return mk('control_start_as_clone', null);
     if (node.type === 'when_key') {
       const bid = mk('event_whenkeypressed', null);
       blocks[bid].fields.KEY_OPTION = [sb3KeyName(node.val), null];

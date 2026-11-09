@@ -9,7 +9,7 @@ const ctx = { console: console };
 vm.createContext(ctx);
 vm.runInContext(
   fs.readFileSync(path.join(SRC, 'data.js'), 'utf8') +
-  '\n;this.UIX = UI; this.EX = UI_EXTRA; this.PB = PALETTE_BLOCKS; this.ALLB = BLOCKS;', ctx);
+  '\n;this.UIX = UI; this.EX = UI_EXTRA; this.PB = PALETTE_BLOCKS; this.ALLB = BLOCKS; this.BY = BYID;', ctx);
 
 const langs = ['es', 'en', 'pt', 'fr'];
 let ok = true;
@@ -186,6 +186,42 @@ if (!/classList\.toggle\('game-portrait'/.test(engine)) {
 if (!/function\s+enterGame\s*\([^)]*\)\s*\{[^}]*syncGameOrientation\(\)/.test(engine) ||
   !/function\s+exitGame\s*\([^)]*\)\s*\{[^}]*syncGameOrientation\(\)/.test(engine)) {
   ok = false; console.log('FAIL entrar o salir del juego no sincroniza la orientación');
+}
+
+/* Clones: tres bloques, un sombrero y un ciclo de vida que vive sólo en
+   ejecución. Si falta cualquiera de las dos mitades (el catálogo o el runtime),
+   el bloque aparece en la paleta pero no hace nada. */
+if (!ctx.BY.when_clone || ctx.BY.when_clone.hat !== 1) {
+  ok = false; console.log('FAIL falta el sombrero «al comenzar como clon»');
+}
+if (!ctx.BY.create_clone || ctx.BY.create_clone.pick !== 'sprites') {
+  ok = false; console.log('FAIL «crear clon de» no tiene el menú de personajes');
+}
+if (!ctx.BY.delete_clone) { ok = false; console.log('FAIL falta «borrar este clon»'); }
+['spawnClone', 'deleteClone', 'clearClones', 'layerIndex', 'makeClone'].forEach(fn => {
+  if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+    ok = false; console.log('FAIL falta ' + fn + '()');
+  }
+});
+if (!/const\s+MAX_CLONES\s*=\s*\d+/.test(engine)) { ok = false; console.log('FAIL falta el tope de clones'); }
+/* Los clones no están en `sprites`: si el dibujo y las colisiones no los
+   suman aparte, se crean pero no se ven ni chocan. */
+if (!/sprites\.concat\(clones\)/.test(engine)) {
+  ok = false; console.log('FAIL el dibujo o las colisiones no incluyen los clones');
+}
+if (!/function\s+stopCode\s*\([^)]*\)\s*\{[\s\S]{0,900}?clearClones\(\)/.test(engine)) {
+  ok = false; console.log('FAIL Detener no borra los clones');
+}
+if (!/sc\.event === 'when_clone'/.test(engine)) {
+  ok = false; console.log('FAIL los clones no filtran su sombrero');
+}
+/* Exportación: los tres opcodes existen en Scratch, así que no pueden quedar
+   en la lista de «sin equivalente». */
+['control_start_as_clone', 'control_create_clone_of', 'control_delete_this_clone'].forEach(op => {
+  if (engine.indexOf(op) < 0) { ok = false; console.log('FAIL la exportación no emite ' + op); }
+});
+if (/SB3_NO_EQUIV\s*=\s*\{[\s\S]{0,600}?create_clone/.test(engine)) {
+  ok = false; console.log('FAIL los clones quedaron marcados como sin equivalente');
 }
 
 /* Un `case` repetido dentro del mismo switch es JavaScript válido y no avisa

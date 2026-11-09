@@ -12,8 +12,8 @@ window.addEventListener('load', function () {
   (async () => {
     try {
       check('sin_errores_arranque', errs.length === 0);
-      check('paleta_48', PALETTE_BLOCKS.length === 48);
-      check('badge_48', document.getElementById('blocksCount').textContent === '48');
+      check('paleta_51', PALETTE_BLOCKS.length === 51);
+      check('badge_al_dia', document.getElementById('blocksCount').textContent === String(PALETTE_BLOCKS.length));
       check('bloques_nuevos', !!BYID.next_costume && !!BYID.switch_costume && BYID.switch_costume.costume === 1);
       check('textos_4_idiomas', ['es', 'en', 'pt', 'fr'].every(k =>
         UI[k].costumesTitle && UI[k].costumeAdd && UI[k].shareTooLong && UI[k].importSprite && UI[k].costumeBadType));

@@ -482,6 +482,24 @@ const BLOCKS = [
     n: L('Sino', 'Else', 'Senão', 'Sinon'),
     d: L('Hace algo si la condición anterior falló.', 'Runs when the previous condition failed.', 'Roda se a condição anterior falhou.', 'S’exécute si la condition précédente est fausse.')
   },
+  /* Clones. El clon es una copia viva del personaje con su propia posición,
+     tamaño, dirección y disfraz, pero comparte los guiones y las variables.
+     Vive sólo mientras dura la ejecución: no se guarda en el proyecto. */
+  {
+    id: 'when_clone', cat: 'control', icon: 'copy', hat: 1,
+    n: L('Al comenzar como clon', 'When I start as a clone', 'Ao começar como clone', 'Quand je démarre en clone'),
+    d: L('Arranca en cada clon, justo en el momento en que se crea.', 'Starts in every clone, the moment it is created.', 'Começa em cada clone, no momento em que é criado.', 'Démarre dans chaque clone, dès sa création.')
+  },
+  {
+    id: 'create_clone', cat: 'control', icon: 'copy', def: 'self', w: 104, pick: 'sprites',
+    n: L('Crear clon de {v}', 'Create clone of {v}', 'Criar clone de {v}', 'Créer un clone de {v}'),
+    d: L('Hace una copia del personaje, con su posición, tamaño y disfraz de ese momento. La copia corre el guion de «al comenzar como clon».', 'Makes a copy of the sprite with its position, size and costume at that moment. The copy runs the «when I start as a clone» script.', 'Faz uma cópia do personagem, com sua posição, tamanho e fantasia daquele momento. A cópia roda o guião de «ao começar como clone».', 'Fait une copie du personnage avec sa position, sa taille et son costume du moment. La copie exécute le script « quand je démarre en clone ».')
+  },
+  {
+    id: 'delete_clone', cat: 'control', icon: 'trash',
+    n: L('Borrar este clon', 'Delete this clone', 'Apagar este clone', 'Supprimer ce clone'),
+    d: L('Hace desaparecer al clon que lo ejecuta. En el personaje original no hace nada.', 'Removes the clone that runs it. On the original sprite it does nothing.', 'Faz desaparecer o clone que o executa. No personagem original não faz nada.', 'Fait disparaître le clone qui l’exécute. Sur le personnage d’origine, ne fait rien.')
+  },
   {
     id: 'when_shake', cat: 'sensor', icon: 'phone', hat: 1,
     n: L('Al agitar', 'On shake', 'Ao agitar', 'En secouant'),
@@ -669,6 +687,8 @@ const UI_EXTRA = {
     costumeDefault: 'Disfraz',
     costumeMissing: 'Ese disfraz ya no existe',
     soundMissing: 'Ese sonido ya no existe',
+    spriteMissing: 'Ese personaje ya no existe',
+    cloneSelf: 'mí mismo',
     importSprite: 'Importar mis imágenes…',
     shareDesc: 'Copiá este link y mandalo por WhatsApp. El proyecto entero, con sus disfraces, viaja adentro del link.',
     shareTooLong: 'El link quedó muy largo: algunos chats lo cortan. Probá con menos imágenes.',
@@ -755,6 +775,8 @@ const UI_EXTRA = {
     costumeDefault: 'Costume',
     costumeMissing: 'That costume no longer exists',
     soundMissing: 'That sound no longer exists',
+    spriteMissing: 'That sprite no longer exists',
+    cloneSelf: 'myself',
     importSprite: 'Import my images…',
     shareDesc: 'Copy this link and send it on WhatsApp. The whole project, costumes included, travels inside the link.',
     shareTooLong: 'This link is very long: some chat apps may cut it. Try fewer images.',
@@ -841,6 +863,8 @@ const UI_EXTRA = {
     costumeDefault: 'Traje',
     costumeMissing: 'Esse traje não existe mais',
     soundMissing: 'Esse som não existe mais',
+    spriteMissing: 'Esse personagem não existe mais',
+    cloneSelf: 'eu mesmo',
     importSprite: 'Importar minhas imagens…',
     shareDesc: 'Copie este link e envie no WhatsApp. O projeto inteiro, com os trajes, vai dentro do link.',
     shareTooLong: 'O link ficou muito longo: alguns apps podem cortá-lo. Tente menos imagens.',
@@ -927,6 +951,8 @@ const UI_EXTRA = {
     costumeDefault: 'Costume',
     costumeMissing: 'Ce costume n’existe plus',
     soundMissing: 'Ce son n’existe plus',
+    spriteMissing: 'Ce personnage n’existe plus',
+    cloneSelf: 'moi-même',
     importSprite: 'Importer mes images…',
     shareDesc: 'Copiez ce lien et envoyez-le sur WhatsApp. Tout le projet, costumes compris, voyage dans le lien.',
     shareTooLong: 'Le lien est très long : certaines applis le coupent. Essayez avec moins d’images.',

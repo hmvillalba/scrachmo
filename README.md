@@ -10,7 +10,7 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 
 ### Bloques como en Scratch
 
-- 48 bloques en 9 categorías con los colores clásicos de Scratch: movimiento, apariencia, sonido, eventos, control, sensores, operadores, variables y multijugador.
+- 51 bloques en 9 categorías con los colores clásicos de Scratch: movimiento, apariencia, sonido, eventos, control, sensores, operadores, variables y multijugador.
 - Bloques sombrero (bandera verde, toque, tecla, agitar el celu, recibir mensaje, puntaje) y bloques C: `repetir`, `por siempre` y condicionales con `si... si no`.
 - Anidado real: arrastrá bloques adentro de un bloque C para envolverlos, con guardas que evitan anidar un bloque dentro de sí mismo.
 - **Varios guiones por sprite**: cada sombrero inicia un guion independiente y sólo se ejecutan los que corresponden al evento ocurrido. Un mismo sprite puede reaccionar a la bandera, a una tecla y a un toque a la vez.
@@ -37,6 +37,15 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 - **Modo juego con la cancha en 4:3**: el botón *Jugar* deja sólo el escenario, centrado y tan grande como entre, con franjas del color de fondo. La proporción es siempre la del juego —480 × 360 unidades, o sea 4:3— y no se estira: si se estirara, 100 pasos hacia arriba se verían más grandes que 100 a la derecha y lo que se ve no coincidiría con los choques, que se calculan en unidades. En un teléfono parado aparece abajo un aviso discreto —«Girá el teléfono para verlo más grande»— que se puede cerrar y no vuelve hasta el próximo juego.
 - **Fondo propio del escenario**: subí tu propia imagen (PNG, JPG, WebP, GIF o BMP) desde el ícono de la tarjeta *Escenario*. Se redibuja a 1280 px como máximo, se comprime a WebP/PNG y se muestra con `cover`. El botón **Quitar mi fondo** vuelve a los 6 gradientes; usar `cambiar fondo` también sale del fondo propio. Viaja en el guardado y en los links compartidos, y se rechazan SVG y URLs externas por seguridad.
 - Variables con pasos configurables (+ / −) y opción de mostrarlas en el escenario.
+
+### Clones
+
+- **`crear clon de [mí mismo / un personaje]`** hace una copia viva del personaje con su posición, dirección, tamaño, visibilidad y disfraz de ese momento. El clon comparte los guiones y las variables con su original, pero se mueve, gira, cambia de tamaño y de disfraz por su cuenta.
+- **`al comenzar como clon`** es el sombrero que corre en cada copia justo al nacer. Un clon **no** corre la bandera verde ni los demás sombreros: si los corriera, cada copia repetiría todo lo que hace el original.
+- **`borrar este clon`** hace desaparecer a la copia que lo ejecuta, y su guion se corta en ese mismo bloque. En el personaje original no hace nada, igual que en Scratch.
+- Los clones **chocan** entre sí y con los originales, y hablan con su propio globo.
+- **No se guardan**: existen sólo mientras dura la ejecución. Detener los borra todos; dejar que el guion termine los deja en pantalla, como estado final. El tope es de **300 clones**, el mismo de Scratch, para que no se pueda colgar el celular.
+- Se exportan a `.sb3` con sus tres bloques nativos, así que un juego de clones funciona igual en Scratch.
 
 ### Disfraces e imágenes propias
 
@@ -95,6 +104,7 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 | `reproducir sonido`, `detener los sonidos`, `volumen` | `sound_*` con los sonidos generados |
 | `al presionar bandera`, `al tocar personaje`, `al presionar tecla`, `al recibir` | `event_*` |
 | `esperar`, `repetir`, `por siempre`, `si`, `si/sino`, `si toca el borde`, `si toca a` | `control_*` y `sensing_touchingobject` |
+| `crear clon de`, `al comenzar como clon`, `borrar este clon` | `control_create_clone_of`, `control_start_as_clone`, `control_delete_this_clone` |
 | `puntaje` y las variables | variables globales del *Stage* |
 | Multijugador, agitado, inclinación, vibrar, crear/mostrar variables, amigos, `sino` suelto | **sin equivalente** |
 
@@ -151,7 +161,7 @@ También podés abrir `index.html` directo con doble clic. Para probarlo desde e
 | --- | --- |
 | `index.html` | Toda la interfaz: layout, estilos, íconos SVG y paneles. |
 | `engine.js` | El motor: render de bloques, drag & drop táctil, ejecución, sprites, variables y eventos. |
-| `data.js` | Catálogo de bloques (48 enunciados + 11 reporteros), categorías y textos de la interfaz (4 idiomas). |
+| `data.js` | Catálogo de bloques (51 enunciados + 11 reporteros), categorías y textos de la interfaz (4 idiomas). |
 | `manifest.webmanifest` | Ficha de instalación: nombre, colores, `display: standalone` e íconos. |
 | `sw.js` | Service worker: guarda la app para que abra sin internet y sirve el shell a los links `?p=`. |
 | `icons/` | Ícono de la app en SVG y PNG (192, 512, *maskable* y *apple-touch*). |
@@ -165,11 +175,11 @@ La app que se abre en el navegador son esos tres archivos más el manifest, el s
 
 ## Verificación
 
-Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite vive **dentro del repo** (`tests/`) y corre también en CI. Son **802 comprobaciones por idioma, 1604 en total**: cada escenario se corre **dos veces, en español y en inglés**, y las dos tienen que dar 0 fallos:
+Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite vive **dentro del repo** (`tests/`) y corre también en CI. Son **846 comprobaciones por idioma, 1692 en total**: cada escenario se corre **dos veces, en español y en inglés**, y las dos tienen que dar 0 fallos:
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
-| Estructura | 30 | Catálogo de 143 personajes, 48 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
+| Estructura | 30 | Catálogo de 143 personajes, 51 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
 | Motor y eventos | 25 | Buscador, guiones por sombrero, despacho de teclado/toque/bandera, aislamiento de hilos, no guardar durante la ejecución, persistencia de puntaje y multijugador, sombrero de puntaje sin re-disparos. |
 | Disfraces y links | 52 | Migración de proyectos viejos, rechazo de SVG/URLs, tira de miniaturas, selector por nombre, serialización, ejecución de los dos bloques nuevos, estado final del disfraz y «Volver al inicio», gzip/base64url, links viejos y fallback. |
 | Importación real | 27 | `File` → canvas → WebP, filtro de tipos, nombres únicos, nuevo personaje desde imágenes, borrado, límite de 12, aviso de espacio lleno. |
@@ -185,6 +195,7 @@ Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless.
 | Layout horizontal | 21 | En el ancho de las pruebas (800 px) las columnas se disuelven, las seis tarjetas quedan en una sola columna, mismo ancho y mismo borde izquierdo, en el orden de siempre con su `order` 1 a 6, sin desborde horizontal; el modo juego oculta código, bloques y personajes y deja el escenario entrando justo (la ventana de las pruebas, 800 × 600, ya es 4:3) y al salir vuelve el editor en orden; y un `resize` a mitad de uso no rompe nada. La disposición ancha (≥ 900 px) se revisó en capturas reales y su CSS está cubierto por las comprobaciones estáticas. |
 | Modo juego 4:3 | 30 | El campo mide 4:3 de verdad, cabe en la pantalla, la aprovecha al máximo y queda centrado en los dos ejes; moviendo un personaje de verdad, 100 unidades a la derecha y 100 hacia arriba miden los mismos píxeles (con el escenario estirado daban 83 px contra 224 px en un teléfono parado); el aviso de girar existe, está traducido, no es un `.modal`, sólo sale en modo juego con la pantalla en vertical, se puede cerrar sin tocar el juego, vuelve al entrar de nuevo y se reescribe al cambiar de idioma; y las 2 claves están en los 4 idiomas con frases distintas. |
 | Exportación `.sb3` | 73 | Vectores conocidos de MD5 y CRC32, el ZIP propio se vuelve a leer (nombres, contenido y CRC de cada entrada), cabecera y largo del WAV, el ruido determinista y la misma exportación dos veces dando bytes idénticos, firma y ancho del PNG, el `project.json` completo: *Stage* primero, `semver`, `monitors`, posición/dirección/tamaño/rotación/volumen del personaje, variables y mensaje declarados, el grafo de bloques sin referencias rotas (incluidos `SUBSTACK` y `SUBSTACK2`), los opcodes esperados de cada bloque, los menús desplegables, la tecla traducida, el MD5 de cada archivo coincidiendo con su nombre, `sampleCount` cuadrando con los bytes, los ids de variable y de mensaje existiendo, ningún archivo huérfano, el comentario con la lista de lo que no se pudo traducir, y un proyecto vacío que no rompe nada. |
+| Clones | 44 | Los tres bloques en el catálogo y en los 4 idiomas, el sombrero marcado y el menú de personajes; que crear un clon copie posición y tamaño, tenga id propio, se dibuje y no se agregue al proyecto; que el sombrero de clon corra sólo en las copias y que una copia **no** corra la bandera (se comprueba con el puntaje, que subiría dos veces); borrar este clon y que en el original no haga nada; el tope de 300; que los clones choquen entre sí y con los originales; que no se guarden en el proyecto; que Detener los borre y terminar no; clonar a otro personaje y que un id inexistente no clone nada; el selector con «mí mismo» y el aviso de personaje borrado; y la exportación a .sb3 con los tres opcodes, el menú sombra y `_myself_` frente al nombre del personaje. |
 | Acerca de | 38 | El botón de la barra con su ícono y su etiqueta traducida, el modal que arranca cerrado y abre al tocarlo, el bloqueo del scroll, el autor, la licencia MIT enlazada, el sitio, la descripción, la frase de mención o donación, los dos enlaces de apoyo con su `target`/`rel` y sus textos traducidos, que no toque el proyecto, los cuatro caminos de cierre (Aceptar, `Escape`, el fondo, y que tocar la tarjeta **no** cierre), las 10 claves en los 4 idiomas con las frases realmente distintas, el cambio de idioma en vivo, y que el modal quede **por encima** de los bloques: se mete un `z-index` 6000 dentro del área de código y el modal tiene que seguir ganando. |
 
 Aparte de la suite de navegador hay **90 comprobaciones de PWA** que no necesitan Chrome:
@@ -201,14 +212,14 @@ node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
-node tests/run.js mi-corrida     # 17 escenarios × 2 idiomas en Chrome headless
+node tests/run.js mi-corrida     # 18 escenarios × 2 idiomas en Chrome headless
 ```
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y por idioma, y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
 
 **Por qué dos idiomas y por qué `--lang`**: el idioma inicial de la app sale de `navigator.language`. Sin fijarlo, Chrome usa el del sistema —español en una máquina, inglés en el runner de Linux— y una prueba que comparaba texto escrito a mano pasaba en un lado y fallaba en el otro. Ya pasó una vez. Ahora `tests/run.js` lanza Chrome con `--lang` explícito (`es-419` y `en-US`) y **verifica en el DOM que el idioma se haya aplicado de verdad**: si el `<html lang>` no coincide con el pedido, cuenta un error y lo dice, para que dos corridas idénticas nunca se confundan con dos idiomas. Se puede acotar con `SCRACHMO_LANGS=es node tests/run.js`.
 
-Además: los 4 idiomas tienen las mismas 192 claves de texto (84 de `UI_EXTRA`) y los 48 bloques activos más 11 reporteros; los 76 `data-t` y 13 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()`, la geometría de los sensores (`spriteRadius()`, `touchingEdge()`, `touchingOther()`, `bounceSprite()`, el cronómetro), las piezas del exportador (`exportSb3()`, `sb3Build()`, `zipStore()`, `md5hex()`, `crc32()`, `wavFromSteps()`), el modal `openAbout()`/`closeAbout()`/`bindAbout()` con su botón, el campo 4:3 del modo juego con `syncGameOrientation()`/`bindGameOrientation()` y su aviso de girar, y el tope `MAX_CODE_DEPTH`; que el área de código **aísle su contexto de apilamiento** (`isolation:isolate`), porque sus bloques usan `z-index` desde 6000 y sin eso se dibujaban encima de cualquier modal; y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app, el modal de proyectos, los cuatro bloques de sensores con el cronómetro en el selector `ƒ`, los bloques de sonido con sus selectores de sonido y melodía, el modal *Acerca de* y el modo juego en vertical y apaisado (con el aviso de girar) también se revisaron en capturas reales, a 500 px y en pantalla ancha.
+Además: los 4 idiomas tienen las mismas 194 claves de texto (86 de `UI_EXTRA`) y los 51 bloques activos más 11 reporteros; los 76 `data-t` y 13 `data-tt` del HTML tienen traducción en los 4 idiomas; las comprobaciones estáticas aseguran que el motor no contenga `eval`/`Function()` ni `prompt()`/`confirm()`/`alert()`, que estén `calcExpr()`, `askUser()`, `nodeVal()`, `evalReporter()`, el selector `bindRepPicker()`, la geometría de los sensores (`spriteRadius()`, `touchingEdge()`, `touchingOther()`, `bounceSprite()`, el cronómetro), las piezas del exportador (`exportSb3()`, `sb3Build()`, `zipStore()`, `md5hex()`, `crc32()`, `wavFromSteps()`), el modal `openAbout()`/`closeAbout()`/`bindAbout()` con su botón, el campo 4:3 del modo juego con `syncGameOrientation()`/`bindGameOrientation()` y su aviso de girar, el ciclo de vida de los clones (`spawnClone()`, `deleteClone()`, `clearClones()`, el tope `MAX_CLONES` y los tres opcodes de exportación), y el tope `MAX_CODE_DEPTH`; que el área de código **aísle su contexto de apilamiento** (`isolation:isolate`), porque sus bloques usan `z-index` desde 6000 y sin eso se dibujaban encima de cualquier modal; y que los workflows no tengan un `name:` con `: ` sin comillas (eso rompe el YAML entero y GitHub corre el archivo sin ejecutar nada); no hubo errores no capturados ni rechazos de promesas en ninguna corrida. La burbuja, la barra de zoom, el bloque `ir a x: y:` (dos casillas, en el editor y en la paleta), el diálogo propio, la casilla con reportero, el ícono de la app, el modal de proyectos, los cuatro bloques de sensores con el cronómetro en el selector `ƒ`, los bloques de sonido con sus selectores de sonido y melodía, los tres bloques de clones con su menú de personajes, el modal *Acerca de* y el modo juego en vertical y apaisado (con el aviso de girar) también se revisaron en capturas reales, a 500 px y en pantalla ancha.
 
 Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve DOM ni capturas por línea de comando); se usó Chrome con `--headless=new --dump-dom`. En el decodificador de imágenes de Chrome headless se detectó un cuelgue intermitente de `createImageBitmap`, por lo que el motor ahora cae a `<img>` si tarda más de 3 segundos.
 

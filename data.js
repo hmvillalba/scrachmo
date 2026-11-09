@@ -250,6 +250,43 @@ const CATS = [
 ];
 const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c]));
 
+/* ---------------- sonidos y melodías ----------------
+   Todo se sintetiza con WebAudio en el momento de reproducir: no hay archivos
+   de audio, así la app sigue abriendo con doble clic (file://) y la PWA no
+   tiene que cachear nada extra. Cada paso es
+   [frecuencia, duración, forma de onda, barrido opcional]; la frecuencia 0 es
+   un silencio y 'noise' genera ruido filtrado (golpes, explosión, aplauso).
+   El id es lo que se guarda en el bloque; el nombre es lo que se muestra, así
+   que cambiar de idioma no rompe los proyectos. */
+const SOUND_LIB = [
+  { id: 'beep', name: L('Pitido', 'Beep', 'Bip', 'Bip'), steps: [[880, .12, 'square']] },
+  { id: 'meow', name: L('Miau', 'Meow', 'Miau', 'Miaou'), steps: [[560, .3, 'sine', 760]] },
+  { id: 'pop', name: L('Pop', 'Pop', 'Pop', 'Pop'), steps: [[1180, .07, 'triangle']] },
+  { id: 'coin', name: L('Moneda', 'Coin', 'Moeda', 'Pièce'), steps: [[988, .08, 'square'], [1319, .22, 'square']] },
+  { id: 'jump', name: L('Salto', 'Jump', 'Pulo', 'Saut'), steps: [[330, .18, 'sine', 900]] },
+  { id: 'boom', name: L('Explosión', 'Explosion', 'Explosão', 'Explosion'), steps: [['noise', .45, 700]] },
+  { id: 'clap', name: L('Aplauso', 'Clap', 'Palmas', 'Applaudissement'), steps: [['noise', .06, 1900], ['noise', .06, 1500], ['noise', .09, 1100]] },
+  { id: 'bell', name: L('Campana', 'Bell', 'Sino', 'Cloche'), steps: [[1318, .5, 'sine'], [1046, .6, 'sine']] }
+];
+
+const MELODY_LIB = [
+  {
+    id: 'happy', name: L('Alegre', 'Happy', 'Alegre', 'Joyeuse'),
+    steps: [[523, .16], [659, .16], [784, .16], [1046, .24], [784, .16], [1046, .4], [0, .16]]
+  },
+  {
+    id: 'sad', name: L('Triste', 'Sad', 'Triste', 'Triste'),
+    steps: [[440, .3], [415, .3], [392, .3], [349, .5], [0, .2]]
+  },
+  {
+    id: 'game', name: L('De juego', 'Game', 'De jogo', 'De jeu'),
+    steps: [[659, .1], [784, .1], [988, .1], [1319, .16], [988, .1], [1319, .24], [0, .12]]
+  }
+];
+
+const SOUNDMAP = Object.fromEntries(SOUND_LIB.map(s => [s.id, s]));
+const MELODYMAP = Object.fromEntries(MELODY_LIB.map(m => [m.id, m]));
+
 /* ---------------- blocks ---------------- */
 const BLOCKS = [
   {
@@ -334,6 +371,31 @@ const BLOCKS = [
     id: 'pop', cat: 'sound', icon: 'volume',
     n: L('Pop', 'Pop', 'Pop', 'Pop'),
     d: L('Reproduce un sonido corto.', 'Plays a short pop sound.', 'Toca um som curto.', 'Joue un petit son.')
+  },
+  {
+    id: 'play_sound', cat: 'sound', icon: 'volume', def: 'beep', w: 104, pick: 'sounds',
+    n: L('Reproducir sonido {v}', 'Play sound {v}', 'Tocar som {v}', 'Jouer le son {v}'),
+    d: L('Reproduce el sonido que elijas. No espera a que termine: para eso usá «esperar».', 'Plays the sound you pick. It does not wait for it to finish: use «wait» for that.', 'Toca o som escolhido. Não espera terminar: para isso use «esperar».', 'Joue le son choisi. N’attend pas la fin : utilise « attendre » pour ça.')
+  },
+  {
+    id: 'play_music', cat: 'sound', icon: 'music', def: 'happy', w: 104, pick: 'melodies',
+    n: L('Tocar música {v}', 'Play music {v}', 'Tocar música {v}', 'Jouer la musique {v}'),
+    d: L('Empieza una melodía en bucle hasta que la detengas o pongas otra.', 'Starts a melody looping until you stop it or play another one.', 'Começa uma melodia em loop até você parar ou tocar outra.', 'Démarre une mélodie en boucle jusqu’à l’arrêt ou une autre mélodie.')
+  },
+  {
+    id: 'stop_sounds', cat: 'sound', icon: 'volume-x',
+    n: L('Detener los sonidos', 'Stop all sounds', 'Parar os sons', 'Arrêter les sons'),
+    d: L('Corta lo que esté sonando, incluida la música.', 'Stops everything that is playing, music included.', 'Corta o que estiver tocando, inclusive a música.', 'Coupe tout ce qui joue, musique comprise.')
+  },
+  {
+    id: 'set_volume', cat: 'sound', icon: 'volume', def: 100, w: 44, num: 1,
+    n: L('Fijar volumen en {v} %', 'Set volume to {v} %', 'Definir volume em {v} %', 'Mettre le volume à {v} %'),
+    d: L('Deja el volumen en ese porcentaje (0 a 100). Se guarda con el proyecto.', 'Sets the volume to that percentage (0 to 100). It is saved with the project.', 'Deixa o volume nessa porcentagem (0 a 100). Fica salvo com o projeto.', 'Met le volume à ce pourcentage (0 à 100). Il est enregistré avec le projet.')
+  },
+  {
+    id: 'change_volume', cat: 'sound', icon: 'volume', def: -10, w: 44, num: 1,
+    n: L('Cambiar volumen en {v}', 'Change volume by {v}', 'Mudar volume em {v}', 'Changer le volume de {v}'),
+    d: L('Sube o baja el volumen esa cantidad. Con números negativos baja.', 'Raises or lowers the volume by that amount. Negative numbers lower it.', 'Aumenta ou abaixa o volume nessa quantidade. Com números negativos abaixa.', 'Monte ou baisse le volume de ce montant. Les nombres négatifs le baissent.')
   },
   {
     id: 'when_flag', cat: 'event', icon: 'flag', hat: 1,
@@ -591,6 +653,7 @@ const UI_EXTRA = {
     costumeAdded: 'Disfraces agregados',
     costumeDefault: 'Disfraz',
     costumeMissing: 'Ese disfraz ya no existe',
+    soundMissing: 'Ese sonido ya no existe',
     importSprite: 'Importar mis imágenes…',
     shareDesc: 'Copiá este link y mandalo por WhatsApp. El proyecto entero, con sus disfraces, viaja adentro del link.',
     shareTooLong: 'El link quedó muy largo: algunos chats lo cortan. Probá con menos imágenes.',
@@ -664,6 +727,7 @@ const UI_EXTRA = {
     costumeAdded: 'Costumes added',
     costumeDefault: 'Costume',
     costumeMissing: 'That costume no longer exists',
+    soundMissing: 'That sound no longer exists',
     importSprite: 'Import my images…',
     shareDesc: 'Copy this link and send it on WhatsApp. The whole project, costumes included, travels inside the link.',
     shareTooLong: 'This link is very long: some chat apps may cut it. Try fewer images.',
@@ -737,6 +801,7 @@ const UI_EXTRA = {
     costumeAdded: 'Trajes adicionados',
     costumeDefault: 'Traje',
     costumeMissing: 'Esse traje não existe mais',
+    soundMissing: 'Esse som não existe mais',
     importSprite: 'Importar minhas imagens…',
     shareDesc: 'Copie este link e envie no WhatsApp. O projeto inteiro, com os trajes, vai dentro do link.',
     shareTooLong: 'O link ficou muito longo: alguns apps podem cortá-lo. Tente menos imagens.',
@@ -810,6 +875,7 @@ const UI_EXTRA = {
     costumeAdded: 'Costumes ajoutés',
     costumeDefault: 'Costume',
     costumeMissing: 'Ce costume n’existe plus',
+    soundMissing: 'Ce son n’existe plus',
     importSprite: 'Importer mes images…',
     shareDesc: 'Copiez ce lien et envoyez-le sur WhatsApp. Tout le projet, costumes compris, voyage dans le lien.',
     shareTooLong: 'Le lien est très long : certaines applis le coupent. Essayez avec moins d’images.',

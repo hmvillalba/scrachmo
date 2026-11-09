@@ -28,8 +28,8 @@ window.addEventListener('load', function () {
       check('bloque_en_byid', !!def && def.id === 'go_xy');
       check('bloque_activo', !!def && !def.legacy && PALETTE_BLOCKS.indexOf(def) > -1);
       check('bloque_en_movimiento', !!def && def.cat === 'motion' && def.num === 1);
-      check('paleta_44', PALETTE_BLOCKS.length === 44);
-      check('badge_44', $('#blocksCount').textContent === '44');
+      check('paleta_49', PALETTE_BLOCKS.length === 49);
+      check('badge_49', $('#blocksCount').textContent === '49');
       check('categoria_motion_7', PALETTE_BLOCKS.filter(b => b.cat === 'motion').length === 7);
       check('textos_4_idiomas', ['es', 'en', 'pt', 'fr'].every(l =>
         typeof def.n[l] === 'string' && def.n[l].length > 0 &&

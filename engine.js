@@ -36,6 +36,14 @@ let paletteDrag = null;
 let spriteDrag = null;
 let lastPaletteDragAt = 0;
 let audioCtx = null;
+/* Volumen del proyecto, 0 a 100. Lo cambian los bloques de sonido y se guarda
+   con el proyecto, así un juego puede venir ya con la música más baja. */
+let volume = 100;
+/* Música en bucle: guardamos el temporizador y la melodía para poder cortarla
+   desde «detener los sonidos», desde Detener y al cambiar de melodía. */
+let musicTimer = null;
+let musicId = '';
+const liveNodes = new Set();
 let gameScrollY = 0;
 let suppressStageClick = false;
 let toastTimer = null;
@@ -544,8 +552,12 @@ function applyPayloadInner(payload) {
      la posición inicial de una corrida anterior. */
   runtimeSnapshot = null;
   updateResetButton();
+  /* Tampoco arrastra la música del proyecto anterior. */
+  stopAllSounds();
   score = clamp(num(payload.score, 0), -1000000, 1000000);
   multiOn = !!payload.multiOn;
+  volume = clamp(Math.round(num(payload.volume, 100)), 0, 100);
+  applyVolume();
 
   if (payload && Array.isArray(payload.sprites)) {
     sprites = normalizeSprites(payload.sprites);
@@ -592,6 +604,9 @@ function resetProjectData(withCode) {
   showScore = false;
   score = 0;
   multiOn = false;
+  volume = 100;
+  applyVolume();
+  stopAllSounds();
   isRunning = false;
   runActive = false;
   runtimeSnapshot = null;
@@ -679,6 +694,7 @@ function serializeProject() {
     showScore: showScore,
     score: score,
     multiOn: multiOn,
+    volume: volume,
     selected: selectedSpriteId
   };
 }
@@ -1987,8 +2003,33 @@ function blockContent(node, def, t) {
         const c = list[findCostumeIndex(s, cur)];
         shown = c ? c.name : (UI[lang].costumeDefault + ' 1');
       }
+      if (def.pick) shown = pickLabel(def.pick, cur);
       val.textContent = shown;
       field = val;
+    } else if (def.pick) {
+      const sel = document.createElement('select');
+      sel.className = 'sb-input sb-select';
+      sel.dataset.input = node.id;
+      sel.style.maxWidth = (def.w || 104) + 'px';
+      sel.setAttribute('aria-label', aria);
+      let found = false;
+      pickList(def.pick).forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.name[lang] || item.name.es;
+        if (item.id === cur) { opt.selected = true; found = true; }
+        sel.appendChild(opt);
+      });
+      /* Un id que ya no existe (proyecto viejo o editado a mano) no rompe el
+         bloque: se muestra como opción suelta y el guion no hace nada. */
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        opt.textContent = UI[lang].soundMissing;
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+      field = sel;
     } else if (def.costume) {
       const sel = document.createElement('select');
       sel.className = 'sb-input sb-select';
@@ -2310,6 +2351,18 @@ function previewNode(def) {
 
 /* Nombre accesible de la paleta: rellena todos los huecos con los valores
    por defecto (un bloque de dos campos usa def "x,y"). */
+/* Listas de nombres que se eligen con un <select>: sonidos y melodías.
+   El bloque guarda el id (estable) y se muestra el nombre del idioma. */
+function pickList(kind) {
+  return kind === 'melodies' ? MELODY_LIB : SOUND_LIB;
+}
+
+function pickLabel(kind, id) {
+  const item = pickList(kind).find(x => x.id === id);
+  if (item) return item.name[lang] || item.name.es;
+  return UI[lang].soundMissing || String(id);
+}
+
 function blockPlainName(def) {
   const label = def.n[lang] || def.n.es;
   const defs = String(def.def !== undefined ? def.def : '').split(',');
@@ -2317,7 +2370,9 @@ function blockPlainName(def) {
   return label.replace(/\{(?:v|x|y)\}/g, () => {
     const value = defs.length > 1 ? defs[i] : defs[0];
     i++;
-    return value === undefined ? '' : value;
+    if (value === undefined) return '';
+    /* En un bloque de sonido el valor guardado es un id: se lee el nombre. */
+    return def.pick ? pickLabel(def.pick, value) : value;
   });
 }
 
@@ -3136,27 +3191,141 @@ function applyVar(node) {
   variables[name] = Number(variables[name] || 0) + (node.type === 'add_var' ? amount : -amount);
 }
 
-/* ---------------- audio / stage bg ---------------- */
-function beep(freq, dur, type, sweep) {
+/* ---------------- audio / stage bg ----------------
+   Sonidos y melodías se sintetizan con WebAudio: no hay archivos. El volumen
+   del proyecto (0-100) se aplica en un nodo maestro, así un cambio se escucha
+   al instante incluso en una melodía que ya está sonando. */
+let masterGain = null;
+
+function volumeGain() {
+  return clamp(num(volume, 100), 0, 100) / 100 * 0.22;
+}
+
+function audioEngine() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+    if (!AC) return null;
     if (!audioCtx) audioCtx = new AC();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const t0 = audioCtx.currentTime;
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = type || 'sine';
-    o.frequency.setValueAtTime(freq, t0);
-    if (sweep) o.frequency.linearRampToValueAtTime(sweep, t0 + dur);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.22, t0 + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g);
-    g.connect(audioCtx.destination);
-    o.start(t0);
-    o.stop(t0 + dur + 0.02);
-  } catch (e) { }
+    if (!masterGain) {
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = volumeGain();
+      masterGain.connect(audioCtx.destination);
+    }
+    return audioCtx;
+  } catch (e) { return null; }
+}
+
+function applyVolume() {
+  if (!masterGain) return;
+  try { masterGain.gain.value = volumeGain(); } catch (e) { }
+}
+
+function track(node) {
+  liveNodes.add(node);
+  try { node.onended = () => liveNodes.delete(node); } catch (e) { }
+}
+
+/* Un paso de una receta: [frecuencia, duración, forma, barrido] o
+   ['noise', duración, corte del filtro]. Devuelve lo que dura, para poder
+   encadenar los pasos. */
+function playStep(step, at, scale) {
+  const ctx = audioEngine();
+  if (!ctx) return 0;
+  const dur = Math.max(0.02, num(step[1], 0.12));
+  const freq = step[0] === 'noise' ? -1 : num(step[0], 0);
+  if (freq === 0) return dur; /* silencio: no hace falta gastar nodos */
+  const gain = ctx.createGain();
+  const peak = Math.max(0.0001, (scale === undefined ? 1 : scale));
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(peak, at + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  gain.connect(masterGain);
+  if (freq < 0) {
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = num(step[2], 1200);
+    src.connect(lp);
+    lp.connect(gain);
+    src.start(at);
+    src.stop(at + dur);
+    track(src);
+    return dur;
+  }
+  const o = ctx.createOscillator();
+  o.type = step[2] || 'sine';
+  o.frequency.setValueAtTime(freq, at);
+  if (step[3]) o.frequency.linearRampToValueAtTime(num(step[3], freq), at + dur);
+  o.connect(gain);
+  o.start(at);
+  o.stop(at + dur + 0.02);
+  track(o);
+  return dur;
+}
+
+function beep(freq, dur, type, sweep) {
+  const ctx = audioEngine();
+  if (!ctx) return;
+  playStep([freq, dur, type, sweep], ctx.currentTime);
+}
+
+function playSoundById(id) {
+  const def = SOUNDMAP[id];
+  if (!def) return false;
+  const ctx = audioEngine();
+  if (!ctx) return false;
+  let at = ctx.currentTime;
+  def.steps.forEach(step => { at += playStep(step, at); });
+  return true;
+}
+
+/* Melodía en bucle: programa una pasada y se vuelve a llamar cuando termina.
+   Cambiar de melodía o detener los sonidos corta el bucle. */
+function playMelodyById(id) {
+  const def = MELODYMAP[id];
+  if (!def) return false;
+  stopMusic();
+  const ctx = audioEngine();
+  if (!ctx) return false;
+  musicId = id;
+  const pass = () => {
+    if (musicId !== id) return;
+    const c = audioEngine();
+    if (!c) return;
+    let at = c.currentTime + 0.02;
+    let total = 0;
+    def.steps.forEach(step => { total += playStep(step, at + total, 0.75); });
+    musicTimer = setTimeout(pass, Math.max(80, total * 1000));
+  };
+  pass();
+  return true;
+}
+
+function stopMusic() {
+  musicId = '';
+  if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+}
+
+function stopAllSounds() {
+  stopMusic();
+  liveNodes.forEach(n => { try { n.stop(0); } catch (e) { } });
+  liveNodes.clear();
+}
+
+function setVolume(v) {
+  volume = clamp(Math.round(num(v, volume)), 0, 100);
+  applyVolume();
+  return volume;
+}
+
+function changeVolume(delta) {
+  return setVolume(volume + num(delta, 0));
 }
 
 function changeBg() {
@@ -3289,12 +3458,34 @@ async function execBlock(node, sprite) {
       await sleep(Math.max(0, num(v, 1)) * 1000);
       return;
     case 'meow':
-      beep(560, 0.3, 'sine', 760);
+      playSoundById('meow');
       await sleep(380);
       return;
     case 'pop':
-      beep(1180, 0.07, 'triangle');
+      playSoundById('pop');
       await sleep(200);
+      return;
+    case 'play_sound':
+      /* El sonido no bloquea el guion, igual que en Scratch: para esperarlo
+         se pone «esperar» debajo. El nombre es un id del catálogo. */
+      playSoundById(String(v).trim());
+      await sleep(120);
+      return;
+    case 'play_music':
+      playMelodyById(String(v).trim());
+      await sleep(120);
+      return;
+    case 'stop_sounds':
+      stopAllSounds();
+      await sleep(80);
+      return;
+    case 'set_volume':
+      setVolume(v);
+      await sleep(80);
+      return;
+    case 'change_volume':
+      changeVolume(v);
+      await sleep(80);
       return;
     case 'vibrate':
       if (navigator.vibrate) navigator.vibrate(clamp(Math.round(num(v, 200)), 20, 2000));
@@ -3648,6 +3839,9 @@ function stopCode() {
   runThreads.forEach(t => { t.cancelled = true; });
   finishRun();
   runThreads.clear();
+  /* Detener es también silencio: si no, una música en bucle seguiría sonando
+     para siempre porque nadie más la corta. */
+  stopAllSounds();
   /* Un «crear variable» puede haber abierto un diálogo en medio de un guion:
      al detener, lo cerramos para que el hilo no quede esperando para siempre. */
   if (wasRunning && askResolver) closeAsk(null);

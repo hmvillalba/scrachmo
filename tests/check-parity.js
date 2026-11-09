@@ -68,6 +68,16 @@ if (!/function\s+touchingEdge\s*\(/.test(engine)) { ok = false; console.log('FAI
 if (!/function\s+touchingOther\s*\(/.test(engine)) { ok = false; console.log('FAIL falta touchingOther()'); }
 if (!/function\s+bounceSprite\s*\(/.test(engine)) { ok = false; console.log('FAIL falta bounceSprite()'); }
 if (!/timerStart\s*=\s*Date\.now\(\)/.test(engine)) { ok = false; console.log('FAIL falta el cronómetro'); }
+/* Audio: la síntesis y, sobre todo, que Detener corte la música. Si alguien
+   quita ese stopAllSounds(), una melodía en bucle quedaría sonando para
+   siempre y ninguna prueba de navegador lo notaría. */
+if (!/function\s+playSoundById\s*\(/.test(engine)) { ok = false; console.log('FAIL falta playSoundById()'); }
+if (!/function\s+playMelodyById\s*\(/.test(engine)) { ok = false; console.log('FAIL falta playMelodyById()'); }
+if (!/function\s+stopAllSounds\s*\(/.test(engine)) { ok = false; console.log('FAIL falta stopAllSounds()'); }
+if (!/function\s+volumeGain\s*\(/.test(engine)) { ok = false; console.log('FAIL falta volumeGain()'); }
+if (!/function\s+stopCode\s*\([\s\S]{0,500}?stopAllSounds\(\)/.test(engine)) {
+  ok = false; console.log('FAIL stopCode() no corta los sonidos');
+}
 
 /* Un `case` repetido dentro del mismo switch es JavaScript válido y no avisa
    de nada: el segundo queda muerto y el bloque sigue haciendo lo viejo. Pasó

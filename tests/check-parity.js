@@ -132,6 +132,30 @@ if (!/@media\(min-width:900px\)/.test(html) || !/body:not\(\.game-mode\) main/.t
   ok = false; console.log('FAIL el layout ancho falta o no excluye el modo juego');
 }
 
+/* Los bloques se apilan con z-index desde 6000 (assignZ()): si el área de
+   código no aísla su contexto, se dibujan por encima de cualquier modal. */
+if (!/\.scratch-workspace\{[^}]*isolation:isolate/.test(html)) {
+  ok = false; console.log('FAIL el área de código no aísla su contexto de apilamiento');
+}
+
+/* Modal «Acerca de»: el botón, el modal y las piezas que lo abren y cierran. */
+if (!/id="aboutBtn"/.test(html) || !/id="aboutModal"/.test(html)) {
+  ok = false; console.log('FAIL faltan el botón o el modal «Acerca de»');
+}
+['openAbout', 'closeAbout', 'bindAbout'].forEach(fn => {
+  if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+    ok = false; console.log('FAIL falta ' + fn + '() del modal «Acerca de»');
+  }
+});
+if (!/^\s*bindAbout\(\);/m.test(engine)) { ok = false; console.log('FAIL bindAbout() no se llama'); }
+/* `anyOpen` es lo que bloquea el scroll: si el modal no está ahí, se abre
+   pero la página de atrás se sigue moviendo. Se mira sólo esa declaración,
+   porque `about` aparece también en las funciones de al lado. */
+const anyOpenDecl = /const anyOpen[\s\S]{0,600}?;/.exec(engine);
+if (!anyOpenDecl || !/about/.test(anyOpenDecl[0])) {
+  ok = false; console.log('FAIL updateModalLock() no tiene en cuenta el modal «Acerca de»');
+}
+
 /* Un `case` repetido dentro del mismo switch es JavaScript válido y no avisa
    de nada: el segundo queda muerto y el bloque sigue haciendo lo viejo. Pasó
    al agregar `rebotar` encima de una versión anterior que quedó olvidada. */

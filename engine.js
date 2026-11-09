@@ -1103,6 +1103,40 @@ function bindProjects() {
   });
 }
 
+/* ---------------- acerca de ----------------
+   Mismos datos que el resto de los proyectos del autor, traducidos a los
+   cuatro idiomas. Es informativo: no toca el proyecto ni el guardado. */
+function openAbout() {
+  const modal = $('#aboutModal');
+  if (!modal) return;
+  modal.hidden = false;
+  updateModalLock();
+}
+
+function closeAbout() {
+  const modal = $('#aboutModal');
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  updateModalLock();
+}
+
+function bindAbout() {
+  const open = $('#aboutBtn');
+  if (open) open.addEventListener('click', openAbout);
+  const close = $('#aboutClose');
+  if (close) close.addEventListener('click', closeAbout);
+
+  const modal = $('#aboutModal');
+  if (!modal) return;
+  /* Tocar el fondo cierra; tocar la tarjeta o los enlaces, no. */
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeAbout();
+  });
+  document.addEventListener('keydown', e => {
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeAbout(); }
+  });
+}
+
 /* ---------------- basic UI ---------------- */
 function toast(msg) {
   const el = $('#toast');
@@ -1374,8 +1408,10 @@ function updateModalLock() {
   const ask = $('#askModal');
   const rep = $('#repPicker');
   const proj = $('#projModal');
+  const about = $('#aboutModal');
   const anyOpen = !$('#shareModal').hidden || !$('#spriteModal').hidden ||
-    !!(ask && !ask.hidden) || !!(rep && !rep.hidden) || !!(proj && !proj.hidden);
+    !!(ask && !ask.hidden) || !!(rep && !rep.hidden) || !!(proj && !proj.hidden) ||
+    !!(about && !about.hidden);
   document.body.classList.toggle('modal-open', anyOpen);
 }
 
@@ -4906,6 +4942,7 @@ function bindEvents() {
   bindAskModal();
   bindRepPicker();
   bindProjects();
+  bindAbout();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {
       lang = btn.dataset.lang;

@@ -723,7 +723,17 @@ const UI_EXTRA = {
     projectDuplicated: 'Proyecto duplicado',
     onlyOneProject: 'Tiene que quedar al menos un proyecto',
     projectLimit: 'Llegaste al máximo de 24 proyectos: borrá alguno',
-    projectsEmpty: 'Todavía no hay proyectos'
+    projectsEmpty: 'Todavía no hay proyectos',
+    aboutBtn: 'Acerca de ScrachMo',
+    aboutTitle: 'Acerca de ScrachMo',
+    aboutSub: 'Programación visual para el celular',
+    aboutAuthor: 'Autor',
+    aboutLicense: 'Licencia',
+    aboutSite: 'Sitio web',
+    aboutDesc: 'Entorno de programación por bloques inspirado en Scratch, pensado para pantallas verticales. Sin frameworks, sin dependencias y sin instalar nada.',
+    aboutThanks: 'Si te gusta ScrachMo, queda a tu criterio una mención o una donación para el autor.',
+    aboutCoffee: 'Invitame un cafecito',
+    aboutKofi: 'Apoyar en Ko-fi'
   },
   en: {
     spriteSearch: 'Search characters…',
@@ -797,7 +807,17 @@ const UI_EXTRA = {
     projectDuplicated: 'Project duplicated',
     onlyOneProject: 'At least one project has to stay',
     projectLimit: 'You reached the 24-project limit: delete one first',
-    projectsEmpty: 'No projects yet'
+    projectsEmpty: 'No projects yet',
+    aboutBtn: 'About ScrachMo',
+    aboutTitle: 'About ScrachMo',
+    aboutSub: 'Visual programming for your phone',
+    aboutAuthor: 'Author',
+    aboutLicense: 'License',
+    aboutSite: 'Website',
+    aboutDesc: 'Block-based programming environment inspired by Scratch, built for vertical screens. No frameworks, no dependencies, nothing to install.',
+    aboutThanks: 'If you enjoy ScrachMo, a mention or a donation to the author is entirely up to you.',
+    aboutCoffee: 'Buy me a coffee',
+    aboutKofi: 'Support on Ko-fi'
   },
   pt: {
     spriteSearch: 'Buscar personagem…',
@@ -871,7 +891,17 @@ const UI_EXTRA = {
     projectDuplicated: 'Projeto duplicado',
     onlyOneProject: 'Precisa ficar pelo menos um projeto',
     projectLimit: 'Você chegou ao máximo de 24 projetos: exclua algum',
-    projectsEmpty: 'Ainda não há projetos'
+    projectsEmpty: 'Ainda não há projetos',
+    aboutBtn: 'Sobre o ScrachMo',
+    aboutTitle: 'Sobre o ScrachMo',
+    aboutSub: 'Programação visual para o celular',
+    aboutAuthor: 'Autor',
+    aboutLicense: 'Licença',
+    aboutSite: 'Site',
+    aboutDesc: 'Ambiente de programação por blocos inspirado no Scratch, feito para telas verticais. Sem frameworks, sem dependências e sem instalar nada.',
+    aboutThanks: 'Se você gosta do ScrachMo, fica a seu critério uma menção ou uma doação para o autor.',
+    aboutCoffee: 'Me paga um cafezinho',
+    aboutKofi: 'Apoiar no Ko-fi'
   },
   fr: {
     spriteSearch: 'Chercher un personnage…',
@@ -945,7 +975,17 @@ const UI_EXTRA = {
     projectDuplicated: 'Projet dupliqué',
     onlyOneProject: 'Il doit rester au moins un projet',
     projectLimit: 'Limite de 24 projets atteinte : supprimez-en un',
-    projectsEmpty: 'Aucun projet pour le moment'
+    projectsEmpty: 'Aucun projet pour le moment',
+    aboutBtn: 'À propos de ScrachMo',
+    aboutTitle: 'À propos de ScrachMo',
+    aboutSub: 'Programmation visuelle pour le téléphone',
+    aboutAuthor: 'Auteur',
+    aboutLicense: 'Licence',
+    aboutSite: 'Site web',
+    aboutDesc: 'Environnement de programmation par blocs inspiré de Scratch, pensé pour les écrans verticaux. Sans frameworks, sans dépendances et sans rien installer.',
+    aboutThanks: "Si ScrachMo vous plaît, une mention ou un don à l'auteur reste à votre discrétion.",
+    aboutCoffee: 'Offrez-moi un café',
+    aboutKofi: 'Soutenir sur Ko-fi'
   }
 };
 Object.keys(UI_EXTRA).forEach(k => Object.assign(UI[k], UI_EXTRA[k]));

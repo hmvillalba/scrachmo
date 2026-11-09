@@ -62,9 +62,33 @@ if (!/function\s+nodeVal\s*\(/.test(engine)) { ok = false; console.log('FAIL fal
 if (!/function\s+evalReporter\s*\(/.test(engine)) { ok = false; console.log('FAIL falta evalReporter()'); }
 if (!/function\s+bindRepPicker\s*\(/.test(engine)) { ok = false; console.log('FAIL falta el selector de reporteros'); }
 
+/* Workflows: un valor sin comillas que contenga «: » rompe el YAML entero y
+   GitHub corre el archivo con el nombre del path, sin ejecutar ni un paso.
+   Pasó una vez con «name: PWA: …» y no avisó en ningún lado. */
+const wfDir = path.join(SRC, '.github', 'workflows');
+let wfCount = 0;
+if (fs.existsSync(wfDir)) {
+  for (const f of fs.readdirSync(wfDir).filter(n => /\.ya?ml$/.test(n))) {
+    wfCount++;
+    const src = fs.readFileSync(path.join(wfDir, f), 'utf8');
+    if (!/^jobs:/m.test(src)) { ok = false; console.log('FAIL workflow ' + f + ': falta jobs:'); }
+    src.split(/\r?\n/).forEach((line, i) => {
+      const m = /^\s*(?:-\s*)?name:\s*(.+)$/.exec(line);
+      if (!m) return;
+      const value = m[1].trim();
+      if (/^['"]/.test(value)) return;
+      if (/: /.test(value)) {
+        ok = false;
+        console.log('FAIL workflow ' + f + ':' + (i + 1) + ' → «' + value + '» tiene «: » sin comillas');
+      }
+    });
+  }
+}
+
 console.log((ok ? 'OK' : 'FALLO') + ' | claves UI=' + base.length +
   ' | UI_EXTRA=' + exBase.length + ' | data-t=' + tKeys.length +
   ' | data-tt=' + ttKeys.length + ' | bloques=' + ctx.PB.length +
+  ' | workflows=' + wfCount +
   ' | sin eval/Function=' + (!/\b(?:new\s+)?Function\s*\(/.test(engine)) +
   ' | sin prompt/confirm=' + (nativeCalls.length === 0));
 process.exit(ok ? 0 : 1);

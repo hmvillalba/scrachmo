@@ -34,10 +34,10 @@ jobs:
       - name: Paridad de textos y comprobaciones estáticas
         run: node tests/check-parity.js
 
-      - name: PWA: manifest, iconos y rutas servidas
+      - name: "PWA: manifest, iconos y rutas servidas"
         run: node tests/pwa-check.js
 
-      - name: PWA: lógica del service worker
+      - name: "PWA: lógica del service worker"
         run: node tests/pwa-sw.js
 
       - name: Localizar Chrome

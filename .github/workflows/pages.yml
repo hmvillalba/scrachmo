@@ -2,6 +2,8 @@ name: Publicar
 
 # Publica la app como sitio estático en GitHub Pages.
 # Requiere una sola cosa en el repo: Settings → Pages → Source: "GitHub Actions".
+# Mientras no esté habilitado, el workflow termina en verde con un aviso: no
+# tiene sentido marcar en rojo cada push por una configuración manual.
 
 on:
   push:
@@ -20,10 +22,30 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.pages.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: "¿Pages está habilitado?"
+        id: pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/pages")
+          echo "respuesta de la API: $code"
+          if [ "$code" = "200" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages todavía no está habilitado. Entrá a Settings → Pages → Source: GitHub Actions y volvé a correr este workflow."
+          fi
+
       - name: Preparar el sitio
+        if: steps.pages.outputs.ready == 'true'
         run: |
           # Sólo lo que la app necesita: ni tests, ni notas, ni capturas.
           mkdir -p _site/icons
@@ -33,13 +55,16 @@ jobs:
           ls -R _site
 
       - uses: actions/configure-pages@v5
+        if: steps.pages.outputs.ready == 'true'
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.ready == 'true'
         with:
           path: _site
 
   deploy:
     needs: build
+    if: needs.build.outputs.ready == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

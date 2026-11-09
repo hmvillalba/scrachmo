@@ -4909,9 +4909,35 @@ async function clearProject() {
   toast(UI[lang].cleared);
 }
 
+/* ---------------- modo juego: aviso de girar ----------------
+   El campo del juego es 4:3 y en modo juego se dibuja centrado, con franjas
+   alrededor. En un teléfono parado eso deja el escenario como una franja
+   horizontal, así que ahí —y sólo ahí— se ofrece girar el aparato. No se usa
+   `screen.orientation.lock()`: no funciona en iOS y exige pantalla completa. */
+const mqPortrait = (typeof window.matchMedia === 'function')
+  ? window.matchMedia('(orientation: portrait)')
+  : null;
+
+function syncGameOrientation() {
+  const portrait = !!mqPortrait && mqPortrait.matches;
+  document.body.classList.toggle('game-portrait', portrait && document.body.classList.contains('game-mode'));
+}
+
+function bindGameOrientation() {
+  const hint = $('#rotateHint');
+  const close = $('#rotateClose');
+  if (hint && close) close.addEventListener('click', () => hint.classList.add('is-off'));
+  if (!mqPortrait) return;
+  if (mqPortrait.addEventListener) mqPortrait.addEventListener('change', syncGameOrientation);
+  else if (mqPortrait.addListener) mqPortrait.addListener(syncGameOrientation);
+}
+
 function enterGame() {
   gameScrollY = window.scrollY || 0;
   document.body.classList.add('game-mode');
+  const hint = $('#rotateHint');
+  if (hint) hint.classList.remove('is-off');
+  syncGameOrientation();
   window.scrollTo(0, 0);
   runAll();
 }
@@ -4919,6 +4945,7 @@ function enterGame() {
 function exitGame() {
   stopCode();
   document.body.classList.remove('game-mode');
+  syncGameOrientation();
   window.scrollTo(0, gameScrollY || 0);
 }
 
@@ -4943,6 +4970,7 @@ function bindEvents() {
   bindRepPicker();
   bindProjects();
   bindAbout();
+  bindGameOrientation();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {
       lang = btn.dataset.lang;

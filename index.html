@@ -566,15 +566,58 @@ body.game-mode .stage-top,
 body.game-mode .stage-actions,
 body.game-mode .stage-bottom,
 body.game-mode .stage-hint{display:none}
-body.game-mode .app{max-width:none;min-height:100dvh;background:#dbeafe;box-shadow:none;padding:0}
-body.game-mode main{padding:0;margin:0;gap:0}
-body.game-mode #stageCard{padding:0;margin:0;border:0;border-radius:0;box-shadow:none;background:transparent}
-body.game-mode .stage{height:100dvh;border-radius:0;box-shadow:none}
+body.game-mode .app{max-width:none;min-height:100dvh;background:#0b1220;box-shadow:none;padding:0}
+body.game-mode main{
+  padding:0;margin:0;gap:0;
+  height:100dvh;display:flex;align-items:center;justify-content:center;
+}
+/* `width:auto` para que la tarjeta mida lo mismo que el campo: si se queda en el
+   100% de `.card`, en vertical la tarjeta es más ancha que el escenario y el
+   campo queda pegado a la izquierda en vez de centrado. */
+body.game-mode #stageCard{
+  width:auto;padding:0;margin:0;border:0;border-radius:0;
+  box-shadow:none;background:transparent;
+}
+/* El campo conserva el 4:3 del juego: el rectángulo más grande que entre,
+   centrado, con franjas oscuras alrededor. Antes era `height:100dvh` y el
+   escenario se estiraba a lo que midiera la pantalla: en un teléfono parado,
+   100 pasos hacia arriba se veían 2,15x más que 100 a la derecha, y como los
+   choques se calculan en unidades, lo que se veía y lo que tocaba no coincidía. */
+body.game-mode .stage{
+  width:min(100vw, calc(100dvh * 4 / 3));
+  height:auto;aspect-ratio:4 / 3;max-height:100dvh;
+  border-radius:0;box-shadow:none;
+}
 body.game-mode .exit-game{display:flex}
 body.game-mode .sprite{font-size:clamp(64px,22vw,110px)}
 body.game-mode .stage-hud{top:calc(12px + env(safe-area-inset-top))}
 body.game-mode .exit-game{top:calc(12px + env(safe-area-inset-top))}
 body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
+
+/* Aviso de girar: sólo en modo juego y con la pantalla en vertical, que es
+   donde el campo 4:3 queda como una franja y girar casi duplica el área. */
+.rotate-hint{display:none}
+body.game-mode.game-portrait .rotate-hint:not(.is-off){
+  display:flex;align-items:center;gap:8px;
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;
+  /* `width:max-content`: con `left:50%` el ancho disponible es media pantalla
+     y el texto se partía en dos líneas. El `max-width` sigue mandando en
+     pantallas angostas. */
+  width:max-content;max-width:calc(100vw - 28px);
+  padding:7px 7px 7px 12px;border-radius:999px;
+  background:rgba(15,23,42,.88);color:#e2e8f0;
+  font-size:12px;font-weight:800;line-height:1.25;
+  box-shadow:0 12px 26px -14px rgba(15,23,42,.9);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+.rotate-hint .ic{width:16px;height:16px;flex:none;color:#93c5fd}
+.rotate-close{
+  width:26px;height:26px;flex:none;border:0;border-radius:999px;cursor:pointer;
+  background:rgba(255,255,255,.14);color:#e2e8f0;display:grid;place-items:center;
+  padding:0;
+}
+.rotate-close .ic{width:13px;height:13px;color:inherit}
 
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.35)}}
 @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
@@ -1513,6 +1556,18 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--stage-zoom,1));bottom:
       <button type="button" class="m-btn primary" id="aboutClose"><span data-t="accept">Aceptar</span></button>
     </div>
   </div>
+</div>
+
+<!-- Aviso de girar: no es un `.modal` porque no bloquea nada. Sólo se ve en
+     modo juego con la pantalla en vertical (ver `body.game-mode.game-portrait`),
+     que es donde el campo 4:3 queda como una franja y girar casi duplica el
+     área. `#rotateClose` le pone `is-off` y no vuelve hasta el próximo juego. -->
+<div class="rotate-hint" id="rotateHint">
+  <svg class="ic" aria-hidden="true"><use href="#i-rotate"></use></svg>
+  <span data-t="rotateHint">Girá el teléfono para verlo más grande</span>
+  <button type="button" class="rotate-close" id="rotateClose" data-tt="rotateHintClose" aria-label="Ocultar el aviso">
+    <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
+  </button>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

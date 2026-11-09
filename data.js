@@ -733,7 +733,9 @@ const UI_EXTRA = {
     aboutDesc: 'Entorno de programación por bloques inspirado en Scratch, pensado para pantallas verticales. Sin frameworks, sin dependencias y sin instalar nada.',
     aboutThanks: 'Si te gusta ScrachMo, queda a tu criterio una mención o una donación para el autor.',
     aboutCoffee: 'Invitame un cafecito',
-    aboutKofi: 'Apoyar en Ko-fi'
+    aboutKofi: 'Apoyar en Ko-fi',
+    rotateHint: 'Girá el teléfono para verlo más grande',
+    rotateHintClose: 'Ocultar el aviso'
   },
   en: {
     spriteSearch: 'Search characters…',
@@ -817,7 +819,9 @@ const UI_EXTRA = {
     aboutDesc: 'Block-based programming environment inspired by Scratch, built for vertical screens. No frameworks, no dependencies, nothing to install.',
     aboutThanks: 'If you enjoy ScrachMo, a mention or a donation to the author is entirely up to you.',
     aboutCoffee: 'Buy me a coffee',
-    aboutKofi: 'Support on Ko-fi'
+    aboutKofi: 'Support on Ko-fi',
+    rotateHint: 'Turn your phone to see it bigger',
+    rotateHintClose: 'Hide this notice'
   },
   pt: {
     spriteSearch: 'Buscar personagem…',
@@ -901,7 +905,9 @@ const UI_EXTRA = {
     aboutDesc: 'Ambiente de programação por blocos inspirado no Scratch, feito para telas verticais. Sem frameworks, sem dependências e sem instalar nada.',
     aboutThanks: 'Se você gosta do ScrachMo, fica a seu critério uma menção ou uma doação para o autor.',
     aboutCoffee: 'Me paga um cafezinho',
-    aboutKofi: 'Apoiar no Ko-fi'
+    aboutKofi: 'Apoiar no Ko-fi',
+    rotateHint: 'Gire o celular para ver maior',
+    rotateHintClose: 'Ocultar o aviso'
   },
   fr: {
     spriteSearch: 'Chercher un personnage…',
@@ -985,7 +991,9 @@ const UI_EXTRA = {
     aboutDesc: 'Environnement de programmation par blocs inspiré de Scratch, pensé pour les écrans verticaux. Sans frameworks, sans dépendances et sans rien installer.',
     aboutThanks: "Si ScrachMo vous plaît, une mention ou un don à l'auteur reste à votre discrétion.",
     aboutCoffee: 'Offrez-moi un café',
-    aboutKofi: 'Soutenir sur Ko-fi'
+    aboutKofi: 'Soutenir sur Ko-fi',
+    rotateHint: 'Tournez le téléphone pour agrandir',
+    rotateHintClose: 'Masquer ce message'
   }
 };
 Object.keys(UI_EXTRA).forEach(k => Object.assign(UI[k], UI_EXTRA[k]));

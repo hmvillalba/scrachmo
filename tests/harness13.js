@@ -66,6 +66,9 @@ window.addEventListener('load', function () {
       check('juego_oculta_personajes', css($('#spritesCard'), 'display') === 'none');
       check('juego_muestra_escenario', css($('#stageCard'), 'display') !== 'none');
       const juegoStage = box('stageCard').height;
+      /* La ventana de las pruebas mide 800x600, que ya es 4:3, así que el campo
+         entra justo y la tarjeta mide lo mismo que la pantalla. Con otra
+         proporción el campo dejaría franjas a los lados (ver harness16). */
       check('juego_escenario_completo', Math.abs(juegoStage - window.innerHeight) < 3);
       check('juego_sin_margenes', css($('main'), 'padding') === '0px' || css($('main'), 'padding') === '0px 0px 0px 0px');
 

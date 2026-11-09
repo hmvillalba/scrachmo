@@ -9,6 +9,9 @@ const vm = require('vm');
 
 const SRC = path.resolve(__dirname, '..');
 const code = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
+/* La versión se lee del propio `sw.js`: si se sube a mano, la prueba la sigue
+   en vez de exigir un nombre fijo y quedar desactualizada en silencio. */
+const VERSION = (/const VERSION = '([^']+)'/.exec(code) || [])[1] || 'scrachmo-v1';
 const ORIGIN = 'https://ejemplo.test';
 
 const problems = [];
@@ -113,7 +116,7 @@ function request(url, mode) {
      las pestañas viejas. */
   await fire('install', {});
   ok(self._skipWaiting === true, 'install no llama a skipWaiting()');
-  const cache = await caches.open('scrachmo-v1');
+  const cache = await caches.open(VERSION);
   const saved = await cache.keys();
   ok(saved.length >= 8, 'install guardó muy pocos archivos (' + saved.length + ')');
   ['index.html', 'data.js', 'engine.js', 'manifest.webmanifest', 'icons/icon-512.png']
@@ -125,7 +128,7 @@ function request(url, mode) {
   await fire('activate', {});
   ok(self._claimed === true, 'activate no llama a clients.claim()');
   ok((await caches.keys()).indexOf('scrachmo-v0') < 0, 'activate no borró la caché vieja');
-  ok((await caches.keys()).indexOf('scrachmo-v1') >= 0, 'activate borró la caché actual');
+  ok((await caches.keys()).indexOf(VERSION) >= 0, 'activate borró la caché actual');
 
   /* fetch de navegación con ?p=: tiene que salir el shell guardado. */
   const nav = await fire('fetch', { request: request('/?p=g1.abc', 'navigate') });

@@ -156,6 +156,38 @@ if (!anyOpenDecl || !/about/.test(anyOpenDecl[0])) {
   ok = false; console.log('FAIL updateModalLock() no tiene en cuenta el modal «Acerca de»');
 }
 
+/* Modo juego: el campo tiene que conservar el 4:3 del mundo (480x360). Si se
+   estira, 100 pasos verticales se ven más grandes que 100 horizontales aunque
+   los choques se sigan calculando en unidades. */
+if (!/body\.game-mode \.stage\{[^}]*aspect-ratio:4 \/ 3/.test(html)) {
+  ok = false; console.log('FAIL el campo del modo juego no fija la proporción 4:3');
+}
+if (!/body\.game-mode \.stage\{[^}]*width:min\(100vw, calc\(100dvh \* 4 \/ 3\)\)/.test(html)) {
+  ok = false; console.log('FAIL el campo del modo juego no se limita a la pantalla');
+}
+if (!/id="rotateHint"/.test(html) || !/id="rotateClose"/.test(html)) {
+  ok = false; console.log('FAIL faltan el aviso de girar o su botón de cerrar');
+}
+if (!/body\.game-mode\.game-portrait \.rotate-hint/.test(html)) {
+  ok = false; console.log('FAIL el aviso de girar no está atado al modo juego en vertical');
+}
+['syncGameOrientation', 'bindGameOrientation'].forEach(fn => {
+  if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+    ok = false; console.log('FAIL falta ' + fn + '()');
+  }
+});
+if (!/^\s*bindGameOrientation\(\);/m.test(engine)) { ok = false; console.log('FAIL bindGameOrientation() no se llama'); }
+if (!/classList\.toggle\('game-portrait'/.test(engine)) {
+  ok = false; console.log('FAIL nada pone ni saca la clase game-portrait');
+}
+/* `[^}]*` para quedarse dentro del cuerpo de cada función: con una ventana de
+   N caracteres, la llamada de `exitGame()` satisfacía la guarda de `enterGame()`
+   aunque éste no sincronizara nada. */
+if (!/function\s+enterGame\s*\([^)]*\)\s*\{[^}]*syncGameOrientation\(\)/.test(engine) ||
+  !/function\s+exitGame\s*\([^)]*\)\s*\{[^}]*syncGameOrientation\(\)/.test(engine)) {
+  ok = false; console.log('FAIL entrar o salir del juego no sincroniza la orientación');
+}
+
 /* Un `case` repetido dentro del mismo switch es JavaScript válido y no avisa
    de nada: el segundo queda muerto y el bloque sigue haciendo lo viejo. Pasó
    al agregar `rebotar` encima de una versión anterior que quedó olvidada. */

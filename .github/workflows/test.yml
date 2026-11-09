@@ -26,10 +26,11 @@ jobs:
           sudo apt-get install -y -qq fonts-noto-color-emoji fonts-dejavu-core > /dev/null
           fc-list | grep -ci emoji || true
 
-      - name: Sintaxis de los tres archivos activos
+      - name: Sintaxis de los archivos activos
         run: |
           node --check data.js
           node --check engine.js
+          node --check sw.js
 
       - name: Paridad de textos y comprobaciones estáticas
         run: node tests/check-parity.js

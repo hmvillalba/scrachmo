@@ -1,6 +1,7 @@
-name: Publicar
+name: Publicar en GitHub Pages opcional
 
-# Publica la app como sitio estático en GitHub Pages.
+# ALTERNATIVA: la app se publica en https://scrachmo.vercel.app con Vercel.
+# Este workflow queda para quien prefiera GitHub Pages en vez de Vercel.
 # Requiere una sola cosa en el repo: Settings → Pages → Source: "GitHub Actions".
 # Mientras no esté habilitado, el workflow termina en verde con un aviso: no
 # tiene sentido marcar en rojo cada push por una configuración manual.

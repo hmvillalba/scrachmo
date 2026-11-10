@@ -99,7 +99,7 @@ window.addEventListener('load', function () {
     check('bandera_reinicia', runActive === true && runThreads.size === 1);
     stopCode();
 
-    /* --- multijugador se persiste --- */
+    /* --- la opción de mensajes se persiste --- */
     try {
       const was = multiOn;
       document.getElementById('multiBtn').click();

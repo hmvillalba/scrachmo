@@ -1,6 +1,7 @@
-/* Tanda 9: modal «Acerca de». Comprueba que el botón de la barra superior
-   abra el modal, que los datos del autor y los enlaces de apoyo estén, que
-   cierre por los cuatro caminos y que los textos existan en los 4 idiomas. */
+/* Tanda 9: modal «Acerca de», versión visible y aviso de actualización de la
+   PWA. Comprueba que el botón de la barra superior abra el modal, que los
+   datos del autor y los enlaces de apoyo estén, que cierre por los cuatro
+   caminos y que los textos existan en los 4 idiomas. */
 window.addEventListener('load', function () {
   const out = [];
   const check = (name, cond) => out.push((cond ? 'PASS ' : 'FAIL ') + name);
@@ -119,13 +120,15 @@ window.addEventListener('load', function () {
 
       /* ============ 7. los textos en los 4 idiomas ============ */
       const CLAVES = ['aboutBtn', 'aboutTitle', 'aboutSub', 'aboutAuthor', 'aboutLicense',
-        'aboutSite', 'aboutDesc', 'aboutThanks', 'aboutCoffee', 'aboutKofi'];
+        'aboutSite', 'aboutDesc', 'aboutThanks', 'aboutCoffee', 'aboutKofi',
+        'aboutVersion', 'updateMsg', 'updateReload', 'updateClose'];
       check('claves_en_4_idiomas', ['es', 'en', 'pt', 'fr'].every(l =>
         CLAVES.every(k => typeof UI[l][k] === 'string' && UI[l][k].length > 0)));
       /* Que estén no alcanza: las frases tienen que ser distintas en cada
          idioma. Sólo se exige a las de contenido: una etiqueta como «Autor»
          es la misma palabra en español y en portugués, y eso no es un error. */
-      const FRASES = ['aboutTitle', 'aboutSub', 'aboutDesc', 'aboutThanks', 'aboutCoffee', 'aboutKofi'];
+      const FRASES = ['aboutTitle', 'aboutSub', 'aboutDesc', 'aboutThanks',
+        'aboutCoffee', 'aboutKofi', 'updateMsg'];
       check('frases_distintas_por_idioma', FRASES.every(k =>
         UI.en[k] !== UI.es[k] && UI.pt[k] !== UI.es[k] && UI.fr[k] !== UI.es[k]));
 
@@ -140,6 +143,34 @@ window.addEventListener('load', function () {
       render();
       check('vuelve_al_idioma', $('#aboutTitle').textContent === UI[lang].aboutTitle);
       closeAbout();
+
+      /* ============ 8. versión visible y aviso de versión nueva ============ */
+      const bar = $('#updateBar');
+      const valor = $('#aboutVersionValue');
+      const etiqueta = modal.querySelector('[data-t="aboutVersion"]');
+      const recargar = $('#updateReload');
+      const cerrar = $('#updateClose');
+      check('fila_de_version_existe', !!valor);
+      check('version_visible_es_APP_VERSION', !!valor && valor.textContent === APP_VERSION &&
+        $('#footerVersion').textContent === 'ScrachMo ' + APP_VERSION);
+      check('etiqueta_version_traducida', !!etiqueta && etiqueta.textContent === UI[lang].aboutVersion);
+      check('aviso_update_existe', !!bar && !!recargar && !!cerrar);
+      check('aviso_update_arranca_oculto', !!bar && bar.hidden === true);
+      check('aviso_update_traducido', !!bar &&
+        $('#updateMsg').textContent === UI[lang].updateMsg &&
+        recargar.textContent === UI[lang].updateReload &&
+        cerrar.getAttribute('aria-label') === UI[lang].updateClose);
+      check('aviso_update_se_puede_cerrar', (() => {
+        if (!bar || !cerrar) return false;
+        bar.hidden = false;
+        cerrar.click();
+        return bar.hidden === true;
+      })());
+      check('motor_engancha_las_actualizaciones', typeof bindPwaUpdates === 'function' &&
+        typeof showPwaUpdate === 'function');
+      check('claves_update_en_4_idiomas', ['es', 'en', 'pt', 'fr'].every(l =>
+        ['aboutVersion', 'updateMsg', 'updateReload', 'updateClose'].every(k =>
+          typeof UI[l][k] === 'string' && UI[l][k].length > 0)));
 
       check('sin_errores_final', errs.length === 0);
     } catch (err) {

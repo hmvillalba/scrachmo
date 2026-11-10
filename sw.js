@@ -1,9 +1,14 @@
 /* Service worker de ScrachMo.
    Objetivo: que la app abra sin internet y se pueda instalar en el celular.
    La app es estática, así que alcanza con guardar los pocos archivos que usa.
-   Si algo falla, la app sigue funcionando desde la red: nunca es requisito. */
+   Si algo falla, la app sigue funcionando desde la red: nunca es requisito.
 
-const VERSION = 'scrachmo-v9';
+   NO EDITAR VERSION A MANO: corré `node tests/bump-sw.js`. El nombre de la
+   caché lleva la versión visible y una huella de index.html + data.js +
+   engine.js; tests/check-parity.js falla si la huella está desactualizada.
+   En Vercel, vercel.json evita que la CDN cachee este archivo. */
+
+const VERSION = 'scrachmo-v10-24cf2a92';
 
 /* Todo lo que se pide en install tiene que existir: si un solo archivo falta,
    addAll() rechaza y el service worker no se instala. */

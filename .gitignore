@@ -12,5 +12,8 @@ tests-out/
 # Sitio preparado para publicar en GitHub Pages
 _site/
 
+# Estado local del CLI de Vercel (no es parte del proyecto)
+.vercel/
+
 # Notas internas de la herramienta (no forman parte de la app)
 .workbuddy-ai/

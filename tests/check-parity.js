@@ -9,7 +9,7 @@ const ctx = { console: console };
 vm.createContext(ctx);
 vm.runInContext(
   fs.readFileSync(path.join(SRC, 'data.js'), 'utf8') +
-  '\n;this.UIX = UI; this.EX = UI_EXTRA; this.PB = PALETTE_BLOCKS; this.ALLB = BLOCKS; this.BY = BYID;', ctx);
+  '\n;this.UIX = UI; this.EX = UI_EXTRA; this.PB = PALETTE_BLOCKS; this.ALLB = BLOCKS; this.BY = BYID; this.AV = APP_VERSION;', ctx);
 
 const langs = ['es', 'en', 'pt', 'fr'];
 let ok = true;
@@ -372,10 +372,106 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- versión de la PWA y aviso de actualización ----------------
+   Sin esta guarda, cambiar index.html / data.js / engine.js sin tocar sw.js
+   deja a los celulares con la copia vieja para siempre: el service worker
+   sirve esos archivos desde la caché y el navegador no reinstala si sw.js no
+   cambió. El nombre de la caché lleva la huella, así que olvidarse es un
+   error de CI y no un problema que aparece tres semanas después. */
+{
+  const { buildHash } = require('./bump-sw');
+  const swSrc = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
+  const m = /const VERSION = 'scrachmo-(v\d+)-([0-9a-f]{8})'/.exec(swSrc);
+  if (!m) {
+    ok = false;
+    console.log('FAIL sw.js: VERSION no tiene versión + huella (corré node tests/bump-sw.js)');
+  } else {
+    if (m[1] !== ctx.AV) {
+      ok = false;
+      console.log('FAIL APP_VERSION (data.js)=' + ctx.AV + ' pero sw.js dice ' + m[1]);
+    }
+    const esperada = buildHash();
+    if (m[2] !== esperada) {
+      ok = false;
+      console.log('FAIL cambió index.html/data.js/engine.js sin actualizar sw.js: ' +
+        'corré node tests/bump-sw.js (huella esperada ' + esperada + ')');
+    }
+  }
+  if (!/const APP_VERSION = 'v\d+'/.test(fs.readFileSync(path.join(SRC, 'data.js'), 'utf8'))) {
+    ok = false; console.log('FAIL falta APP_VERSION en data.js');
+  }
+  /* El aviso de versión nueva: piezas del motor, del HTML y su enganche. */
+  ['bindPwaUpdates', 'showPwaUpdate'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() del aviso de actualización');
+    }
+  });
+  if (!/^\s*bindPwaUpdates\(\);/m.test(engine)) {
+    ok = false; console.log('FAIL bindPwaUpdates() no se llama');
+  }
+  if (!/controllerchange/.test(engine) || !/updatefound/.test(engine)) {
+    ok = false; console.log('FAIL el aviso no escucha controllerchange/updatefound');
+  }
+  ['updateBar', 'updateReload', 'updateClose', 'aboutVersionValue', 'footerVersion'].forEach(id => {
+    if (!new RegExp('id="' + id + '"').test(html)) {
+      ok = false; console.log('FAIL falta #' + id + ' en index.html');
+    }
+  });
+  ['aboutVersion', 'updateMsg', 'updateReload', 'updateClose'].forEach(k => {
+    if (typeof ctx.EX.es[k] !== 'string') {
+      ok = false; console.log('FAIL falta la clave UI_EXTRA.' + k);
+    }
+  });
+  if (!/aboutVersionValue/.test(engine)) {
+    ok = false; console.log('FAIL render() no muestra la versión en «Acerca de»');
+  }
+}
+
+/* ---------------- despliegue: Vercel ---------------- */
+{
+  const vpath = path.join(SRC, 'vercel.json');
+  if (!fs.existsSync(vpath)) {
+    ok = false; console.log('FAIL falta vercel.json');
+  } else {
+    try {
+      const v = JSON.parse(fs.readFileSync(vpath, 'utf8'));
+      const reglas = Array.isArray(v.headers) ? v.headers : [];
+      const sw = reglas.find(h => String(h.source || '').replace(/^\//, '') === 'sw.js');
+      if (!sw || !(sw.headers || []).some(h => /max-age=0|no-cache/.test(String(h.value || '')))) {
+        ok = false; console.log('FAIL vercel.json no desactiva la caché de sw.js');
+      }
+    } catch (e) {
+      ok = false; console.log('FAIL vercel.json no es JSON válido: ' + e.message);
+    }
+  }
+  const ign = fs.existsSync(path.join(SRC, '.gitignore')) ?
+    fs.readFileSync(path.join(SRC, '.gitignore'), 'utf8') : '';
+  if (!/^\.vercel\/$/m.test(ign)) {
+    ok = false; console.log('FAIL .gitignore no ignora .vercel/');
+  }
+}
+
+/* ---------------- honestidad de los mensajes ----------------
+   La categoría se llamó «Multijugador» y prometía «otros jugadores por la red
+   local», cuando en realidad sólo escribe en localStorage. Si vuelve a colarse
+   alguna de esas frases, la interfaz vuelve a mentir. */
+{
+  const dataRaw = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const mentiras = ['Multijugador', 'Multiplayer', 'Multijogador', 'Multijoueur',
+    'Jugar entre varios', 'Play together', 'Jogar em grupo', 'Jouer à plusieurs',
+    'red local', 'otro jugador', 'otros jugadores', 'other players',
+    'outros jogadores', 'autres joueurs'];
+  const presentes = mentiras.filter(p => dataRaw.indexOf(p) > -1);
+  if (presentes.length) {
+    ok = false;
+    console.log('FAIL data.js sigue prometiendo multijugador: ' + presentes.join(', '));
+  }
+}
+
 console.log((ok ? 'OK' : 'FALLO') + ' | claves UI=' + base.length +
   ' | UI_EXTRA=' + exBase.length + ' | data-t=' + tKeys.length +
   ' | data-tt=' + ttKeys.length + ' | bloques=' + ctx.PB.length +
-  ' | workflows=' + wfCount +
+  ' | workflows=' + wfCount + ' | version=' + ctx.AV +
   ' | sin eval/Function=' + (!/\b(?:new\s+)?Function\s*\(/.test(engine)) +
   ' | sin prompt/confirm=' + (nativeCalls.length === 0));
 process.exit(ok ? 0 : 1);

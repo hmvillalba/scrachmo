@@ -91,6 +91,8 @@ try {
 
 const ver = /const VERSION = '([^']+)'/.exec(sw);
 ok(!!ver && ver[1].length > 3, 'sw.js sin VERSION');
+ok(/^scrachmo-v\d+-[0-9a-f]{8}$/.test(ver ? ver[1] : ''),
+  'sw.js: VERSION no lleva la versión y la huella de los archivos (corré node tests/bump-sw.js)');
 
 const assetsBlock = /const ASSETS = \[([\s\S]*?)\];/.exec(sw);
 if (ok(!!assetsBlock, 'sw.js sin la lista ASSETS')) {
@@ -112,6 +114,26 @@ ok(/ignoreSearch:\s*true/.test(sw), 'sw.js no ignora la query: los links ?p= no 
 ok(/mode === 'navigate'/.test(sw), 'sw.js no contempla la navegación (shell offline)');
 ok(/caches\.keys\(\)/.test(sw), 'sw.js no limpia cachés viejas al activarse');
 
+/* ---------- despliegue en Vercel ----------
+   Si la CDN cachea sw.js, el navegador nunca ve una versión nueva y la app
+   instalada se queda vieja para siempre. Vercel no lo adivina: hay que
+   pedirlo en vercel.json. */
+let vc = null;
+try {
+  vc = JSON.parse(read('vercel.json'));
+} catch (e) {
+  problems.push('vercel.json no es JSON válido: ' + e.message);
+}
+if (vc) {
+  const reglas = Array.isArray(vc.headers) ? vc.headers : [];
+  ok(reglas.length > 0, 'vercel.json no declara headers');
+  const reglaSw = reglas.find(h => String(h.source || '').replace(/^\//, '') === 'sw.js');
+  ok(!!reglaSw, 'vercel.json no tiene una regla para /sw.js');
+  ok(!!reglaSw && (reglaSw.headers || []).some(h =>
+    /max-age=0|no-cache/.test(String(h.value || ''))),
+    'vercel.json deja que la CDN cachee sw.js');
+}
+
 /* ---------- resumen ---------- */
 function finish() {
   if (problems.length) {
@@ -124,9 +146,10 @@ function finish() {
 }
 
 /* ---------- servido real por HTTP ---------- */
-/* GitHub Pages sirve el sitio desde una subcarpeta y con MIME propios. Acá se
-   levanta un servidor igual y se piden las rutas críticas con rutas relativas:
-   si alguna quedara absoluta (/data.js), en Pages daría 404. */
+/* Vercel sirve la raíz, pero GitHub Pages sirve desde una subcarpeta y con
+   MIME propios. Acá se levanta un servidor igual y se piden las rutas
+   críticas con rutas relativas: si alguna quedara absoluta (/data.js), en un
+   subdirectorio daría 404. */
 const http = require('http');
 const MIME = {
   '.html': 'text/html',

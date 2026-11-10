@@ -1215,6 +1215,50 @@ function bindAbout() {
   });
 }
 
+/* ---------------- actualizaciones de la PWA ----------------
+   sw.js llama a skipWaiting() al instalarse, así que una versión nueva toma
+   el control de las pestañas que ya estaban abiertas. Sin aviso, la persona
+   sigue usando HTML/JS viejos con una caché nueva y no se entera de nada.
+   En la PRIMERA instalación no hay controller previo: ahí no se avisa, porque
+   no hay una versión anterior que reemplazar. */
+let pwaUpdateShown = false;
+
+function showPwaUpdate() {
+  const bar = $('#updateBar');
+  if (!bar || pwaUpdateShown) return;
+  pwaUpdateShown = true;
+  bar.hidden = false;
+}
+
+function bindPwaUpdates() {
+  const bar = $('#updateBar');
+  if (!bar) return;
+
+  /* Estos dos se enganchan siempre, incluso con file://: son del DOM, no del
+     service worker, y la prueba de «Acerca de» los ejercita sin servidor. */
+  const reload = $('#updateReload');
+  if (reload) reload.addEventListener('click', () => location.reload());
+  const close = $('#updateClose');
+  if (close) close.addEventListener('click', () => { bar.hidden = true; });
+
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  const habiaController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (habiaController) showPwaUpdate();
+  });
+  /* updatefound vive en la registration, no en el container. ready resuelve
+     cuando haya una activa, incluso si el registro ocurre después de acá. */
+  navigator.serviceWorker.ready.then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const nuevo = reg.installing;
+      if (!nuevo || !habiaController) return;
+      nuevo.addEventListener('statechange', () => {
+        if (nuevo.state === 'installed' && navigator.serviceWorker.controller) showPwaUpdate();
+      });
+    });
+  }).catch(() => { /* sin service worker la app funciona igual */ });
+}
+
 /* ---------------- basic UI ---------------- */
 function toast(msg) {
   const el = $('#toast');
@@ -2737,6 +2781,12 @@ function render() {
     spSearch.setAttribute('aria-label', t.spriteSearch);
   }
   $('#blocksCount').textContent = String(PALETTE_BLOCKS.length);
+  /* La versión no se traduce: es la misma cadena que nombra la caché de la
+     PWA, así quien reporte un problema puede decir qué copia está viendo. */
+  const aboutVer = $('#aboutVersionValue');
+  if (aboutVer) aboutVer.textContent = APP_VERSION;
+  const footerVer = $('#footerVersion');
+  if (footerVer) footerVer.textContent = 'ScrachMo ' + APP_VERSION;
   $('#multiSub').textContent = multiOn ? t.multiOn : t.multiOff;
   $('#multiBtn').classList.toggle('is-on', multiOn);
 
@@ -4119,9 +4169,10 @@ async function execBlock(node, sprite) {
       return;
     }
     case 'send_msg': {
+      /* No hay red: el aviso viaja por localStorage a otras pestañas del mismo
+         origen. El evento storage no llega a la propia pestaña, así que acá se
+         reenvía dentro del proyecto, con tope para cortar cadenas. */
       store.set('scrachmo_msg', JSON.stringify({ t: Date.now() }));
-      /* El evento storage no llega a la propia pestaña: reenviar el
-         mensaje adentro del proyecto, con tope para cortar cadenas. */
       const now = Date.now();
       if (now - lastMsgAt > 250) {
         lastMsgAt = now;
@@ -4478,7 +4529,7 @@ async function copyShare() {
    sin comprimir, disfraces en PNG y sonidos en WAV sintetizados con las
    mismas recetas del motor.
 
-   Lo que no tiene equivalente en Scratch (multijugador, puntaje, agitar el
+   Lo que no tiene equivalente en Scratch (mensajes locales, puntaje, agitar el
    celu, vibrar, inclinación) se deja afuera y queda anotado en un comentario
    dentro del proyecto exportado, para que se vea al abrirlo en Scratch y no
    se pierda en un aviso que desaparece. */
@@ -5515,6 +5566,7 @@ function bindEvents() {
   bindRepPicker();
   bindProjects();
   bindAbout();
+  bindPwaUpdates();
   bindGameOrientation();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {

@@ -10,6 +10,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
 const L = (es, en, pt, fr) => ({ es, en, pt, fr });
+/* Versión que se muestra en «Acerca de». sw.js arma el nombre de la caché
+   con esta misma cadena más una huella de los tres archivos de la app;
+   tests/check-parity.js verifica que no se desincronicen y
+   tests/bump-sw.js los actualiza juntos. */
+const APP_VERSION = 'v10';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -40,8 +45,8 @@ const UI = {
     sb3Comment: 'ScrachMo: esto no tiene equivalente en Scratch',
     sb3Fail: 'No se pudo armar el .sb3',
     import: 'Importar', importSub: 'Abrir un .scmo',
-    multi: 'Multijugador', multiSub: 'Jugar entre varios', multiOn: 'Activado', multiOff: 'Jugar entre varios',
-    multiOnMsg: 'Multijugador activado', multiOffMsg: 'Multijugador desactivado',
+    multi: 'Mensajes', multiSub: 'Sólo en este navegador', multiOn: 'Mensajes activados', multiOff: 'Mensajes desactivados',
+    multiOnMsg: 'Mensajes activados', multiOffMsg: 'Mensajes desactivados',
     clear: 'Borrar todo', clearSub: 'Empezar de nuevo',
     shareTitle: 'Compartir proyecto',
     shareDesc: 'Copiá este link y mandalo por WhatsApp. Quien lo abra va a ver tu código.',
@@ -100,8 +105,8 @@ const UI = {
     sb3Comment: 'ScrachMo: this has no equivalent in Scratch',
     sb3Fail: 'Could not build the .sb3',
     import: 'Import', importSub: 'Open a .scmo',
-    multi: 'Multiplayer', multiSub: 'Play together', multiOn: 'On', multiOff: 'Play together',
-    multiOnMsg: 'Multiplayer on', multiOffMsg: 'Multiplayer off',
+    multi: 'Messages', multiSub: 'This browser only', multiOn: 'Messages on', multiOff: 'Messages off',
+    multiOnMsg: 'Messages on', multiOffMsg: 'Messages off',
     clear: 'Clear all', clearSub: 'Start over',
     shareTitle: 'Share project',
     shareDesc: 'Copy this link and send it on WhatsApp. Anyone who opens it will see your code.',
@@ -160,8 +165,8 @@ const UI = {
     sb3Comment: 'ScrachMo: isto não tem equivalente no Scratch',
     sb3Fail: 'Não foi possível montar o .sb3',
     import: 'Importar', importSub: 'Abrir um .scmo',
-    multi: 'Multijogador', multiSub: 'Jogar em grupo', multiOn: 'Ativo', multiOff: 'Jogar em grupo',
-    multiOnMsg: 'Multijogador ativado', multiOffMsg: 'Multijogador desativado',
+    multi: 'Mensagens', multiSub: 'Só neste navegador', multiOn: 'Mensagens ativadas', multiOff: 'Mensagens desativadas',
+    multiOnMsg: 'Mensagens ativadas', multiOffMsg: 'Mensagens desativadas',
     clear: 'Apagar tudo', clearSub: 'Começar de novo',
     shareTitle: 'Compartilhar projeto',
     shareDesc: 'Copie o link e envie no WhatsApp. Quem abrir vai ver seu código.',
@@ -220,8 +225,8 @@ const UI = {
     sb3Comment: 'ScrachMo : ceci n’a pas d’équivalent dans Scratch',
     sb3Fail: 'Impossible de construire le .sb3',
     import: 'Importer', importSub: 'Ouvrir un .scmo',
-    multi: 'Multijoueur', multiSub: 'Jouer à plusieurs', multiOn: 'Actif', multiOff: 'Jouer à plusieurs',
-    multiOnMsg: 'Multijoueur activé', multiOffMsg: 'Multijoueur désactivé',
+    multi: 'Messages', multiSub: 'Dans ce navigateur seulement', multiOn: 'Messages activés', multiOff: 'Messages désactivés',
+    multiOnMsg: 'Messages activés', multiOffMsg: 'Messages désactivés',
     clear: 'Tout effacer', clearSub: 'Recommencer',
     shareTitle: 'Partager le projet',
     shareDesc: 'Copie ce lien et envoie-le sur WhatsApp. Celui qui l’ouvre verra ton code.',
@@ -270,7 +275,7 @@ const CATS = [
   { id: 'sensor', color: '#5CB1D6', tint: '#EDF9FD', icon: 'vibrate', name: L('Sensores', 'Sensing', 'Sensores', 'Capteurs') },
   { id: 'ops', color: '#59C059', tint: '#EDFAED', icon: 'calculator', name: L('Operadores', 'Operators', 'Operadores', 'Opérateurs') },
   { id: 'vars', color: '#FF8C1A', tint: '#FFF1E3', icon: 'box', name: L('Variables', 'Variables', 'Variáveis', 'Variables') },
-  { id: 'multi', color: '#FF6680', tint: '#FFEEF1', icon: 'users', name: L('Multijugador', 'Multiplayer', 'Multijogador', 'Multijoueur') }
+  { id: 'multi', color: '#FF6680', tint: '#FFEEF1', icon: 'message', name: L('Mensajes', 'Messages', 'Mensagens', 'Messages') }
 ];
 const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c]));
 
@@ -598,12 +603,12 @@ const BLOCKS = [
   {
     id: 'when_msg', cat: 'multi', icon: 'message', hat: 1,
     n: L('Al recibir mensaje', 'On message', 'Ao receber mensagem', 'À la réception'),
-    d: L('Se activa al recibir un mensaje de otro jugador.', 'Triggers when another player sends a message.', 'Ativa ao receber mensagem de outro jogador.', 'Se déclenche à la réception d’un message.')
+    d: L('Se activa con un mensaje de este navegador. No llega de otros dispositivos.', 'Triggers on a message from this same browser, not from another device.', 'Ativa com uma mensagem deste navegador, não de outro aparelho.', 'Se déclenche avec un message de ce navigateur, pas d’un autre appareil.')
   },
   {
     id: 'send_msg', cat: 'multi', icon: 'send',
     n: L('Enviar mensaje', 'Send message', 'Enviar mensagem', 'Envoyer un message'),
-    d: L('Avisa a los otros jugadores por la red local.', 'Sends a message to other players.', 'Avisa os outros jogadores.', 'Préviens les autres joueurs.')
+    d: L('Avisa a los guiones del proyecto y a otras pestañas del mismo navegador. No usa la red.', 'Notifies this project’s scripts and other tabs of the same browser. No network involved.', 'Avisa os scripts do projeto e outras abas do mesmo navegador. Sem rede.', 'Prévient les scripts du projet et les autres onglets du même navigateur. Sans réseau.')
   },
   /* ---------------- reporteros ----------------
      Un reportero NO es un enunciado: devuelve un valor y vive dentro de la
@@ -792,7 +797,7 @@ const UI_EXTRA = {
     aboutCoffee: 'Invitame un cafecito',
     aboutKofi: 'Apoyar en Ko-fi',
     rotateHint: 'Girá el teléfono para verlo más grande',
-    rotateHintClose: 'Ocultar el aviso'
+    rotateHintClose: 'Ocultar el aviso', aboutVersion: 'Versión', updateMsg: 'Hay una versión nueva de ScrachMo', updateReload: 'Recargar', updateClose: 'Ahora no'
   },
   en: {
     spriteSearch: 'Search characters…',
@@ -887,7 +892,7 @@ const UI_EXTRA = {
     aboutCoffee: 'Buy me a coffee',
     aboutKofi: 'Support on Ko-fi',
     rotateHint: 'Turn your phone to see it bigger',
-    rotateHintClose: 'Hide this notice'
+    rotateHintClose: 'Hide this notice', aboutVersion: 'Version', updateMsg: 'A new version of ScrachMo is ready', updateReload: 'Reload', updateClose: 'Not now'
   },
   pt: {
     spriteSearch: 'Buscar personagem…',
@@ -982,7 +987,7 @@ const UI_EXTRA = {
     aboutCoffee: 'Me paga um cafezinho',
     aboutKofi: 'Apoiar no Ko-fi',
     rotateHint: 'Gire o celular para ver maior',
-    rotateHintClose: 'Ocultar o aviso'
+    rotateHintClose: 'Ocultar o aviso', aboutVersion: 'Versão', updateMsg: 'Há uma nova versão do ScrachMo', updateReload: 'Recarregar', updateClose: 'Agora não'
   },
   fr: {
     spriteSearch: 'Chercher un personnage…',
@@ -1077,7 +1082,7 @@ const UI_EXTRA = {
     aboutCoffee: 'Offrez-moi un café',
     aboutKofi: 'Soutenir sur Ko-fi',
     rotateHint: 'Tournez le téléphone pour agrandir',
-    rotateHintClose: 'Masquer ce message'
+    rotateHintClose: 'Masquer ce message', aboutVersion: 'Version', updateMsg: 'Une nouvelle version de ScrachMo est prête', updateReload: 'Recharger', updateClose: 'Plus tard'
   }
 };
 Object.keys(UI_EXTRA).forEach(k => Object.assign(UI[k], UI_EXTRA[k]));

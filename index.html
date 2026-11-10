@@ -602,6 +602,35 @@ footer{padding:18px 20px 8px;text-align:center;font-size:10.5px;color:var(--mute
 }
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
+/* Aviso de versión nueva de la PWA. No es un modal: no bloquea nada y se
+   puede cerrar para seguir usando la copia actual. Va encima del toast (90)
+   para que los dos no se pisen si aparecen al mismo tiempo. */
+.update-bar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(16px + env(safe-area-inset-bottom));z-index:95;
+  width:max-content;max-width:calc(100vw - 24px);
+  display:flex;align-items:center;gap:9px;
+  padding:9px 9px 9px 13px;border-radius:14px;
+  background:#0f172a;color:#f8fafc;
+  font-size:12px;font-weight:700;line-height:1.3;
+  box-shadow:0 16px 34px -14px rgba(15,23,42,.85);
+}
+.update-bar .ic{width:17px;height:17px;flex:none;color:#93c5fd}
+.update-bar > span{flex:1;min-width:0}
+.update-reload{
+  flex:none;border:0;border-radius:9px;cursor:pointer;
+  padding:7px 11px;background:#4f46e5;color:#fff;
+  font:inherit;font-weight:800;
+}
+.update-reload:hover{background:#4338ca}
+.update-close{
+  flex:none;width:26px;height:26px;padding:0;border:0;border-radius:999px;
+  cursor:pointer;background:rgba(255,255,255,.14);color:#e2e8f0;
+  display:grid;place-items:center;
+}
+.update-close .ic{width:14px;height:14px;color:inherit}
+@media(max-width:380px){.update-bar{font-size:11px;gap:6px;padding:8px}}
+
 /* ---------- Game mode ---------- */
 body.game-mode{background:#0b1220;overflow:hidden}
 body.game-mode .topbar,
@@ -1453,10 +1482,10 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
           </button>
           <button type="button" class="tool" data-kind="multi" id="multiBtn">
             <span class="tool-ic">
-              <svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg>
+              <svg class="ic" aria-hidden="true"><use href="#i-message"></use></svg>
               <span class="dot" id="multiDot"></span>
             </span>
-            <span class="tool-txt"><b data-t="multi">Multijugador</b><small id="multiSub" data-t="multiSub">Jugar entre varios</small></span>
+            <span class="tool-txt"><b data-t="multi">Mensajes</b><small id="multiSub" data-t="multiSub">Sólo en este navegador</small></span>
           </button>
           <button type="button" class="tool" data-kind="clear" id="clearBtn">
             <span class="tool-ic"><svg class="ic" aria-hidden="true"><use href="#i-trash"></use></svg></span>
@@ -1492,7 +1521,7 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
   </main>
 
   <footer>
-    <span>ScrachMo v2.0</span> ·
+    <span id="footerVersion">ScrachMo v10</span> ·
     <span data-t="footer">Inspirado en Scratch · Pensado para el móvil</span>
   </footer>
 
@@ -1604,6 +1633,10 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
         <b data-t="aboutSite">Sitio web</b>
         <a href="https://simlabsoftware.netlify.app" target="_blank" rel="noopener noreferrer">simlabsoftware.netlify.app</a>
       </div>
+      <div class="about-row">
+        <b data-t="aboutVersion">Versión</b>
+        <span id="aboutVersionValue">v10</span>
+      </div>
     </div>
 
     <p class="about-desc" data-t="aboutDesc">Entorno de programación por bloques inspirado en Scratch, pensado para pantallas verticales. Sin frameworks, sin dependencias y sin instalar nada.</p>
@@ -1635,6 +1668,18 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
   <svg class="ic" aria-hidden="true"><use href="#i-rotate"></use></svg>
   <span data-t="rotateHint">Girá el teléfono para verlo más grande</span>
   <button type="button" class="rotate-close" id="rotateClose" data-tt="rotateHintClose" aria-label="Ocultar el aviso">
+    <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
+  </button>
+</div>
+
+<!-- Aviso de actualización de la PWA: aparece cuando un service worker nuevo
+     toma el control de una página que ya estaba abierta. Recargar trae la
+     versión nueva; «Ahora no» la deja para más tarde. Arranca oculto. -->
+<div class="update-bar" id="updateBar" role="status" hidden>
+  <svg class="ic" aria-hidden="true"><use href="#i-rotate-ccw"></use></svg>
+  <span id="updateMsg" data-t="updateMsg">Hay una versión nueva de ScrachMo</span>
+  <button type="button" class="update-reload" id="updateReload" data-t="updateReload">Recargar</button>
+  <button type="button" class="update-close" id="updateClose" data-tt="updateClose" aria-label="Ocultar el aviso">
     <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
   </button>
 </div>

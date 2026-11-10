@@ -46,9 +46,18 @@ window.addEventListener('load', function () {
 
   /* En la ventana de las pruebas (800x600) la tarjeta de código queda debajo
      del pliegue y elementFromPoint devuelve null: hay que traerla a la vista
-     antes de soltar nada. */
+     antes de soltar nada. Ojo con `html{scroll-behavior:smooth}`: con scroll
+     animado la medición ocurre antes de que la página se mueva (en CI
+     fallaba siempre y en local pasaba por casualidad), así que el salto se
+     fuerza a instantáneo. */
   function scrollCode() {
-    $('.scratch-workspace').scrollIntoView({ block: 'center' });
+    const ws = $('.scratch-workspace');
+    const prev = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    const r = ws.getBoundingClientRect();
+    window.scrollBy(0, Math.round(r.top - 80));
+    document.documentElement.style.scrollBehavior = prev;
+    return ws.getBoundingClientRect();
   }
 
   /* Arrastra un bloque de la paleta y lo suelta en (x,y). */
@@ -84,7 +93,8 @@ window.addEventListener('load', function () {
 
       /* ================= 1. anidar soltando encima ================= */
       let s = setCode([makeNode('forever')]);
-      scrollCode();
+      const wr = scrollCode();
+      check('codigo_a_la_vista', wr.top >= 0 && wr.bottom <= window.innerHeight);
       const head = $('#codeList .sb.c-head');
       check('hay_cabecera', !!head);
       const slotHead = dropSlotAt(head);

@@ -3861,6 +3861,14 @@ function bounceSprite(s) {
   return true;
 }
 
+/* Bloques en C que se resuelven con una condición. Esta lista y execNode()
+   tienen que coincidir SIEMPRE: un C-block que no esté acá cae en execBlock(),
+   que no conoce su body, y su contenido se ignora en silencio. Así estuvieron
+   «si toca el borde» y «si toca a otro personaje» desde que se agregaron. */
+const COND_TYPES = {
+  if_tilt: 1, if_score: 1, if_edge: 1, if_touch: 1, if_cond: 1, if_else: 1
+};
+
 function checkNodeCondition(node, sprite) {
   if (node.type === 'if_tilt') return Math.abs(window.lastTilt || 0) > 15;
   if (node.type === 'if_score') return score > num(nodeVal(node, sprite), 5);
@@ -4288,7 +4296,7 @@ async function execNode(node, sprite, ctx) {
       }
       return;
     }
-    if (node.type === 'if_tilt' || node.type === 'if_score' || node.type === 'if_cond' || node.type === 'if_else') {
+    if (COND_TYPES[node.type]) {
       const ok = checkNodeCondition(node, sprite);
       if (ctx) ctx.lastCond = ok;
       if (ok) await execStack(node.body || [], sprite, ctx);

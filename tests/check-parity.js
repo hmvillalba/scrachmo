@@ -115,6 +115,32 @@ if (!/kind\s*===\s*'keys'\s*\?\s*KEY_LIB/.test(engine)) {
   ok = false; console.log('FAIL pickList() no devuelve KEY_LIB');
 }
 if (!/function\s+pickMatch\s*\(/.test(engine)) { ok = false; console.log('FAIL falta pickMatch()'); }
+
+/* Condicionales: TODO C-block con condición tiene que estar en COND_TYPES.
+   Si falta uno, execNode() lo manda a execBlock(), que no conoce su body, y
+   el contenido se ignora en silencio. Así estuvieron «si toca el borde» y
+   «si toca a otro personaje» desde que se agregaron: el bloque se veía, se
+   arrastraba y no hacía nada. */
+{
+  const dataSrc = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const cBlocks = [...dataSrc.matchAll(/id: '([a-z0-9_]+)', cat: '[a-z]+',[^\n]*?\bc: 1\b/g)].map(m => m[1]);
+  const condMatch = /const COND_TYPES = \{([\s\S]*?)\};/.exec(engine);
+  const condIds = condMatch ? [...condMatch[1].matchAll(/([a-z0-9_]+)\s*:\s*1/g)].map(m => m[1]) : [];
+  /* repeat/forever no llevan condición; «sino» es la rama negativa. */
+  const propios = ['repeat', 'forever', 'sino'];
+  const faltan = cBlocks.filter(id => propios.indexOf(id) < 0 && condIds.indexOf(id) < 0);
+  if (!condIds.length) { ok = false; console.log('FAIL falta COND_TYPES en engine.js'); }
+  if (faltan.length) {
+    ok = false; console.log('FAIL C-blocks con condición fuera de COND_TYPES: ' + faltan.join(', '));
+  }
+  if (!/if \(COND_TYPES\[node\.type\]\)/.test(engine)) {
+    ok = false; console.log('FAIL execNode() no despacha con COND_TYPES');
+  }
+  if (/\|\|\s*node\.type === 'if_edge'/.test(engine)) {
+    ok = false; console.log('FAIL volvió la lista literal de condicionales en execNode()');
+  }
+}
+
 /* Alto del área de código: el asa y la variable que lo mueve. */
 if (!/id="codeGrip"/.test(html)) { ok = false; console.log('FAIL falta el asa #codeGrip'); }
 ['startCodeResize', 'moveCodeResize', 'endCodeResize', 'keyCodeResize',

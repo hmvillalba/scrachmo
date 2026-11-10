@@ -145,6 +145,43 @@ window.addEventListener('load', function () {
         Math.abs(evalReporter(makeNode('rep_timer'), mov) - 1.5) < 0.5);
       stopCode();
 
+      /* ============ 7b. los C-block con condición ejecutan su cuerpo ============
+         Estuvieron rotos en silencio desde que se agregaron: execNode() no los
+         despachaba como condicionales, así que su body se ignoraba y «si toca
+         el borde» / «si toca a otro personaje» no hacían nada al ejecutarse.
+         Las comprobaciones de arriba pasaban igual porque sólo miran
+         checkNodeCondition(), no la ejecución. */
+      const condS = make('Cond', 240, 0);
+      const lejos = make('Lejos', 0, 0);
+      condS.code = [
+        makeNode('when_flag'),
+        (() => { const n = makeNode('if_edge'); n.body = [makeNode('score_add', 1)]; return n; })(),
+        (() => { const n = makeNode('if_touch'); n.body = [makeNode('score_add', 10)]; return n; })()
+      ];
+      sprites = [condS, lejos];
+      selectedSpriteId = condS.id;
+      render();
+
+      score = 0;
+      fireEvent('when_flag');
+      await new Promise(r => setTimeout(r, 400));
+      stopCode();
+      check('if_edge_ejecuta_el_cuerpo', score === 1);
+
+      condS.x = 0; condS.y = 0; lejos.x = 20; lejos.y = 0;
+      score = 0;
+      fireEvent('when_flag');
+      await new Promise(r => setTimeout(r, 400));
+      stopCode();
+      check('if_touch_ejecuta_el_cuerpo', score === 10);
+
+      condS.x = 0; condS.y = 0; lejos.x = 200; lejos.y = 0;
+      score = 0;
+      fireEvent('when_flag');
+      await new Promise(r => setTimeout(r, 400));
+      stopCode();
+      check('condiciones_no_ejecutan_de_mas', score === 0);
+
       /* ============ 8. guardar y volver a abrir ============ */
       const payload = {
         version: '2.0',

@@ -1101,7 +1101,12 @@ const SPRITE_GROUPS = [
       '🦋|mariposa butterfly borboleta papillon', '🐙|pulpo octopus polvo pieuvre',
       '🦀|cangrejo crab caranguejo crabe', '🐠|pez fish peixe poisson',
       '🐬|delfin dolphin golfinho dauphin', '🐳|ballena whale baleia baleine',
-      '🦖|dinosaurio dinosaur dinossauro dinosaure', '🐲|dragon dragon dragao'
+      '🦖|dinosaurio dinosaur dinossauro dinosaure', '🐲|dragon dragon dragao',
+      '🐢|tortuga turtle tartaruga tortue', '🐍|serpiente snake serpente serpent',
+      '🦎|lagarto lizard lagarto lezard', '🐊|cocodrilo crocodile crocodilo',
+      '🦈|tiburon shark tubarao requin', '🐋|cachalote whale baleia baleine',
+      '🦑|calamar squid lula calmar', '🦐|camaron shrimp camarao crevette',
+      '🦞|langosta lobster lagosta homard', '🦦|nutria otter lontra loutre'
     ]
   },
   {
@@ -1112,7 +1117,11 @@ const SPRITE_GROUPS = [
       '⭐|estrella star estrela etoile', '🌟|estrella star brillo', '✨|brillo sparkle magia',
       '☄️|cometa comet cometa comete', '🌍|tierra earth planeta terra', '🪐|planeta planet saturno',
       '👽|alien extraterrestre alienigena', '🤖|robot robot robo', '🌞|sol sun sol soleil',
-      '🔭|telescopio telescope telescopio', '🌌|galaxia galaxy galaxia', '🌠|estrella fugaz shooting star'
+      '🔭|telescopio telescope telescopio', '🌌|galaxia galaxy galaxia', '🌠|estrella fugaz shooting star',
+      '🌎|planeta tierra planet earth', '💫|destello sparkle etoile filante',
+      '👾|marciano invasor alien monster', '🌑|luna nueva new moon lua nova',
+      '🌓|cuarto creciente quarter moon', '🌗|cuarto menguante last quarter',
+      '🌚|luna oscura dark moon', '🌜|luna noche night moon'
     ]
   },
   {
@@ -1124,7 +1133,31 @@ const SPRITE_GROUPS = [
       '🚲|bicicleta bici bike bicicleta velo', '🏍️|moto motocicleta motorcycle',
       '✈️|avion aviao plane avion', '🚁|helicoptero helicopter helicoptere',
       '⛵|velero barco boat voilier', '🚤|lancha speedboat barco', '🚂|tren train trem',
-      '🛵|scooter motoneta', '🚜|tractor tractor trator'
+      '🛵|scooter motoneta', '🚜|tractor tractor trator',
+      '🚘|auto carro coche voiture', '🚖|taxi remis cab', '🚍|autobus colectivo bus',
+      '🚐|van combi furgoneta', '🚛|camion trailer camion', '🚝|monorriel monorail trem',
+      '🚢|barco buque ship navio', '🛶|canoa kayak canoe', '🛴|patineta scooter trottinette',
+      '🚦|semaforo traffic light feu', '🚧|barrera obra barrier'
+    ]
+  },
+  {
+    name: L('Edad Media', 'Middle Ages', 'Idade Média', 'Moyen Âge'),
+    items: [
+      '🏹|arco flecha bow arc', '🪓|hacha axe hache', '⚒️|martillo yunque hammer forge',
+      '🗿|estatua moai statue', '⚱️|urna vasija urn', '🏺|jarron vasija amphora',
+      '🤺|esgrima espada fencer epee', '🏇|jinete caballo rider jockey',
+      '💂|guardia soldado guard garde',
+      '🗝️|llave antigua old key cle', '⚜️|flor de lis fleur lys'
+    ]
+  },
+  {
+    name: L('Terror', 'Horror', 'Terror', 'Horreur'),
+    items: [
+      '☠️|calavera huesos skull skull crossbones', '🕷️|arana spider araignee',
+      '🕸️|telarana telaraña web toile', '⚰️|ataud coffin cercueil',
+      '🕯️|vela candela candle bougie',
+      '🧿|amuleto ojo turco amulet', '👁️|ojo eye oeil',
+      '🩸|sangre blood sang', '🦴|hueso bone os'
     ]
   },
   {
@@ -1134,7 +1167,57 @@ const SPRITE_GROUPS = [
       '🏈|futbol americano football', '🎱|billar pool', '🎈|globo balloon ballon',
       '🎁|regalo gift cadeau', '🎮|joystick consola videogame', '🎲|dado dice',
       '🧩|rompecabezas puzzle', '🎯|diana dardo target', '🪁|cometa kite papalote',
-      '🛡️|escudo shield', '⚔️|espadas sword', '🏆|trofeo trophy', '🎪|circo circus'
+      '🛡️|escudo shield', '⚔️|espadas sword', '🏆|trofeo trophy', '🎪|circo circus',
+      '🏐|voley volleyball volei', '🏉|rugby rugby', '🥊|boxeo boxing boxe',
+      '🥋|karate judo artes marciales', '🏓|pingpong ping pong', '🏸|badminton badminton',
+      '🥅|arco red goal but', '🎳|bolos bowling', '🏂|snowboard tabla snowboard',
+      '🏄|surf surfear surf'
+    ]
+  },
+  {
+    name: L('Flechas y señales', 'Arrows and signs', 'Setas e sinais', 'Flèches et signes'),
+    items: [
+      '➡️|derecha right droite', '⬅️|izquierda left gauche', '⬆️|arriba up haut',
+      '⬇️|abajo down bas', '↗️|diagonal arriba derecha', '↘️|diagonal abajo derecha',
+      '↙️|diagonal abajo izquierda', '↖️|diagonal arriba izquierda',
+      '↩️|volver atras back retour', '↪️|seguir adelante forward',
+      '🔃|girar rotar rotate', '🔄|recargar repetir refresh',
+      '🔁|repetir loop boucle', '⏫|subir arriba up', '⏬|bajar abajo down',
+      '⏩|adelante rapido fast', '⏪|atras retroceder rewind', '🔀|mezclar shuffle'
+    ]
+  },
+  {
+    name: L('Formas y colores', 'Shapes and colors', 'Formas e cores', 'Formes et couleurs'),
+    items: [
+      '🔴|rojo circulo red rouge', '🟠|naranja orange', '🟡|amarillo yellow jaune',
+      '🟢|verde green vert', '🔵|azul blue bleu', '🟣|violeta purple violet',
+      '🟤|marron brown brun', '⚫|negro black noir', '⚪|blanco white blanc',
+      '🟥|cuadrado rojo square rouge', '🟧|cuadrado naranja square orange',
+      '🟨|cuadrado amarillo square yellow', '🟩|cuadrado verde square green',
+      '🟦|cuadrado azul square blue', '🟪|cuadrado violeta square purple',
+      '🟫|cuadrado marron square brown', '⬛|cuadrado negro black square',
+      '⬜|cuadrado blanco white square', '🔺|triangulo triangle', '🔻|triangulo abajo triangle down',
+      '🔶|rombo diamond losange', '🔷|rombo azul diamond blue'
+    ]
+  },
+  {
+    name: L('Frutas', 'Fruits', 'Frutas', 'Fruits'),
+    items: [
+      '🍊|naranja mandarina orange', '🍋|limon lemon citron', '🍒|cereza cherry cerise',
+      '🍑|durazno melocoton peach peche', '🍍|anana pina pineapple ananas',
+      '🥝|kiwi kiwi', '🥭|mango mango', '🌰|castana chestnut chataigne',
+      '🍐|pera pear poire', '🍏|manzana verde green apple pomme verte',
+      '🥥|coco coconut noix', '🍈|melon melon', '🍅|tomate tomato tomate',
+      '🥜|mani cacahuete peanut arachide'
+    ]
+  },
+  {
+    name: L('Verduras', 'Vegetables', 'Legumes', 'Légumes'),
+    items: [
+      '🥕|zanahoria carrot carotte', '🥦|brocoli broccoli', '🥔|papa patata potato pomme de terre',
+      '🍆|berenjena eggplant aubergine', '🧄|ajo garlic ail', '🧅|cebolla onion oignon',
+      '🥬|lechuga lettuce laitue', '🥒|pepino cucumber concombre',
+      '🌶️|aji picante chili piment', '🍠|batata camote sweet potato'
     ]
   },
   {
@@ -1144,7 +1227,11 @@ const SPRITE_GROUPS = [
       '🍓|frutilla fresa strawberry morango fraise', '🍕|pizza pizza', '🍔|hamburguesa burger',
       '🍩|dona donut rosquilla', '🍪|galleta cookie biscuit', '🍉|sandia melancia watermelon pasteque',
       '🥑|palta aguacate avocado abacate', '🌽|maiz choclo corn milho', '🍄|hongo seta mushroom',
-      '🧁|cupcake magdalena pastel', '🍦|helado ice cream glace'
+      '🧁|cupcake magdalena pastel', '🍦|helado ice cream glace',
+      '🍟|papas fritas fries frites', '🌭|pancho hotdog hot dog', '🌮|taco taco',
+      '🌯|burrito burrito', '🍜|ramen fideos noodles', '🍣|sushi sushi',
+      '🍤|camaron frito shrimp crevette', '🍰|torta cake gateau', '🍫|chocolate chocolate',
+      '🍬|caramelo candy bonbon', '🍭|chupetin lollipop sucette', '🍿|pochoclo popcorn pop corn'
     ]
   },
   {
@@ -1154,7 +1241,11 @@ const SPRITE_GROUPS = [
       '🌻|girasol sunflower girassol', '🌸|flor flower fleur', '🍀|trebol clover trevo',
       '🌈|arcoiris rainbow', '☀️|sol sun soleil', '🌊|ola wave vague',
       '🔥|fuego fire feu', '❄️|nieve snow neige', '🍁|hoja leaf',
-      '🌴|palmera palm palmeira', '🌋|volcan volcano'
+      '🌴|palmera palm palmeira', '🌋|volcan volcano',
+      '🌧️|lluvia rain pluie', '⛈️|tormenta storm orage', '🌩️|rayo lightning eclair',
+      '🌨️|nevando snowing neige', '🌪️|tornado tornado', '🌫️|niebla fog brouillard',
+      '☔|paraguas umbrella parapluie', '💧|gota gota water goutte',
+      '🌡️|termometro thermometer', '🌤️|sol con nubes partly sunny'
     ]
   },
   {
@@ -1175,7 +1266,30 @@ const SPRITE_GROUPS = [
       '🔔|campana bell', '⏰|reloj despertador alarm clock', '📱|celular telefono phone',
       '💻|computadora laptop ordinateur', '🎵|musica nota music note', '📚|libros books livre',
       '✏️|lapiz pencil', '🚪|puerta door', '🧭|brujula compass',
-      '⚙️|engranaje gear', '🪙|moneda coin'
+      '⚙️|engranaje gear', '💰|dinero bolsa money argent',
+      '🧸|osito peluche teddy ours', '🪀|yoyo yoyo', '🎀|mono lazo bow noeud',
+      '🎉|festejo party fete', '🎊|confeti confetti', '🖼️|cuadro marco picture',
+      '🔍|lupa lente magnifier loupe', '🧲|iman magnet aimant', '🔋|pila bateria battery',
+      '💾|disco disk disquette', '📡|antena antenna'
+    ]
+  },
+  {
+    name: L('Herramientas', 'Tools', 'Ferramentas', 'Outils'),
+    items: [
+      '🔨|martillo hammer marteau', '🔪|cuchillo knife couteau', '⛏️|pico pico pickaxe pioche',
+      '🔧|llave inglesa wrench cle', '🔩|tornillo tornillo screw vis',
+      '🛠️|herramientas tools outils', '🧰|caja herramientas toolbox boite',
+      '🏗️|grua crane grue', '🔦|linterna flashlight lampe torche',
+      '🧯|extinguidor extinguisher', '⚓|ancla anchor ancre', '🕳️|agujero hueco hole trou'
+    ]
+  },
+  {
+    name: L('Música', 'Music', 'Música', 'Musique'),
+    items: [
+      '🎸|guitarra guitar guitare', '🥁|bateria bateria drum tambour', '🎹|piano piano',
+      '🎺|trompeta trumpet trompette', '🎻|violin violin violon', '🎤|microfono microphone',
+      '🎧|auriculares headphones casque', '🎼|partitura score partition',
+      '🪕|banjo banjo', '🎷|saxofon saxophone'
     ]
   }
 ];

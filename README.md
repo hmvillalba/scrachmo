@@ -31,7 +31,7 @@ Sin frameworks, sin dependencias, sin build: tres archivos que andan en cualquie
 ### Escenario y sprites
 
 - Múltiples sprites, cada uno con su propio programa: crear, eliminar y alternar entre ellos.
-- **Catálogo de 143 personajes** organizado en 8 grupos (animales, espacio, vehículos, juegos y deportes, comida, naturaleza, fantasía y objetos), con buscador que ignora tildes y mayúsculas y acepta palabras en español, inglés, portugués y francés.
+- **Catálogo de 321 personajes** organizado en 16 grupos (animales, espacio, vehículos, edad media, terror, juegos y deportes, flechas y señales, formas y colores, frutas, verduras, comida, naturaleza, fantasía, objetos, herramientas y música), con buscador que ignora tildes y mayúsculas y acepta palabras en español, inglés, portugués y francés. Sólo entran emojis que todos los sistemas dibujan: nada de cuadraditos vacíos.
 - Movimiento, dirección, tamaño, rotación, visibilidad y burbujas de diálogo. La dirección acepta **vueltas completas**: escribí 270 o 359 y el personaje gira de verdad (el valor se guarda como −90 o −1, que es el mismo ángulo). Los globos se leen en horizontal, con ancho según el texto y envoltura cuando el mensaje es largo.
 - **Zoom del escenario**: con `− / 130 % / +` la cámara se acerca o se aleja: crecen los personajes, el fondo y los globos, pero **la ventana del escenario mide siempre lo mismo** (antes el zoom estiraba la escena y la página entera saltaba de tamaño). Las posiciones siguen siendo porcentuales del mundo, así que arrastrar un sprite y los bloques de movimiento no se descalibran, y el arrastre divide por el zoom para que el personaje siga la punta del dedo. También se aplica en modo juego.
 - **Escenario del tamaño que necesites**: el mundo mide 480 × 360 unidades de fábrica, pero se agranda arrastrando las asas del borde —la de abajo cambia el alto, la de la derecha el ancho y la esquina las dos, hasta 1440 × 1080—. Crece **hacia la derecha y hacia abajo**, así que lo que ya estaba puesto no se mueve ni un píxel y el espacio nuevo queda libre para más personajes o para una cancha más larga. Los bordes, los rebotes, los choques y el recorte de las casillas `x`/`y` siguen al tamaño nuevo, el tamaño viaja en el proyecto y en los links, y **Volver al tamaño original** (aparece al lado del zoom cuando el escenario ya no es el de fábrica) devuelve todo a 480 × 360 recortando lo que quedaba afuera. Con teclado, las flechas sobre el asa agrandan de a 60 unidades.
@@ -178,11 +178,11 @@ La app que se abre en el navegador son esos tres archivos más el manifest, el s
 
 ## Verificación
 
-Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite vive **dentro del repo** (`tests/`) y corre también en CI. Son **1012 comprobaciones por idioma, 2024 en total**: cada escenario se corre **dos veces, en español y en inglés**, y las dos tienen que dar 0 fallos:
+Los cambios se validan con pruebas de humo sobre el DOM real en Chrome headless. La suite vive **dentro del repo** (`tests/`) y corre también en CI. Son **1016 comprobaciones por idioma, 2032 en total**: cada escenario se corre **dos veces, en español y en inglés**, y las dos tienen que dar 0 fallos:
 
 | Suite | Comprobaciones | Qué cubre |
 | --- | ---: | --- |
-| Estructura | 30 | Catálogo de 143 personajes, 53 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
+| Estructura | 34 | Catálogo de 321 personajes en 16 grupos (sin emojis repetidos y con palabras clave), 53 bloques y badge, textos en 4 idiomas, IDs del DOM, muescas, resaltado y conservación de la posición final. |
 | Motor y eventos | 25 | Buscador, guiones por sombrero, despacho de teclado/toque/bandera, aislamiento de hilos, no guardar durante la ejecución, persistencia de puntaje y multijugador, sombrero de puntaje sin re-disparos. |
 | Disfraces y links | 53 | Migración de proyectos viejos, rechazo de SVG **en los datos guardados** y de URLs externas, tira de miniaturas, selector por nombre, serialización, ejecución de los dos bloques nuevos, estado final del disfraz y «Volver al inicio», gzip/base64url, links viejos y fallback. |
 | Importación real | 37 | `File` → canvas → WebP, filtro de tipos (un SVG entra, un `.svgz` y un tipo falso no), SVG rasterizado a mapa de bits, agrandado del vector y proporción sacada del `width`/`height` o del `viewBox`, nombres únicos, nuevo personaje desde imágenes, borrado, límite de 12, aviso de espacio lleno. |
@@ -218,7 +218,7 @@ node --check data.js && node --check engine.js && node --check sw.js
 node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
-node tests/run.js mi-corrida     # 20 escenarios × 2 idiomas en Chrome headless
+node tests/run.js mi-corrida     # 21 escenarios × 2 idiomas en Chrome headless
 ```
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y por idioma, y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.

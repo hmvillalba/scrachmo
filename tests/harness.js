@@ -2,12 +2,22 @@ window.addEventListener('load', function () {
   const out = [];
   const check = (name, cond) => out.push((cond ? 'PASS ' : 'FAIL ') + name);
   try {
-    check('catalogo_grupos', SPRITE_GROUPS.length >= 8);
-    check('catalogo_items', SPRITE_CHOICES.length >= 100);
+    /* Catálogo de personajes. El buscador depende de que cada emoji traiga sus
+       propias palabras clave: si un item queda sin texto, sólo se puede elegir
+       tocándolo, y si dos items repiten emoji, uno de los dos es inalcanzable
+       porque el filtro devuelve los dos a la vez. */
+    const catItems = SPRITE_GROUPS.reduce((out, g) => out.concat(g.items), []);
+    const catEmojis = catItems.map(it => it.split('|')[0]);
+    check('catalogo_grupos', SPRITE_GROUPS.length >= 16);
+    check('catalogo_items', SPRITE_CHOICES.length >= 300);
+    check('catalogo_sin_repetidos', new Set(catEmojis).size === catEmojis.length);
+    check('catalogo_con_claves', catItems.every(it => (String(it).split('|')[1] || '').trim().split(/\s+/).length >= 2));
+    check('catalogo_grupos_con_nombre', SPRITE_GROUPS.every(g => g.name && g.name.es && g.name.en && g.name.pt && g.name.fr));
+    check('catalogo_grupos_no_vacios', SPRITE_GROUPS.every(g => g.items.length > 0));
     check('paleta_53', PALETTE_BLOCKS.length === 53);
     check('badge_al_dia', document.getElementById('blocksCount').textContent === String(PALETTE_BLOCKS.length));
     check('modal_grupos', document.querySelectorAll('#spriteChoices .sprite-group').length === SPRITE_GROUPS.length);
-    check('modal_items', document.querySelectorAll('#spriteChoices .sprite-choice').length >= 100);
+    check('modal_items', document.querySelectorAll('#spriteChoices .sprite-choice').length === SPRITE_CHOICES.length);
     spriteSearchTerm = 'cohete';
     renderSpriteChoices();
     check('busqueda_filtra', document.querySelectorAll('#spriteChoices .sprite-choice').length === 1);

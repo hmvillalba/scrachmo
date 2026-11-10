@@ -604,6 +604,35 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- CSS sin uso (P2.11) ----------------
+   Una clase declarada en el <style> que no aparece en el HTML (fuera del
+   propio <style>), ni en engine.js ni en data.js es código muerto: queda de
+   diseños viejos y confunde al que lee. Si alguna se arma por concatenación
+   y el chequeo se queja, hay que nombrarla acá. */
+{
+  const at = html.indexOf('<style');
+  const end = html.indexOf('</style>');
+  if (at < 0 || end < 0) {
+    ok = false; console.log('FAIL no encontré el <style> de app.html');
+  } else {
+    const css = html.slice(at, end);
+    const resto = html.slice(0, at) + html.slice(end);
+    const declaradas = new Set();
+    const reClase = /\.(-?[_a-zA-Z][_a-zA-Z0-9-]*)/g;
+    let mc;
+    while ((mc = reClase.exec(css))) declaradas.add(mc[1]);
+    const muertas = [];
+    declaradas.forEach(c => {
+      const patron = new RegExp('(^|[^\\w-])' + c + '([^\\w-]|$)');
+      if (!patron.test(resto) && !patron.test(engine) && !patron.test(data)) muertas.push(c);
+    });
+    if (muertas.length) {
+      ok = false;
+      console.log('FAIL CSS sin uso en app.html: .' + muertas.sort().join(' .'));
+    }
+  }
+}
+
 /* ---------------- despliegue: Vercel ---------------- */
 {
   const vpath = path.join(SRC, 'vercel.json');

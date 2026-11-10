@@ -3842,6 +3842,46 @@ function touchingOther(s) {
   return false;
 }
 
+/* Choque contra UN personaje concreto: cuenta el original (o.id) y sus clones
+   (o.srcId). Devuelve el clon tocado o null, así «si toca a» y «borrar el clon
+   que toco» comparten la misma geometría y no se pueden desincronizar. */
+function touchedCloneOf(s, key) {
+  if (!s) return null;
+  const k = String(key == null ? '' : key);
+  if (!k || k === 'self') return null;
+  const r = spriteRadius(s);
+  for (let i = 0; i < clones.length; i++) {
+    const o = clones[i];
+    if (!o || o === s || o.dead || !o.visible) continue;
+    if (o.srcId !== k && o.id !== k) continue;
+    const dx = o.x - s.x;
+    const dy = o.y - s.y;
+    const rr = r + spriteRadius(o);
+    if (dx * dx + dy * dy <= rr * rr) return o;
+  }
+  return null;
+}
+
+function touchingSprite(s, key) {
+  if (!s || !s.visible) return false;
+  const k = String(key == null ? '' : key);
+  /* «mí mismo» en un condicional no tiene sentido (un personaje no se toca a
+     sí mismo), así que se lee como «cualquier otro», igual que if_touch. */
+  if (!k || k === 'self') return touchingOther(s);
+  const r = spriteRadius(s);
+  const all = sprites.concat(clones);
+  for (let i = 0; i < all.length; i++) {
+    const o = all[i];
+    if (!o || o === s || !o.visible || o.dead) continue;
+    if (o.id !== k && o.srcId !== k) continue;
+    const dx = o.x - s.x;
+    const dy = o.y - s.y;
+    const rr = r + spriteRadius(o);
+    if (dx * dx + dy * dy <= rr * rr) return true;
+  }
+  return false;
+}
+
 /* Devuelve true si había que rebotar. `move` calcula x con el seno y la y con
    el coseno: rebotar en una pared vertical invierte el seno (dir → -dir) y en
    una horizontal invierte el coseno (dir → 180 - dir). */
@@ -3866,7 +3906,7 @@ function bounceSprite(s) {
    que no conoce su body, y su contenido se ignora en silencio. Así estuvieron
    «si toca el borde» y «si toca a otro personaje» desde que se agregaron. */
 const COND_TYPES = {
-  if_tilt: 1, if_score: 1, if_edge: 1, if_touch: 1, if_cond: 1, if_else: 1
+  if_tilt: 1, if_score: 1, if_edge: 1, if_touch: 1, if_touch_sprite: 1, if_cond: 1, if_else: 1
 };
 
 function checkNodeCondition(node, sprite) {
@@ -3874,6 +3914,7 @@ function checkNodeCondition(node, sprite) {
   if (node.type === 'if_score') return score > num(nodeVal(node, sprite), 5);
   if (node.type === 'if_edge') return touchingEdge(sprite);
   if (node.type === 'if_touch') return touchingOther(sprite);
+  if (node.type === 'if_touch_sprite') return touchingSprite(sprite, nodeVal(node, sprite));
   return evalCond(nodeVal(node, sprite));
 }
 
@@ -3898,6 +3939,14 @@ async function execBlock(node, sprite) {
     case 'delete_clone':
       deleteClone(sprite);
       return;
+    case 'delete_touched_clone': {
+      /* Un disparo borra justo lo que impacta, no todos los clones del
+         personaje: borrar la tanda entera vaciaba la pantalla de golpe. */
+      const hit = touchedCloneOf(sprite, v);
+      if (hit) deleteClone(hit);
+      await sleep(20);
+      return;
+    }
     case 'move': {
       const steps = num(v, 10);
       const rad = sprite.dir * Math.PI / 180;
@@ -4713,7 +4762,9 @@ const SB3_NO_EQUIV = {
   hide2: 'esconder amigo',
   move2: 'mover amigo',
   sino: 'sino suelto',
-  op_calc: 'calcular'
+  op_calc: 'calcular',
+  /* Scratch no puede borrar clones de otro personaje: sólo el propio. */
+  delete_touched_clone: 'borrar el clon que toco'
 };
 
 function sb3KeyName(val) {
@@ -4965,6 +5016,20 @@ function sb3SpriteBlocks(sprite, index) {
         if (!others.length) return null;
         const bid = mk('control_if', parentId);
         blocks[bid].inputs.CONDITION = [2, touching(others[0].name, bid)];
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'if_touch_sprite': {
+        /* Scratch sí tiene «¿tocando [personaje]?», así que se exporta tal cual.
+           Con «mí mismo» cae al primero de los otros, igual que en ejecución. */
+        const key = String(nodeVal(node, sprite) || '');
+        const target = (key && key !== 'self')
+          ? sprites.find(s => s.id === key)
+          : sprites.filter(s => s !== sprite)[0];
+        if (!target) return null;
+        const bid = mk('control_if', parentId);
+        blocks[bid].inputs.CONDITION = [2, touching(target.name, bid)];
         const sub = buildStack(node.body || [], bid);
         if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
         return bid;
@@ -5539,7 +5604,9 @@ function bindEvents() {
   const ps = $('#propSize');
   px.addEventListener('input', () => { const s = selectedSprite(); if (s && px.value !== '') { s.x = clamp(num(px.value, s.x), worldLeft(), worldRight()); updateSpriteEl(s); scheduleSave(); } });
   py.addEventListener('input', () => { const s = selectedSprite(); if (s && py.value !== '') { s.y = clamp(num(py.value, s.y), worldBottom(), worldTop()); updateSpriteEl(s); scheduleSave(); } });
-  pd.addEventListener('input', () => { const s = selectedSprite(); if (s && pd.value !== '') { s.dir = clamp(num(pd.value, s.dir), -180, 180); updateSpriteEl(s); scheduleSave(); } });
+  /* La dirección se normaliza a −180…180, no se recorta: escribir 270 tiene
+     que girar el personaje (queda como −90), no quedarse en 180. */
+  pd.addEventListener('input', () => { const s = selectedSprite(); if (s && pd.value !== '') { s.dir = normDir(num(pd.value, s.dir)); updateSpriteEl(s); scheduleSave(); } });
   ps.addEventListener('input', () => { const s = selectedSprite(); if (s && ps.value !== '') { s.size = clamp(num(ps.value, s.size), 20, 200); updateSpriteEl(s); scheduleSave(); } });
   px.addEventListener('change', () => { const s = selectedSprite(); if (s) { px.value = fmt(s.x); saveProject(); } });
   py.addEventListener('change', () => { const s = selectedSprite(); if (s) { py.value = fmt(s.y); saveProject(); } });

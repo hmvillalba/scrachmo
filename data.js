@@ -483,6 +483,11 @@ const BLOCKS = [
     d: L('Envuelve bloques que se ejecutan si se cruza con otro personaje visible.', 'Wraps blocks that run when it overlaps another visible sprite.', 'Envolve blocos que rodam quando cruza com outro personagem visível.', 'Entoure des blocs exécutés quand il croise un autre personnage visible.')
   },
   {
+    id: 'if_touch_sprite', cat: 'control', icon: 'pointer', def: 'self', w: 104, pick: 'sprites', c: 1,
+    n: L('Si toca a {v}', 'If touching {v}', 'Se toca {v}', 'Si touche {v}'),
+    d: L('Envuelve bloques que se ejecutan si se cruza con ese personaje o con cualquiera de sus clones. Con «mí mismo» se comporta como «si toca a otro personaje».', 'Wraps blocks that run when it overlaps that sprite or any of its clones. With «myself» it behaves like «if touching another sprite».', 'Envolve blocos que rodam quando cruza com esse personagem ou qualquer clone dele. Com «eu mesmo» funciona como «se toca outro personagem».', 'Entoure des blocs exécutés quand il croise ce personnage ou l’un de ses clones. Avec « moi-même », se comporte comme « si touche un autre personnage ».')
+  },
+  {
     id: 'if_score', cat: 'control', icon: 'target', def: 5, w: 46, num: 1, c: 1,
     n: L('Si puntos > {v}', 'If score > {v}', 'Se pontos > {v}', 'Si score > {v}'),
     d: L('Envuelve bloques que se ejecutan si el puntaje es mayor.', 'Wraps blocks that run if the score is higher.', 'Envolve blocos que rodam se os pontos forem maiores.', 'Entoure des blocs exécutés si le score est plus grand.')
@@ -519,6 +524,11 @@ const BLOCKS = [
     id: 'delete_clone', cat: 'control', icon: 'trash',
     n: L('Borrar este clon', 'Delete this clone', 'Apagar este clone', 'Supprimer ce clone'),
     d: L('Hace desaparecer al clon que lo ejecuta. En el personaje original no hace nada.', 'Removes the clone that runs it. On the original sprite it does nothing.', 'Faz desaparecer o clone que o executa. No personagem original não faz nada.', 'Fait disparaître le clone qui l’exécute. Sur le personnage d’origine, ne fait rien.')
+  },
+  {
+    id: 'delete_touched_clone', cat: 'control', icon: 'trash', def: 'self', w: 104, pick: 'sprites',
+    n: L('Borrar el clon de {v} que toco', 'Delete the clone of {v} I touch', 'Apagar o clone de {v} que toco', 'Supprimer le clone de {v} que je touche'),
+    d: L('Hace desaparecer el clon de ese personaje que está tocando el que lo ejecuta. Sirve para que un disparo destruya lo que impacta. Si toca al original, no hace nada.', 'Removes the clone of that sprite that the runner is touching. Use it so a shot destroys what it hits. If it touches the original, it does nothing.', 'Faz desaparecer o clone desse personagem que está tocando quem o executa. Serve para um tiro destruir o que atinge. Se tocar no original, não faz nada.', 'Fait disparaître le clone de ce personnage que touche celui qui l’exécute. Sert à ce qu’un tir détruise ce qu’il frappe. S’il touche l’original, ne fait rien.')
   },
   {
     id: 'when_shake', cat: 'sensor', icon: 'phone', hat: 1,

@@ -32,7 +32,7 @@ window.addEventListener('load', function () {
       check('sin_errores_arranque', errs.length === 0);
 
       /* ============ 1. catálogo ============ */
-      check('paleta_51', PALETTE_BLOCKS.length === 51);
+      check('paleta_53', PALETTE_BLOCKS.length === 53);
       check('bloques_nuevos', ['bounce', 'if_edge', 'if_touch', 'timer_reset']
         .every(id => !!BYID[id] && PALETTE_BLOCKS.some(b => b.id === id)));
       check('reportero_cronometro', !!BYID.rep_timer && BYID.rep_timer.rep === 1);

@@ -56,8 +56,16 @@ window.addEventListener('load', function () {
       const links = Array.from(modal.querySelectorAll('.about-row a'));
       const licencia = links.find(a => a.getAttribute('href') === 'LICENSE');
       check('licencia_mit', !!licencia && licencia.textContent.trim() === 'MIT');
-      const sitio = links.find(a => a.getAttribute('href').indexOf('simlabsoftware') > -1);
-      check('sitio_web', !!sitio && sitio.getAttribute('href') === 'https://simlabsoftware.netlify.app');
+      /* La fila «Sitio web» tiene que apuntar a la URL pública de Vercel. No
+         alcanza con el href: el texto visible también puede quedar viejo, y es
+         justo lo que se ve en el modal. Ningún rastro del hosting anterior. */
+      const sitio = links.find(a => a.getAttribute('href').indexOf('scrachmo.vercel.app') > -1);
+      check('sitio_web', !!sitio &&
+        sitio.getAttribute('href') === 'https://scrachmo.vercel.app' &&
+        sitio.textContent.trim() === 'scrachmo.vercel.app' &&
+        sitio.getAttribute('target') === '_blank' &&
+        (sitio.getAttribute('rel') || '').indexOf('noopener') > -1 &&
+        modal.textContent.toLowerCase().indexOf('netlify') === -1);
 
       /* ============ 4. los enlaces de apoyo ============ */
       const apoyos = Array.from(modal.querySelectorAll('.about-link'));

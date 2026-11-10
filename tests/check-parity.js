@@ -449,6 +449,21 @@ if (fs.existsSync(wfDir)) {
   if (!/^\.vercel\/$/m.test(ign)) {
     ok = false; console.log('FAIL .gitignore no ignora .vercel/');
   }
+  /* El modal «Acerca de» seguía enlazando el sitio viejo en Netlify. Se exige
+     la URL pública en el enlace Y en el texto visible: cambiar sólo el href
+     deja el dominio viejo a la vista, que es lo que reportó el usuario. */
+  ['index.html', 'data.js', 'engine.js', 'README.md'].forEach(f => {
+    const txt = fs.readFileSync(path.join(SRC, f), 'utf8');
+    if (/netlify/i.test(txt)) {
+      ok = false; console.log('FAIL ' + f + ' todavía menciona Netlify');
+    }
+  });
+  const filaSitio = /<a href="([^"]+)"[^>]*>([^<]*)<\/a>/.exec(
+    (html.split('data-t="aboutSite"')[1] || '').slice(0, 400));
+  if (!filaSitio || filaSitio[1] !== 'https://scrachmo.vercel.app' ||
+      filaSitio[2].trim() !== 'scrachmo.vercel.app') {
+    ok = false; console.log('FAIL «Acerca de» no enlaza la URL pública de Vercel');
+  }
 }
 
 /* ---------------- honestidad de los mensajes ----------------

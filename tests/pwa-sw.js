@@ -119,26 +119,47 @@ function request(url, mode) {
   const cache = await caches.open(VERSION);
   const saved = await cache.keys();
   ok(saved.length >= 8, 'install guardó muy pocos archivos (' + saved.length + ')');
-  ['index.html', 'data.js', 'engine.js', 'manifest.webmanifest', 'icons/icon-512.png']
+  ['index.html', 'app.html', 'landing.js', 'boot.js', 'data.js', 'engine.js',
+    'manifest.webmanifest', 'icons/icon-512.png']
     .forEach(f => ok(saved.some(u => u.endsWith('/' + f)), 'install no guardó ' + f));
 
   /* activate: borra cachés viejas y toma el control de las pestañas. */
   const vieja = await caches.open('scrachmo-v0');
-  await vieja.put('index.html', { ok: true });
+  await vieja.put('app.html', { ok: true });
   await fire('activate', {});
   ok(self._claimed === true, 'activate no llama a clients.claim()');
   ok((await caches.keys()).indexOf('scrachmo-v0') < 0, 'activate no borró la caché vieja');
   ok((await caches.keys()).indexOf(VERSION) >= 0, 'activate borró la caché actual');
 
-  /* fetch de navegación con ?p=: tiene que salir el shell guardado. */
+  /* Link viejo compartido: la RAÍZ con ?p= tiene que abrir el editor aunque no
+     haya red (landing.js no podría redirigir). Además NO debe refrescar la
+     caché con esa respuesta: en la red la raíz devuelve la landing, y guardar
+     eso como app.html dejaría la PWA rota. */
+  const antesNav = fetched.length;
   const nav = await fire('fetch', { request: request('/?p=g1.abc', 'navigate') });
   ok(!!nav._response, 'el handler de fetch no llamó a respondWith en la navegación');
   let served = nav._response ? await nav._response : null;
-  if (served) {
-    ok(!!served.url && served.url.endsWith('/index.html'), 'navegación con ?p= no salió del shell cacheado (' + (served && served.url) + ')');
-  } else {
-    ok(false, 'la navegación no devolvió respuesta');
+  ok(!!served && !!served.url && served.url.endsWith('/app.html'),
+    'la raíz con ?p= no sirvió el editor cacheado (' + (served && served.url) + ')');
+  ok(fetched.length === antesNav, 'la raíz con ?p= pidió la landing a la red y podría pisar app.html');
+  const appGuardado = await cache.match('app.html', { ignoreSearch: true });
+  ok(!!appGuardado && String(appGuardado.url).endsWith('/app.html'),
+    'la respuesta de la raíz con ?p= pisó el app.html de la caché');
+
+  /* El enlace directo a la app, con y sin proyecto compartido. */
+  for (const ruta of ['/app.html', '/app.html?p=g1.abc']) {
+    const directo = await fire('fetch', { request: request(ruta, 'navigate') });
+    const pagina = directo._response ? await directo._response : null;
+    ok(!!pagina && String(pagina.url).endsWith('/app.html'),
+      ruta + ' no sirvió el editor cacheado (' + (pagina && pagina.url) + ')');
   }
+
+  /* La raíz sin ?p= es la landing. Se deja al final porque su refresco en
+     segundo plano reescribe la entrada index.html del doble de caché. */
+  const raiz = await fire('fetch', { request: request('/', 'navigate') });
+  const landing = raiz._response ? await raiz._response : null;
+  ok(!!landing && String(landing.url).endsWith('/index.html'),
+    'la raíz no sirvió la landing cacheada (' + (landing && landing.url) + ')');
 
   /* Un archivo de la app se sirve desde la caché. */
   const js = await fire('fetch', { request: request('/data.js') });
@@ -160,5 +181,6 @@ function request(url, mode) {
     console.log('PWA-SW checks=' + checks + ' FAIL=' + problems.length);
     process.exit(1);
   }
-  console.log('OK | PWA service worker: install (' + saved.length + ' archivos), activate, navegación ?p= offline, caché de assets y respeto por otros orígenes y POST');
+  console.log('OK | PWA service worker: ' + checks + ' comprobaciones | install (' +
+    saved.length + ' archivos), activate, shell de app/landing, links ?p= offline, caché y respeto por otros orígenes y POST');
 })();

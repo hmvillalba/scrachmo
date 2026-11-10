@@ -1,22 +1,24 @@
-/* Mantiene juntas la versión visible (data.js) y la caché de la PWA (sw.js).
+/* Mantiene juntas las tres versiones: la visible de la app (data.js), la de la
+   landing (landing.js) y la caché de la PWA (sw.js).
 
-   El service worker sirve index.html, data.js y engine.js desde la caché sin
-   revalidar. Si esos archivos cambian y sw.js queda igual, el navegador ni
+   El service worker sirve la landing, el editor y sus scripts desde la caché
+   sin revalidar. Si esos archivos cambian y sw.js queda igual, el navegador ni
    siquiera reinstala: la app instalada se queda vieja indefinidamente. Por eso
-   el nombre de la caché lleva una huella de los tres archivos y
+   el nombre de la caché lleva una huella de TODOS los archivos que se sirven y
    tests/check-parity.js falla si la huella no coincide.
 
    Uso: node tests/bump-sw.js [vNN]
    Sin argumento sube un número; con argumento fija la versión (ej. v11).
-   No hay que editar sw.js a mano. */
+   No hay que editar sw.js ni las versiones a mano. */
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const SRC = path.resolve(__dirname, '..');
 /* sw.js no entra en la huella: si entrara, cambiar VERSION cambiaría la huella
-   y habría que recalcularla infinitamente. Son los archivos que la caché sirve. */
-const RUNTIME = ['index.html', 'data.js', 'engine.js'];
+   y habría que recalcularla infinitamente. Sí entran los seis archivos que la
+   caché sirve: las dos páginas y los cuatro scripts. */
+const RUNTIME = ['index.html', 'app.html', 'landing.js', 'boot.js', 'data.js', 'engine.js'];
 
 const read = f => fs.readFileSync(path.join(SRC, f), 'utf8');
 
@@ -49,7 +51,16 @@ function bump(wanted) {
   const data2 = data.replace(versionRe, "const APP_VERSION = '" + next + "';");
   fs.writeFileSync(dataPath, data2, 'utf8');
 
-  /* 2) Nombre de la caché, ya con la huella del data.js definitivo. */
+  /* 1b) La landing no carga data.js, así que lleva su propia copia del número.
+          Se escribe ANTES de la huella porque landing.js entra en RUNTIME. */
+  const landingPath = path.join(SRC, 'landing.js');
+  const landing = read('landing.js');
+  const landingRe = /const VERSION = 'v\d+';/;
+  if (!landingRe.test(landing)) throw new Error('No encontré VERSION en landing.js');
+  fs.writeFileSync(landingPath,
+    landing.replace(landingRe, "const VERSION = '" + next + "';"), 'utf8');
+
+  /* 2) Nombre de la caché, ya con la huella de los archivos definitivos. */
   const hash = buildHash();
   const cache = 'scrachmo-' + next + '-' + hash;
   const swPath = path.join(SRC, 'sw.js');

@@ -180,6 +180,59 @@ window.addEventListener('load', function () {
         ['aboutVersion', 'updateMsg', 'updateReload', 'updateClose'].every(k =>
           typeof UI[l][k] === 'string' && UI[l][k].length > 0)));
 
+      /* ============ 9. trampa de foco y restauración (P1.7) ============ */
+      const appRoot = document.querySelector('body > .app');
+      const esInerte = el => !!el && (el.hasAttribute('inert') || !!el.closest('[inert]'));
+      btn.focus();
+      const origen = document.activeElement;
+      btn.click();
+      check('foco_entra_al_modal', modal.hidden === false &&
+        modal.contains(document.activeElement));
+      check('fondo_inerte_mientras_hay_modal', esInerte(appRoot));
+      const controles = Array.from(modal.querySelectorAll(
+        'a[href],button:not([disabled]),input:not([disabled])'))
+        .filter(e => !e.hidden && (e.offsetWidth > 0 || e.offsetHeight > 0));
+      check('el_modal_tiene_controles_enfocables', controles.length >= 2);
+      const ultimo = controles[controles.length - 1];
+      const primero = controles[0];
+      ultimo.focus();
+      document.dispatchEvent(new KeyboardEvent('keydown',
+        { key: 'Tab', bubbles: true, cancelable: true }));
+      check('tab_adelante_no_se_escapa', document.activeElement === primero);
+      primero.focus();
+      document.dispatchEvent(new KeyboardEvent('keydown',
+        { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+      check('tab_atras_no_se_escapa', document.activeElement === ultimo);
+      closeAbout();
+      check('foco_vuelve_al_boton_que_abrio', document.activeElement === origen);
+      check('fondo_recupera_interactividad', !esInerte(appRoot));
+
+      /* ============ 10. tope DURANTE la descompresión (P1.5) ============ */
+      check('motor_tiene_tope_de_inflado', typeof inflateLimited === 'function' &&
+        typeof MAX_INFLATE_BYTES === 'number' && MAX_INFLATE_BYTES > 0);
+      const gzipBytes = async texto => {
+        const st = new Blob([texto]).stream().pipeThrough(new CompressionStream('gzip'));
+        const rd = st.getReader();
+        const partes = [];
+        let total = 0;
+        for (;;) {
+          const paso = await rd.read();
+          if (paso.done) break;
+          partes.push(paso.value);
+          total += paso.value.length;
+        }
+        const salida = new Uint8Array(total);
+        let off = 0;
+        partes.forEach(p => { salida.set(p, off); off += p.length; });
+        return salida;
+      };
+      const bomba = await gzipBytes('A'.repeat(200000));
+      check('gzip_bomba_se_corta_antes_de_inflar', await inflateLimited(bomba, 1024) === null);
+      const pequeno = await gzipBytes('hola');
+      const inflado = await inflateLimited(pequeno, 1024);
+      check('gzip_legitimo_sigue_aceptandose', !!inflado &&
+        new TextDecoder().decode(inflado) === 'hola');
+
       check('sin_errores_final', errs.length === 0);
     } catch (err) {
       out.push('ERROR ' + err.message + ' @ ' + (err.stack || '').split('\n')[1]);

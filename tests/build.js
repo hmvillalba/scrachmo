@@ -12,7 +12,8 @@ const HARNESS = [
   'harness.js', 'harness2.js', 'harness3.js', 'harness4.js',
   'harness5.js', 'harness6.js', 'harness7.js', 'harness8.js',
   'harness9.js', 'harness10.js', 'harness11.js', 'harness12.js', 'harness13.js', 'harness14.js',
-  'harness15.js', 'harness16.js', 'harness17.js', 'harness18.js', 'harness19.js', 'harness20.js'
+  'harness15.js', 'harness16.js', 'harness17.js', 'harness18.js', 'harness19.js', 'harness20.js',
+  'harness21.js'
 ];
 
 function build() {
@@ -26,7 +27,10 @@ function build() {
   } else {
     T = fs.mkdtempSync(path.join(os.tmpdir(), 'scrachmo-smoke-'));
   }
-  for (const f of ['data.js', 'engine.js']) {
+  /* La app vive en app.html: index.html es la landing y NO carga el motor.
+     boot.js y landing.js se copian igual para que los <script src> del shell
+     no den 404 en las páginas file:// del arnés. */
+  for (const f of ['data.js', 'engine.js', 'boot.js', 'landing.js', 'app.html', 'index.html']) {
     fs.copyFileSync(path.join(SRC, f), path.join(T, f));
   }
   for (const f of HARNESS) {
@@ -38,11 +42,11 @@ function build() {
     'window.addEventListener("unhandledrejection",function(e){window.__ERRORS__.push("rejection: "+String(e.reason));});' +
     '<\/script>\n';
 
-  const html = fs.readFileSync(path.join(SRC, 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(SRC, 'app.html'), 'utf8');
   const dataTag = '<script src="data.js"></script>';
   const engineTag = '<script src="engine.js"></script>';
   if (html.indexOf(dataTag) < 0 || html.indexOf(engineTag) < 0) {
-    throw new Error('No se encontraron los tags de data.js / engine.js en index.html');
+    throw new Error('No se encontraron los tags de data.js / engine.js en app.html');
   }
   const base = html.replace(dataTag, early + dataTag);
 

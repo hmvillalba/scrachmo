@@ -35,7 +35,12 @@ for (const l of langs) {
   }
 }
 
-const html = fs.readFileSync(path.join(SRC, 'index.html'), 'utf8');
+/* index.html es la LANDING y no carga el motor: todas las guardas de la
+   interfaz, el CSS y los ids del editor se tienen que leer de app.html. */
+const html = fs.readFileSync(path.join(SRC, 'app.html'), 'utf8');
+const landingHtml = fs.readFileSync(path.join(SRC, 'index.html'), 'utf8');
+const landingJs = fs.readFileSync(path.join(SRC, 'landing.js'), 'utf8');
+const bootJs = fs.readFileSync(path.join(SRC, 'boot.js'), 'utf8');
 const grab = re => Array.from(new Set(Array.from(html.matchAll(re), m => m[1])));
 const tKeys = grab(/data-t="([^"]+)"/g);
 const ttKeys = grab(/data-tt="([^"]+)"/g);
@@ -219,12 +224,13 @@ if (!/id="aboutBtn"/.test(html) || !/id="aboutModal"/.test(html)) {
   }
 });
 if (!/^\s*bindAbout\(\);/m.test(engine)) { ok = false; console.log('FAIL bindAbout() no se llama'); }
-/* `anyOpen` es lo que bloquea el scroll: si el modal no está ahí, se abre
-   pero la página de atrás se sigue moviendo. Se mira sólo esa declaración,
-   porque `about` aparece también en las funciones de al lado. */
-const anyOpenDecl = /const anyOpen[\s\S]{0,600}?;/.exec(engine);
-if (!anyOpenDecl || !/about/.test(anyOpenDecl[0])) {
-  ok = false; console.log('FAIL updateModalLock() no tiene en cuenta el modal «Acerca de»');
+/* Todos los diálogos tienen que estar en la lista que bloquea el scroll y
+   atrapa el foco: si uno queda afuera, se abre pero la página de atrás sigue
+   recibiendo Tab y se mueve. */
+const listaModales = /const MODAL_IDS = \[([^\]]+)\]/.exec(engine);
+if (!listaModales || ['shareModal', 'spriteModal', 'askModal', 'repPicker',
+  'projModal', 'aboutModal'].some(id => listaModales[1].indexOf("'" + id + "'") < 0)) {
+  ok = false; console.log('FAIL MODAL_IDS no cubre los seis modales (incluido «Acerca de»)');
 }
 
 /* Modo juego: el campo tiene que conservar la proporción del mundo (480x360 de
@@ -373,9 +379,9 @@ if (fs.existsSync(wfDir)) {
 }
 
 /* ---------------- versión de la PWA y aviso de actualización ----------------
-   Sin esta guarda, cambiar index.html / data.js / engine.js sin tocar sw.js
-   deja a los celulares con la copia vieja para siempre: el service worker
-   sirve esos archivos desde la caché y el navegador no reinstala si sw.js no
+   Sin esta guarda, cambiar cualquiera de los seis archivos del runtime sin
+   tocar sw.js deja a los celulares con la copia vieja para siempre: el service
+   worker los sirve desde la caché y el navegador no reinstala si sw.js no
    cambió. El nombre de la caché lleva la huella, así que olvidarse es un
    error de CI y no un problema que aparece tres semanas después. */
 {
@@ -393,7 +399,7 @@ if (fs.existsSync(wfDir)) {
     const esperada = buildHash();
     if (m[2] !== esperada) {
       ok = false;
-      console.log('FAIL cambió index.html/data.js/engine.js sin actualizar sw.js: ' +
+      console.log('FAIL cambió la landing/app/motor sin actualizar sw.js: ' +
         'corré node tests/bump-sw.js (huella esperada ' + esperada + ')');
     }
   }
@@ -414,7 +420,7 @@ if (fs.existsSync(wfDir)) {
   }
   ['updateBar', 'updateReload', 'updateClose', 'aboutVersionValue', 'footerVersion'].forEach(id => {
     if (!new RegExp('id="' + id + '"').test(html)) {
-      ok = false; console.log('FAIL falta #' + id + ' en index.html');
+      ok = false; console.log('FAIL falta #' + id + ' en app.html');
     }
   });
   ['aboutVersion', 'updateMsg', 'updateReload', 'updateClose'].forEach(k => {
@@ -427,6 +433,141 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- arquitectura landing + editor ----------------
+   La raíz es la presentación y app.html es la app. Si se vuelve a poner el
+   editor en index.html, la landing desaparece y los links directos dejan de
+   tener sentido; si se rompe el redirect, todos los proyectos compartidos
+   antes de la mudanza dejan de abrir. */
+{
+  const versionLanding = /const VERSION = '(v\d+)';/.exec(landingJs);
+  if (!versionLanding || versionLanding[1] !== ctx.AV) {
+    ok = false;
+    console.log('FAIL landing.js VERSION=' + (versionLanding ? versionLanding[1] : '?') +
+      ' pero data.js APP_VERSION=' + ctx.AV);
+  }
+  if (/<script src="data\.js"/.test(landingHtml) || /<script src="engine\.js"/.test(landingHtml)) {
+    ok = false; console.log('FAIL la landing no debería cargar el motor');
+  }
+  if (!/<script src="landing\.js"><\/script>/.test(landingHtml)) {
+    ok = false; console.log('FAIL la landing no carga landing.js');
+  }
+  if (!/app\.html/.test(landingHtml) || !/id="shareApp"/.test(landingHtml) ||
+      !/id="appUrl"/.test(landingHtml)) {
+    ok = false; console.log('FAIL la landing no ofrece el enlace directo y compartible a app.html');
+  }
+  ['cafecito.app/hmvillalba', 'ko-fi.com/hugomartinvillalba',
+    'github.com/hmvillalba/scrachmo'].forEach(url => {
+    if (landingHtml.indexOf(url) < 0) {
+      ok = false; console.log('FAIL la landing no enlaza ' + url);
+    }
+  });
+  if (!/location\.replace\(\s*'app\.html'/.test(landingJs) || !/[?&]p=/.test(landingJs)) {
+    ok = false; console.log('FAIL landing.js no redirige los links ?p= viejos al editor');
+  }
+  /* Paridad de los textos de la landing: cada clave del HTML tiene que estar
+     en el diccionario de los cuatro idiomas. */
+  const clavesLanding = Array.from(new Set(
+    Array.from(landingHtml.matchAll(/data-i18n="([^"]+)"/g), m => m[1])));
+  ['es', 'en', 'pt', 'fr'].forEach(l => {
+    /* El bloque `fr` es el último y cierra sin coma: la coma es opcional. */
+    const bloque = (new RegExp('\\n\\s*' + l + ':\\s*\\{([\\s\\S]*?)\\n\\s*\\},?')
+      .exec(landingJs) || [])[1] || '';
+    const faltan = clavesLanding.filter(k => bloque.indexOf("'" + k + "'") < 0);
+    if (faltan.length) {
+      ok = false;
+      console.log('FAIL landing: faltan claves en ' + l + ': ' + faltan.join(', '));
+    }
+  });
+  const manifest = (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(SRC, 'manifest.webmanifest'), 'utf8')); }
+    catch (e) { return {}; }
+  })();
+  if (String(manifest.start_url || '').indexOf('app.html') < 0) {
+    ok = false; console.log('FAIL la PWA instalada arranca en la landing (start_url)');
+  }
+  if (!/<script src="boot\.js"><\/script>/.test(html) ||
+      !/serviceWorker\.register\(\s*'sw\.js'\s*\)/.test(bootJs)) {
+    ok = false; console.log('FAIL el registro del service worker no está en boot.js');
+  }
+}
+
+/* ---------------- P1.5 / P1.6 / P1.7: seguridad y accesibilidad ---------------- */
+{
+  /* Tope DURANTE la descompresión: un gzip bomb no puede esperar al
+     arrayBuffer() completo para ser rechazado. */
+  ['MAX_INFLATE_BYTES', 'inflateLimited'].forEach(s => {
+    if (engine.indexOf(s) < 0) { ok = false; console.log('FAIL falta ' + s + ' del tope gzip'); }
+  });
+  if (!/function\s+inflateLimited\s*\([\s\S]{0,900}?reader\.cancel\(/.test(engine)) {
+    ok = false; console.log('FAIL inflateLimited() no cancela el stream al pasarse del tope');
+  }
+  if (!/decodeShareAsync[\s\S]{0,900}?inflateLimited\(/.test(engine)) {
+    ok = false; console.log('FAIL decodeShareAsync() no usa inflateLimited()');
+  }
+  /* CSP: ningún script inline en las dos páginas. En los arneses file:// no
+     hay cabeceras, así que un descuido aquí sólo se rompe en Vercel. */
+  [['app.html', html], ['index.html', landingHtml]].forEach(([f, txt]) => {
+    const inline = txt.match(/<script(?![^>]*\bsrc=)[^>]*>/gi) || [];
+    if (inline.length) { ok = false; console.log('FAIL ' + f + ' tiene scripts inline (los bloquea la CSP)'); }
+    if (/\son(?:click|change|input|load|submit|error)\s*=/i.test(txt)) {
+      ok = false; console.log('FAIL ' + f + ' tiene manejadores inline (los bloquea la CSP)');
+    }
+  });
+  /* Trampa de foco: el modal retiene Tab y el fondo queda inerte. */
+  ['openModals', 'trapModalKey', 'updateModalLock'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() de la trampa de foco');
+    }
+  });
+  if (!/setAttribute\(\s*'inert'/.test(engine) || !/removeAttribute\(\s*'inert'/.test(engine)) {
+    ok = false; console.log('FAIL los modales no ponen/quitan inert al fondo');
+  }
+  if (!/modalFocusFrom/.test(engine)) {
+    ok = false; console.log('FAIL no se restaura el foco al cerrar un modal');
+  }
+}
+
+/* ---------------- diálogo con tamaño, arranque y biblioteca ---------------- */
+{
+  /* El tamaño del globo va en node.zoom, NO en node.val: si fuera un segundo
+     hueco, un mensaje con comas se partiría en dos campos. */
+  if (!ctx.BY.say || ctx.BY.say.zoom !== 1) {
+    ok = false; console.log('FAIL el bloque «decir» no declara su campo de tamaño');
+  }
+  ['sayZooms', '--bz', 'node.zoom'].forEach(s => {
+    if (engine.indexOf(s) < 0) { ok = false; console.log('FAIL falta ' + s + ' en el zoom del globo'); }
+  });
+  if (!/if\s*\(def\.zoom\s*&&\s*!opts\.preview\)/.test(engine)) {
+    ok = false; console.log('FAIL el campo de tamaño no se dibuja dentro del bloque');
+  }
+  if (!/data-zoom/.test(engine) || !/\[data-input\],\[data-zoom\]/.test(engine)) {
+    ok = false; console.log('FAIL el campo de tamaño no está enganchado al editar');
+  }
+  /* La bandera recorre todos los personajes: si el seleccionado no tiene
+     bloques no puede bloquear el arranque, y si no hay sombrero de bandera
+     hay que avisarlo en vez de no hacer nada. */
+  if (!/noFlagScripts/.test(engine)) {
+    ok = false; console.log('FAIL runAll() no avisa cuando falta el sombrero de bandera');
+  }
+  if (!/function\s+runAll\s*\([\s\S]{0,700}?scriptsFor\('when_flag'\)/.test(engine)) {
+    ok = false; console.log('FAIL runAll() no recorre los guiones de bandera de todo el proyecto');
+  }
+  /* Respaldo de la biblioteca y deshacer borrado. */
+  ['libraryPayload', 'exportLibrary', 'undoDeleteProject'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() de la biblioteca');
+    }
+  });
+  if (!/let\s+lastDeleted\s*=\s*null/.test(engine)) {
+    ok = false; console.log('FAIL no se guarda el último proyecto borrado');
+  }
+  ['projExport', 'projUndo'].forEach(id => {
+    if (!new RegExp('id="' + id + '"').test(html)) {
+      ok = false; console.log('FAIL falta #' + id + ' en el modal de proyectos');
+    }
+  });
+}
+
 /* ---------------- despliegue: Vercel ---------------- */
 {
   const vpath = path.join(SRC, 'vercel.json');
@@ -436,9 +577,18 @@ if (fs.existsSync(wfDir)) {
     try {
       const v = JSON.parse(fs.readFileSync(vpath, 'utf8'));
       const reglas = Array.isArray(v.headers) ? v.headers : [];
-      const sw = reglas.find(h => String(h.source || '').replace(/^\//, '') === 'sw.js');
-      if (!sw || !(sw.headers || []).some(h => /max-age=0|no-cache/.test(String(h.value || '')))) {
-        ok = false; console.log('FAIL vercel.json no desactiva la caché de sw.js');
+      ['sw.js', 'index.html', 'app.html'].forEach(f => {
+        const regla = reglas.find(h => String(h.source || '').replace(/^\//, '') === f);
+        if (!regla || !(regla.headers || []).some(h =>
+          /max-age=0|no-cache/.test(String(h.value || '')))) {
+          ok = false; console.log('FAIL vercel.json deja que la CDN cachee /' + f);
+        }
+      });
+      const todas = reglas.reduce((a, h) => a.concat(h.headers || []), []);
+      const csp = String((todas.find(h =>
+        /content-security-policy/i.test(String(h.key || ''))) || {}).value || '');
+      if (!/script-src\s+'self'(?:\s|;)/.test(csp) || /script-src[^;]*unsafe-inline/.test(csp)) {
+        ok = false; console.log('FAIL la CSP no aplica script-src \'self\' estricto');
       }
     } catch (e) {
       ok = false; console.log('FAIL vercel.json no es JSON válido: ' + e.message);
@@ -452,7 +602,8 @@ if (fs.existsSync(wfDir)) {
   /* El modal «Acerca de» seguía enlazando el sitio viejo en Netlify. Se exige
      la URL pública en el enlace Y en el texto visible: cambiar sólo el href
      deja el dominio viejo a la vista, que es lo que reportó el usuario. */
-  ['index.html', 'data.js', 'engine.js', 'README.md'].forEach(f => {
+  ['index.html', 'app.html', 'landing.js', 'boot.js', 'data.js', 'engine.js',
+    'README.md', 'manifest.webmanifest'].forEach(f => {
     const txt = fs.readFileSync(path.join(SRC, f), 'utf8');
     if (/netlify/i.test(txt)) {
       ok = false; console.log('FAIL ' + f + ' todavía menciona Netlify');

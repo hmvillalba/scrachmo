@@ -36,6 +36,12 @@ if (manifest) {
   ok(manifest.display === 'standalone' || manifest.display === 'fullscreen' ||
     manifest.display === 'minimal-ui', 'manifest: display no es instalable (' + manifest.display + ')');
   ok(String(manifest.start_url).indexOf('http') !== 0, 'start_url debería ser relativa');
+  /* La raíz es la LANDING: si la PWA arrancara en "./", instalar ScrachMo
+     abriría la presentación en vez del editor. Tiene que entrar directo. */
+  ok(String(manifest.start_url).indexOf('app.html') >= 0,
+    'manifest: start_url tiene que abrir app.html (la raíz es la landing)');
+  ok(String(manifest.id || '').indexOf('app.html') >= 0,
+    'manifest: id tendría que identificar al editor, no a la landing');
   ok(manifest.lang === 'es', 'manifest: lang debería ser "es"');
   ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2, 'manifest: hacen falta al menos 2 iconos');
 
@@ -66,20 +72,47 @@ if (manifest) {
   });
 }
 
-/* ---------- enganche en index.html ---------- */
-const html = read('index.html');
-ok(/<link[^>]+rel="manifest"[^>]+href="manifest\.webmanifest"/.test(html), 'index.html no enlaza el manifest');
-ok(/<link[^>]+rel="apple-touch-icon"[^>]+href="icons\/apple-touch-icon\.png"/.test(html), 'index.html sin apple-touch-icon');
-ok(/<link[^>]+rel="icon"[^>]+href="icons\/icon\.svg"/.test(html), 'index.html sin favicon');
-ok(/<meta[^>]+name="theme-color"/.test(html), 'index.html sin theme-color');
-ok(/<meta[^>]+name="apple-mobile-web-app-capable"/.test(html), 'index.html sin apple-mobile-web-app-capable');
-ok(/navigator\.serviceWorker\.register\(\s*'sw\.js'\s*\)/.test(html), 'index.html no registra sw.js');
-ok(/location\.protocol\s*!==\s*'file:'/.test(html),
+/* ---------- enganche en app.html ----------
+   index.html es la landing (no carga el motor). Todo lo que hace instalable la
+   PWA tiene que estar en el editor. */
+const html = read('app.html');
+const landing = read('index.html');
+const boot = read('boot.js');
+const landingJs = read('landing.js');
+ok(/<link[^>]+rel="manifest"[^>]+href="manifest\.webmanifest"/.test(html), 'app.html no enlaza el manifest');
+ok(/<link[^>]+rel="apple-touch-icon"[^>]+href="icons\/apple-touch-icon\.png"/.test(html), 'app.html sin apple-touch-icon');
+ok(/<link[^>]+rel="icon"[^>]+href="icons\/icon\.svg"/.test(html), 'app.html sin favicon');
+ok(/<meta[^>]+name="theme-color"/.test(html), 'app.html sin theme-color');
+ok(/<meta[^>]+name="apple-mobile-web-app-capable"/.test(html), 'app.html sin apple-mobile-web-app-capable');
+ok(/navigator\.serviceWorker\.register\(\s*'sw\.js'\s*\)/.test(boot), 'boot.js no registra sw.js');
+ok(/<script src="boot\.js"><\/script>/.test(html), 'app.html no carga boot.js');
+ok(/location\.protocol\s*!==\s*'file:'/.test(boot),
   'el registro del service worker no está protegido para file:// (rompería el doble clic)');
 ok(/<script src="data\.js"><\/script>\s*<script src="engine\.js"><\/script>/.test(html),
   'data.js y engine.js tienen que cargarse seguidos y en ese orden');
-ok(/<script src="engine\.js"><\/script>\s*<script>[\s\S]{0,400}?serviceWorker\.register/.test(html),
-  'el registro de la PWA va después de engine.js, no entre los dos scripts');
+ok(/<script src="engine\.js"><\/script>[\s\S]{0,200}?<script src="boot\.js"><\/script>/.test(html),
+  'boot.js tiene que cargarse después de engine.js');
+
+/* ---------- CSP: nada de scripts inline ----------
+   vercel.json declara script-src 'self'. Un <script> sin src o un onclick=
+   en el HTML quedaría bloqueado en producción y la app se rompería en silencio
+   (en los arneses file:// no hay cabeceras, así que sólo se ve en Vercel). */
+['app.html', 'index.html'].forEach(f => {
+  const txt = f === 'app.html' ? html : landing;
+  const inline = (txt.match(/<script(?![^>]*\bsrc=)[^>]*>/gi) || []);
+  ok(inline.length === 0, f + ' tiene ' + inline.length + ' <script> inline (la CSP los bloquea)');
+  ok(!/\son(?:click|change|input|load|submit|error|focus|blur)\s*=/i.test(txt),
+    f + ' tiene manejadores inline (onclick, oninput…), prohibidos por la CSP');
+});
+ok(/content-security-policy/i.test(read('vercel.json')), 'vercel.json no declara CSP');
+
+/* ---------- la landing y el enlace directo ---------- */
+ok(/<script src="landing\.js"><\/script>/.test(landing), 'index.html no carga landing.js');
+ok(/href="app\.html"/.test(landing), 'la landing no enlaza la app');
+ok(/id="shareApp"/.test(landing) && /id="appUrl"/.test(landing),
+  'la landing no ofrece copiar/compartir el enlace directo');
+ok(/app\.html/.test(landingJs) && /[?&]p=/.test(landingJs),
+  'landing.js no redirige los links ?p= viejos al editor');
 
 /* ---------- service worker ---------- */
 const sw = read('sw.js');
@@ -98,7 +131,8 @@ const assetsBlock = /const ASSETS = \[([\s\S]*?)\];/.exec(sw);
 if (ok(!!assetsBlock, 'sw.js sin la lista ASSETS')) {
   const assets = (assetsBlock[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1));
   ok(assets.length >= 6, 'ASSETS tiene muy pocos archivos (' + assets.length + ')');
-  ['index.html', 'data.js', 'engine.js', 'manifest.webmanifest']
+  ['index.html', 'app.html', 'landing.js', 'boot.js', 'data.js', 'engine.js',
+    'manifest.webmanifest']
     .forEach(f => ok(assets.indexOf(f) >= 0, 'ASSETS no incluye ' + f));
   ok(assets.some(a => /^icons\/.*\.png$/.test(a)), 'ASSETS no incluye ningún icono PNG');
   assets.forEach(a => {
@@ -127,11 +161,24 @@ try {
 if (vc) {
   const reglas = Array.isArray(vc.headers) ? vc.headers : [];
   ok(reglas.length > 0, 'vercel.json no declara headers');
-  const reglaSw = reglas.find(h => String(h.source || '').replace(/^\//, '') === 'sw.js');
-  ok(!!reglaSw, 'vercel.json no tiene una regla para /sw.js');
-  ok(!!reglaSw && (reglaSw.headers || []).some(h =>
-    /max-age=0|no-cache/.test(String(h.value || ''))),
-    'vercel.json deja que la CDN cachee sw.js');
+  ['sw.js', 'index.html', 'app.html'].forEach(f => {
+    const regla = reglas.find(h => String(h.source || '').replace(/^\//, '') === f);
+    ok(!!regla, 'vercel.json no tiene una regla para /' + f);
+    ok(!!regla && (regla.headers || []).some(h =>
+      /max-age=0|no-cache/.test(String(h.value || ''))),
+      'vercel.json deja que la CDN cachee /' + f);
+  });
+  /* CSP global: tiene que existir y NO permitir scripts inline. Si se afloja
+     script-src, volver a meter un <script> en el HTML pasa desapercibido. */
+  const todas = reglas.flatMap(h => h.headers || []);
+  const csp = String((todas.find(h => /content-security-policy/i.test(h.key || '')) || {}).value || '');
+  ok(!!csp, 'vercel.json no declara Content-Security-Policy');
+  ok(/default-src\s+'self'/.test(csp), 'la CSP no tiene default-src \'self\'');
+  ok(/script-src\s+'self'(?:\s|;)/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp),
+    'la CSP permite scripts inline (script-src no es estrictamente \'self\')');
+  ok(/worker-src\s+'self'/.test(csp), 'la CSP no permite el service worker (worker-src)');
+  ok(/img-src[^;]*blob:/.test(csp) && /img-src[^;]*data:/.test(csp),
+    'la CSP bloquea las imágenes data:/blob: de disfraces y SVG');
 }
 
 /* ---------- resumen ---------- */
@@ -176,6 +223,10 @@ const server = http.createServer((req, res) => {
   const routes = [
     ['/', /text\/html/],
     ['/?p=g1.abc', /text\/html/],
+    ['/app.html', /text\/html/],
+    ['/app.html?p=g1.abc', /text\/html/],
+    ['/landing.js', /javascript/],
+    ['/boot.js', /javascript/],
     ['/data.js', /javascript/],
     ['/engine.js', /javascript/],
     ['/manifest.webmanifest', /application\/manifest\+json/],

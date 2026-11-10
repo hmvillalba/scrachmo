@@ -70,6 +70,9 @@ let toastTimer = null;
 let saveTimer = null;
 const sayTimers = new Map();
 const sayTexts = new Map();
+/* Tamaño de cada globo abierto, en porcentaje. Va aparte del texto para que
+   el bloque «decir» siga guardando el mensaje tal cual en node.val. */
+const sayZooms = new Map();
 
 /* runtime: un hilo por guion, con su propio estado de condición */
 const runThreads = new Set();
@@ -108,6 +111,10 @@ const MAX_BG_CHARS = 900000;
 const MAX_CODE_DEPTH = 40;
 const MAX_CODE_NODES = 2000;
 const MAX_PAYLOAD_CHARS = 8000000;
+/* Tope de BYTES al descomprimir. UTF-8 puede usar hasta 4 bytes por carácter,
+   así que el límite de caracteres se traduce a este techo sin rechazar por
+   error un proyecto legítimo con muchos acentos o emojis. */
+const MAX_INFLATE_BYTES = MAX_PAYLOAD_CHARS * 4;
 let importNodeCount = 0;
 let importTruncated = false;
 const payloadTooBig = text => String(text).length > MAX_PAYLOAD_CHARS;
@@ -289,6 +296,32 @@ async function encodeSharePayload(payload) {
   return 'j1.' + bytesToB64Url(bytes);
 }
 
+/* Descomprime POR PARTES y corta en cuanto se pasa del tope. Hacer
+   `new Response(stream).arrayBuffer()` y recién después medir el resultado deja
+   la puerta abierta a una bomba gzip: 20 KB comprimidos pueden expandirse a
+   cientos de MB, y el navegador los materializa enteros antes de devolver el
+   control. Acá se cancela el reader, así el descompresor deja de producir. */
+async function inflateLimited(bytes, limit) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const reader = stream.getReader();
+  const parts = [];
+  let total = 0;
+  for (;;) {
+    const step = await reader.read();
+    if (step.done) break;
+    total += step.value.length;
+    if (total > limit) {
+      try { await reader.cancel(); } catch (e) { }
+      return null;
+    }
+    parts.push(step.value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  parts.forEach(p => { out.set(p, off); off += p.length; });
+  return out;
+}
+
 async function decodeShareAsync(code) {
   if (!code) return null;
   const kind = code.slice(0, 3);
@@ -299,9 +332,8 @@ async function decodeShareAsync(code) {
     let bytes = b64UrlToBytes(code.slice(3));
     if (kind === 'g1.') {
       if (typeof DecompressionStream !== 'function') return null;
-      bytes = new Uint8Array(await new Response(
-        new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
-      ).arrayBuffer());
+      bytes = await inflateLimited(bytes, MAX_INFLATE_BYTES);
+      if (!bytes) return null;
     }
     const text = new TextDecoder().decode(bytes);
     if (payloadTooBig(text)) return null;
@@ -471,6 +503,9 @@ function normalizeOneNode(raw, seen, depth, wantRep) {
     type: type,
     val: raw.val !== undefined ? raw.val : (def.def !== undefined ? def.def : 0)
   };
+  /* El tamaño del globo viaja en el proyecto. Sin este campo, exportar y
+     volver a importar (link o .scmo) devolvería todos los diálogos al 100 %. */
+  if (def.zoom) node.zoom = clamp(Math.round(num(raw.zoom, 100)), 50, 250);
   /* Sólo los bloques declarados como anfitriones (y los propios reporteros,
      para poder anidar) aceptan casillas con reportero. Ignorar reps en
      sombreros o en bloques de texto evita estados imposibles al importar. */
@@ -953,6 +988,9 @@ function renderProjects() {
   const box = $('#projList');
   if (!box) return;
   const t = UI[lang];
+  /* «Deshacer borrado» sólo aparece si hay algo que restaurar. */
+  const undoBtn = $('#projUndo');
+  if (undoBtn) undoBtn.hidden = !lastDeleted;
   box.textContent = '';
   if (!projects.length) {
     const empty = document.createElement('p');
@@ -1121,6 +1159,67 @@ function duplicateProject(id) {
   toast(t.projectDuplicated);
 }
 
+/* Último proyecto borrado en esta sesión: permite deshacer sin haber escrito
+   una papelera en disco. Se guarda también su JSON, que es lo único que no se
+   puede reconstruir después. */
+let lastDeleted = null;
+
+/* Respaldo de TODA la biblioteca en un solo archivo. El proyecto activo se
+   serializa en el momento (vive en scrachmo_v8 y su slot puede estar viejo);
+   los demás salen de su slot. */
+function libraryPayload() {
+  const activo = serializeProject();
+  return {
+    format: 'scrachmo-library',
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    active: activeProjectId,
+    projects: projects.map(p => {
+      let data = null;
+      if (p.id === activeProjectId) data = activo;
+      else {
+        try { data = JSON.parse(store.get(projectKey(p.id)) || 'null'); } catch (e) { data = null; }
+      }
+      return { id: p.id, name: p.name, updatedAt: p.updatedAt, data: data };
+    })
+  };
+}
+
+function exportLibrary() {
+  const t = UI[lang];
+  const data = libraryPayload();
+  try {
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'scrachmo-biblioteca-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    /* Revocar enseguida puede cortar la descarga en Safari: se espera. */
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast(t.libraryExported.replace('{n}', String(data.projects.length)));
+  } catch (e) {
+    toast(t.badFile);
+  }
+}
+
+function undoDeleteProject() {
+  const t = UI[lang];
+  const d = lastDeleted;
+  if (!d) return;
+  if (projects.length >= MAX_PROJECTS) { toast(t.projectLimit); return; }
+  const at = clamp(d.index, 0, projects.length);
+  projects.splice(at, 0, { id: d.id, name: d.name, updatedAt: d.updatedAt });
+  /* El JSON se repone sólo si se había podido leer al borrar. */
+  if (d.raw) store.set(projectKey(d.id), d.raw);
+  lastDeleted = null;
+  writeProjects();
+  renderProjects();
+  toast(t.projectRestored);
+}
+
 async function deleteProject(id) {
   const t = UI[lang];
   if (projects.length <= 1) { toast(t.onlyOneProject); return; }
@@ -1128,6 +1227,17 @@ async function deleteProject(id) {
   if (!p) return;
   const sure = await askConfirm(t.deleteProject + ': «' + p.name + '»?');
   if (!sure) return;
+
+  /* Se copia ANTES de tocar nada: si el borrado era el activo, su contenido
+     vive en scrachmo_v8 y está a punto de ser reemplazado por el siguiente. */
+  if (id === activeProjectId) persistProject();
+  lastDeleted = {
+    id: id,
+    name: p.name,
+    updatedAt: p.updatedAt,
+    index: projects.findIndex(x => x.id === id),
+    raw: store.get(id === activeProjectId ? 'scrachmo_v8' : projectKey(id))
+  };
 
   const wasActive = id === activeProjectId;
   projects = projects.filter(x => x.id !== id);
@@ -1163,6 +1273,10 @@ function bindProjects() {
   if (close) close.addEventListener('click', closeProjects);
   const fresh = $('#projNew');
   if (fresh) fresh.addEventListener('click', newProject);
+  const exp = $('#projExport');
+  if (exp) exp.addEventListener('click', exportLibrary);
+  const undo = $('#projUndo');
+  if (undo) undo.addEventListener('click', undoDeleteProject);
 
   const modal = $('#projModal');
   if (!modal) return;
@@ -1526,15 +1640,87 @@ function closeSpriteModal() {
   updateModalLock();
 }
 
+/* ---------------- accesibilidad de los modales ----------------
+   Sin trampa de foco, Tab se escapa del diálogo hacia la interfaz de atrás y
+   quien usa teclado no tiene forma de cerrarlo. Se centraliza acá: los seis
+   modales ya llaman updateModalLock() al abrir y al cerrar. además de retener
+   Tab se marca el fondo como «inert» y se devuelve el foco al control que
+   abrió el diálogo. */
+const MODAL_IDS = ['shareModal', 'spriteModal', 'askModal', 'repPicker', 'projModal', 'aboutModal'];
+const FOCUSABLE_SEL = 'a[href],button:not([disabled]),input:not([disabled]),' +
+  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+let modalFocusFrom = null;
+let modalTrapBound = false;
+
+function openModals() {
+  return MODAL_IDS.map(id => $('#' + id)).filter(m => m && !m.hidden);
+}
+
+function modalFocusables(modal) {
+  return Array.prototype.filter.call(modal.querySelectorAll(FOCUSABLE_SEL), el =>
+    !el.hidden && el.getAttribute('aria-hidden') !== 'true' &&
+    (el.offsetWidth > 0 || el.offsetHeight > 0));
+}
+
+function trapModalKey(e) {
+  if (e.key !== 'Tab') return;
+  const abiertos = openModals();
+  const modal = abiertos[abiertos.length - 1];
+  if (!modal) return;
+  const items = modalFocusables(modal);
+  if (!items.length) { e.preventDefault(); return; }
+  const primero = items[0];
+  const ultimo = items[items.length - 1];
+  const activo = document.activeElement;
+  if (e.shiftKey && (activo === primero || !modal.contains(activo))) {
+    e.preventDefault();
+    ultimo.focus();
+  } else if (!e.shiftKey && (activo === ultimo || !modal.contains(activo))) {
+    e.preventDefault();
+    primero.focus();
+  }
+}
+
 function updateModalLock() {
-  const ask = $('#askModal');
-  const rep = $('#repPicker');
-  const proj = $('#projModal');
-  const about = $('#aboutModal');
-  const anyOpen = !$('#shareModal').hidden || !$('#spriteModal').hidden ||
-    !!(ask && !ask.hidden) || !!(rep && !rep.hidden) || !!(proj && !proj.hidden) ||
-    !!(about && !about.hidden);
+  const abiertos = openModals();
+  const anyOpen = abiertos.length > 0;
+  const estabaAbierto = document.body.classList.contains('modal-open');
+  if (anyOpen && !estabaAbierto) modalFocusFrom = document.activeElement;
   document.body.classList.toggle('modal-open', anyOpen);
+
+  /* «inert» saca al resto de la página del orden de tabulación y de los
+     eventos. Los .modal son hermanos del contenedor .app, así que se excluyen:
+     marcar ese contenedor dejaría mudos también a los diálogos. */
+  Array.prototype.forEach.call(document.body.children, hijo => {
+    if (hijo.classList && hijo.classList.contains('modal')) return;
+    if (anyOpen) hijo.setAttribute('inert', '');
+    else hijo.removeAttribute('inert');
+  });
+
+  if (anyOpen) {
+    const modal = abiertos[abiertos.length - 1];
+    if (!modal.contains(document.activeElement)) {
+      const items = modalFocusables(modal);
+      try {
+        if (items.length) items[0].focus();
+        else { modal.setAttribute('tabindex', '-1'); modal.focus(); }
+      } catch (e) { }
+    }
+    if (!modalTrapBound) {
+      document.addEventListener('keydown', trapModalKey, true);
+      modalTrapBound = true;
+    }
+  } else {
+    if (modalTrapBound) {
+      document.removeEventListener('keydown', trapModalKey, true);
+      modalTrapBound = false;
+    }
+    const volver = modalFocusFrom;
+    modalFocusFrom = null;
+    if (volver && volver.isConnected && typeof volver.focus === 'function') {
+      try { volver.focus(); } catch (e) { }
+    }
+  }
 }
 
 /* ---------------- diálogos propios ----------------
@@ -1833,15 +2019,20 @@ function updateBubbleEl(s) {
   if (!bub) return;
   const text = sayTexts.get(s.id) || '';
   bub.textContent = text;
+  /* El zoom se aplica por CSS con --bz, así no hay estilos inline que peleen
+     con el modo juego ni con la animación de entrada del globo. */
+  bub.style.setProperty('--bz', String(clamp(num(sayZooms.get(s.id), 100), 50, 250) / 100));
   bub.classList.toggle('show', !!text);
 }
 
-function saySprite(s, text) {
+function saySprite(s, text, zoom) {
   sayTexts.set(s.id, text);
+  sayZooms.set(s.id, clamp(num(zoom, 100), 50, 250));
   updateBubbleEl(s);
   clearTimeout(sayTimers.get(s.id));
   const timer = setTimeout(() => {
     sayTexts.delete(s.id);
+    sayZooms.delete(s.id);
     sayTimers.delete(s.id);
     updateBubbleEl(s);
   }, 2600);
@@ -2382,6 +2573,28 @@ function blockContent(node, def, t) {
     content.appendChild(wrap);
   });
   if (parts[parts.length - 1]) content.appendChild(document.createTextNode(parts[parts.length - 1]));
+  /* El globo de diálogo se puede agrandar o achicar. El tamaño vive en
+     node.zoom y NO dentro de node.val: si fuera un segundo hueco, un mensaje
+     con comas («Hola, mundo») se partiría en dos campos, porque los bloques
+     de varios huecos guardan "a,b". */
+  if (def.zoom && !opts.preview) {
+    const zoom = clamp(Math.round(num(node.zoom, 100)), 50, 250);
+    const zin = document.createElement('input');
+    zin.className = 'sb-input sb-zoom';
+    zin.type = 'number';
+    zin.min = '50';
+    zin.max = '250';
+    zin.step = '10';
+    zin.value = String(zoom);
+    zin.dataset.zoom = node.id;
+    zin.title = tr.bubbleZoom;
+    zin.setAttribute('aria-label', tr.bubbleZoom);
+    content.appendChild(zin);
+    const unit = document.createElement('span');
+    unit.className = 'sb-zoom-unit';
+    unit.textContent = '%';
+    content.appendChild(unit);
+  }
   return content;
 }
 
@@ -4078,7 +4291,7 @@ async function execBlock(node, sprite) {
       await sleep(150);
       return;
     case 'say':
-      saySprite(sprite, String(v == null ? '' : v));
+      saySprite(sprite, String(v == null ? '' : v), node.zoom);
       await sleep(320);
       return;
     case 'size':
@@ -4273,11 +4486,13 @@ function restoreRuntime(snap) {
 
 function clearSayBubbles() {
   sayTexts.clear();
+  sayZooms.clear();
   sayTimers.forEach(t => clearTimeout(t));
   sayTimers.clear();
   const layer = $('#spritesLayer');
   if (layer) layer.querySelectorAll('.sprite-bubble').forEach(b => {
     b.textContent = '';
+    b.style.removeProperty('--bz');
     b.classList.remove('show');
   });
 }
@@ -4430,7 +4645,17 @@ function runAll() {
      sprites a cero: arranca desde donde quedaron y beginRun() toma esa
      posición como nuevo «inicio» para el botón Volver al inicio. */
   stopCode();
-  runScripts(scriptsFor('when_flag'));
+  const lista = scriptsFor('when_flag');
+  /* La bandera recorre TODOS los personajes, no sólo el que está en edición:
+     que el seleccionado no tenga bloques no impide arrancar. Si hay bloques
+     pero ninguno cuelga de «al presionar bandera» (por ejemplo, todo está
+     bajo «al presionar una tecla»), el botón parecía no hacer nada: este
+     aviso dice exactamente qué falta. */
+  if (!lista.length) {
+    if (collectScripts().length) toast(UI[lang].noFlagScripts);
+    return;
+  }
+  runScripts(lista);
 }
 
 function stopCode() {
@@ -5707,8 +5932,17 @@ function bindEvents() {
   });
 
   const applyBlockValue = e => {
-    const input = e.target.closest('[data-input]');
+    const input = e.target.closest('[data-input],[data-zoom]');
     if (!input) return;
+    /* El campo de tamaño del globo no toca node.val: sólo node.zoom. */
+    if (input.dataset.zoom !== undefined) {
+      const zinfo = findNode(input.dataset.zoom);
+      if (!zinfo) return;
+      zinfo.node.zoom = clamp(Math.round(num(input.value, 100)), 50, 250);
+      if (e.type === 'change') input.value = String(zinfo.node.zoom);
+      scheduleSave();
+      return;
+    }
     const info = findNode(input.dataset.input);
     if (!info) return;
     if (input.dataset.xy !== undefined) {
@@ -5904,6 +6138,9 @@ function bindEvents() {
 
   $('#closeShare').addEventListener('click', closeShare);
   $('#copyLink').addEventListener('click', copyShare);
+  /* Antes era onclick="this.select()" en el HTML. La CSP usa script-src
+     'self' y los manejadores inline quedan bloqueados: se engancha acá. */
+  $('#shareLink').addEventListener('click', e => e.target.select());
   $('#shareModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeShare(); });
 
   $$('[data-collapse]').forEach(btn => {

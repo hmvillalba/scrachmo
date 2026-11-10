@@ -14,7 +14,7 @@ const L = (es, en, pt, fr) => ({ es, en, pt, fr });
    con esta misma cadena más una huella de los tres archivos de la app;
    tests/check-parity.js verifica que no se desincronicen y
    tests/bump-sw.js los actualiza juntos. */
-const APP_VERSION = 'v10';
+const APP_VERSION = 'v11';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -368,7 +368,7 @@ const BLOCKS = [
     d: L('Teletransporta el personaje a un punto al azar.', 'Teleports the character to a random spot.', 'Teletransporta o personagem para um ponto aleatório.', 'Téléporte le personnage à un endroit aléatoire.')
   },
   {
-    id: 'say', cat: 'looks', icon: 'speech', def: 'Hola!', w: 96,
+    id: 'say', cat: 'looks', icon: 'speech', def: 'Hola!', w: 132, zoom: 1,
     n: L('Decir {v}', 'Say {v}', 'Dizer {v}', 'Dire {v}'),
     d: L('Muestra un globo de diálogo.', 'Shows a speech bubble.', 'Mostra um balão de fala.', 'Affiche une bulle de dialogue.')
   },
@@ -705,6 +705,12 @@ BLOCKS.forEach(b => { if (REPORTER_HOSTS.indexOf(b.id) >= 0) b.repOk = 1; });
 /* ---------------- textos extra (v2.1 + disfraces) ---------------- */
 const UI_EXTRA = {
   es: {
+    exportLibrary: 'Exportar biblioteca',
+    libraryExported: 'Biblioteca exportada: {n} proyectos',
+    undoDelete: 'Deshacer borrado',
+    projectRestored: 'Proyecto restaurado',
+    noFlagScripts: 'Ningún personaje tiene «al presionar bandera»: agregá ese sombrero para que Ejecutar arranque',
+    bubbleZoom: 'Tamaño del diálogo (%)',
     spriteSearch: 'Buscar personaje…',
     spriteNoResults: 'No encontramos personajes con ese nombre.',
     motionDenied: 'Activá el movimiento en los permisos del navegador',
@@ -800,6 +806,12 @@ const UI_EXTRA = {
     rotateHintClose: 'Ocultar el aviso', aboutVersion: 'Versión', updateMsg: 'Hay una versión nueva de ScrachMo', updateReload: 'Recargar', updateClose: 'Ahora no'
   },
   en: {
+    exportLibrary: 'Export library',
+    libraryExported: 'Library exported: {n} projects',
+    undoDelete: 'Undo delete',
+    projectRestored: 'Project restored',
+    noFlagScripts: 'No character has “when green flag clicked”: add that hat so Run starts',
+    bubbleZoom: 'Bubble size (%)',
     spriteSearch: 'Search characters…',
     spriteNoResults: 'No characters match that search.',
     motionDenied: 'Enable motion access in your browser settings',
@@ -895,6 +907,12 @@ const UI_EXTRA = {
     rotateHintClose: 'Hide this notice', aboutVersion: 'Version', updateMsg: 'A new version of ScrachMo is ready', updateReload: 'Reload', updateClose: 'Not now'
   },
   pt: {
+    exportLibrary: 'Exportar biblioteca',
+    libraryExported: 'Biblioteca exportada: {n} projetos',
+    undoDelete: 'Desfazer exclusão',
+    projectRestored: 'Projeto restaurado',
+    noFlagScripts: 'Nenhum personagem tem “ao clicar na bandeira”: adicione esse chapéu para que Executar inicie',
+    bubbleZoom: 'Tamanho do balão (%)',
     spriteSearch: 'Buscar personagem…',
     spriteNoResults: 'Nenhum personagem com esse nome.',
     motionDenied: 'Ative o movimento nas permissões do navegador',
@@ -990,6 +1008,12 @@ const UI_EXTRA = {
     rotateHintClose: 'Ocultar o aviso', aboutVersion: 'Versão', updateMsg: 'Há uma nova versão do ScrachMo', updateReload: 'Recarregar', updateClose: 'Agora não'
   },
   fr: {
+    exportLibrary: 'Exporter la bibliothèque',
+    libraryExported: 'Bibliothèque exportée : {n} projets',
+    undoDelete: 'Annuler la suppression',
+    projectRestored: 'Projet restauré',
+    noFlagScripts: 'Aucun personnage n’a « quand le drapeau est cliqué » : ajoutez ce chapeau pour que Exécuter démarre',
+    bubbleZoom: 'Taille de la bulle (%)',
     spriteSearch: 'Chercher un personnage…',
     spriteNoResults: 'Aucun personnage pour cette recherche.',
     motionDenied: 'Activez le mouvement dans les permissions du navigateur',

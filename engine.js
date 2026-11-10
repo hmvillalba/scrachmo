@@ -1295,6 +1295,277 @@ function bindProjects() {
   });
 }
 
+/* ---------------- ejemplos y guía ----------------
+   Tres proyectos de muestra que se abren como COPIA: nunca tocan el proyecto
+   que la persona estaba armando. Se arman con makeNode()/createSpriteData(),
+   los mismos constructores que usa la app, así que no hay JSON duplicado que
+   se desincronice cuando cambia el formato de los nodos. */
+
+/* El zoom del globo vive en node.zoom y no en val, así que no puede ir por
+   makeNode: se asigna después. */
+function exSay(text, zoom) {
+  const n = makeNode('say', text);
+  if (n) n.zoom = clamp(Math.round(num(zoom, 100)), 50, 250);
+  return n;
+}
+
+/* Caminar sólo en horizontal: «ir a x: (posición x) + delta, y: fija». Es el
+   patrón que evita que el personaje se dé vuelta mientras camina, y de paso
+   muestra cómo se anida un reportero dentro de otro. */
+function exStepX(delta, y) {
+  const suma = makeNode('rep_add', '0,' + delta);
+  suma.reps = [makeNode('rep_x'), null];
+  const ir = makeNode('go_xy', '0,' + y);
+  ir.reps = [suma, null];
+  return ir;
+}
+
+/* Clon que aparece en un punto al azar de la parte de arriba. */
+function exDrop(y) {
+  const ir = makeNode('go_xy', '0,' + y);
+  ir.reps = [makeNode('rep_random', '-190,190'), null];
+  return ir;
+}
+
+function exHola(t) {
+  const gato = createSpriteData('🐱', t.exCat, [
+    makeNode('when_flag'),
+    exSay(t.ex1Line1, 130),
+    makeNode('wait', 1),
+    exSay(t.ex1Line2, 100),
+    makeNode('when_key', 'arrowright'),
+    makeNode('point_dir', 90),
+    makeNode('move', 14),
+    makeNode('when_key', 'arrowleft'),
+    makeNode('point_dir', -90),
+    makeNode('move', 14)
+  ]);
+  gato.y = -40;
+  return { sprites: [gato], selected: gato.id };
+}
+
+function exFruta(t) {
+  const cesta = createSpriteData('🧺', t.exBasket, [
+    makeNode('when_flag'),
+    makeNode('go_xy', '0,-140'),
+    makeNode('when_key', 'arrowleft'),
+    exStepX(-18, -140),
+    makeNode('when_key', 'arrowright'),
+    exStepX(18, -140)
+  ]);
+  cesta.y = -140;
+
+  /* El clon se borra al tocar la cesta: «borrar este clon» corta el hilo en
+     el siguiente punto de espera, así que no sigue cayendo. */
+  const toca = makeNode('if_touch_sprite', cesta.id);
+  toca.body = [makeNode('score_add', 1), makeNode('delete_clone')];
+
+  const caer = makeNode('repeat', 30);
+  caer.body = [makeNode('move', 12), toca];
+
+  const lluvia = makeNode('forever');
+  lluvia.body = [makeNode('create_clone', 'self'), makeNode('wait', 1)];
+
+  const fruta = createSpriteData('🍎', t.exFruit, [
+    makeNode('when_flag'),
+    makeNode('hide'),
+    lluvia,
+    makeNode('when_clone'),
+    /* Un clon de un personaje escondido nace escondido: hay que mostrarlo. */
+    makeNode('show'),
+    exDrop(170),
+    makeNode('point_dir', 180),
+    caer,
+    makeNode('delete_clone')
+  ]);
+  return { sprites: [cesta, fruta], selected: cesta.id, showScore: true };
+}
+
+function exCometas(t) {
+  const lluvia = makeNode('forever');
+  lluvia.body = [makeNode('create_clone', 'self'), makeNode('wait', 1.4)];
+
+  const caer = makeNode('repeat', 34);
+  caer.body = [makeNode('move', 10)];
+
+  const cometa = createSpriteData('☄️', t.exComet, [
+    makeNode('when_flag'),
+    makeNode('hide'),
+    lluvia,
+    makeNode('when_clone'),
+    makeNode('show'),
+    exDrop(175),
+    makeNode('point_dir', 180),
+    caer,
+    makeNode('delete_clone')
+  ]);
+
+  const golpe = makeNode('if_touch_sprite', cometa.id);
+  golpe.body = [exSay(t.ex3Hit, 120), makeNode('score_reset'), makeNode('vibrate', 200)];
+
+  const vigilar = makeNode('forever');
+  vigilar.body = [makeNode('wait', 0.5), golpe];
+
+  const nave = createSpriteData('🚀', t.exShip, [
+    makeNode('when_flag'),
+    makeNode('go_xy', '0,-140'),
+    makeNode('score_reset'),
+    vigilar,
+    makeNode('when_key', 'arrowleft'),
+    exStepX(-18, -140),
+    makeNode('when_key', 'arrowright'),
+    exStepX(18, -140)
+  ]);
+  nave.y = -140;
+
+  /* Los puntos suben solos mientras sobrevivís: así se nota el reinicio. */
+  const puntos = makeNode('forever');
+  puntos.body = [makeNode('wait', 1), makeNode('score_add', 1)];
+  nave.code.push(makeNode('when_flag'), puntos);
+
+  return { sprites: [nave, cometa], selected: nave.id, showScore: true };
+}
+
+const EXAMPLES = [
+  { id: 'hola', emoji: '🐱', nameKey: 'ex1', descKey: 'ex1d', build: exHola },
+  { id: 'fruta', emoji: '🍎', nameKey: 'ex2', descKey: 'ex2d', build: exFruta },
+  { id: 'cometas', emoji: '☄️', nameKey: 'ex3', descKey: 'ex3d', build: exCometas }
+];
+
+const EXAMPLE_GUIDE_STEPS = 5;
+
+/* Proyecto completo a partir de un ejemplo. Se devuelve un objeto con la
+   misma forma que serializeProject(), que es lo que come applyPayload(). */
+function examplePayload(ex) {
+  const t = UI[lang];
+  const built = ex.build(t);
+  return {
+    version: '2.0',
+    sprites: built.sprites,
+    variables: {},
+    hidden: {},
+    worldW: WORLD_W0,
+    worldH: WORLD_H0,
+    stageBg: built.stageBg || 0,
+    stageBgImg: '',
+    showScore: !!built.showScore,
+    score: 0,
+    multiOn: false,
+    volume: 100,
+    selected: built.selected
+  };
+}
+
+function renderExamples() {
+  const box = $('#exList');
+  if (!box) return;
+  const t = UI[lang];
+  const frag = document.createDocumentFragment();
+
+  const cards = document.createElement('div');
+  cards.className = 'ex-cards';
+  EXAMPLES.forEach(ex => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'ex-card';
+    card.dataset.example = ex.id;
+
+    const face = document.createElement('span');
+    face.className = 'ex-face';
+    face.setAttribute('aria-hidden', 'true');
+    face.textContent = ex.emoji;
+
+    const txt = document.createElement('span');
+    txt.className = 'ex-txt';
+    const name = document.createElement('b');
+    name.textContent = t[ex.nameKey];
+    const desc = document.createElement('small');
+    desc.textContent = t[ex.descKey];
+    txt.appendChild(name);
+    txt.appendChild(desc);
+
+    card.appendChild(face);
+    card.appendChild(txt);
+    cards.appendChild(card);
+  });
+  frag.appendChild(cards);
+
+  const titulo = document.createElement('p');
+  titulo.className = 'ex-guide-title';
+  titulo.textContent = t.exGuide;
+  frag.appendChild(titulo);
+
+  const lista = document.createElement('ol');
+  lista.className = 'ex-guide';
+  for (let i = 1; i <= EXAMPLE_GUIDE_STEPS; i++) {
+    const li = document.createElement('li');
+    li.textContent = t['exStep' + i];
+    lista.appendChild(li);
+  }
+  frag.appendChild(lista);
+
+  box.replaceChildren(frag);
+}
+
+function openExamples() {
+  const modal = $('#exModal');
+  if (!modal) return;
+  renderExamples();
+  modal.hidden = false;
+  updateModalLock();
+}
+
+function closeExamples() {
+  const modal = $('#exModal');
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  updateModalLock();
+}
+
+/* Abrir un ejemplo crea un proyecto NUEVO: el que estaba abierto se respalda
+   en su slot y queda intacto en la lista. */
+function openExample(id) {
+  const t = UI[lang];
+  const ex = EXAMPLES.find(e => e.id === id);
+  if (!ex) return;
+  if (projects.length >= MAX_PROJECTS) { toast(t.projectLimit); return; }
+  if (!persistProject()) return;
+  if (!stashActiveProject()) return;
+
+  const payload = examplePayload(ex);
+  const pid = uid('p');
+  stopCode();
+  if (!applyPayload(payload)) { toast(t.badFile); return; }
+  projects.unshift({ id: pid, name: t[ex.nameKey], updatedAt: Date.now() });
+  activeProjectId = pid;
+  writeProjects();
+  varFormOpen = false;
+  resetHistory();
+  render();
+  persistProject();
+  updateProjectName();
+  closeExamples();
+  toast(t.exOpened.replace('{n}', t[ex.nameKey]));
+}
+
+function bindExamples() {
+  const btn = $('#examplesBtn');
+  if (btn) btn.addEventListener('click', openExamples);
+  const close = $('#exClose');
+  if (close) close.addEventListener('click', closeExamples);
+
+  const modal = $('#exModal');
+  if (!modal) return;
+  modal.addEventListener('click', e => {
+    if (e.target === modal) { closeExamples(); return; }
+    const card = e.target.closest('[data-example]');
+    if (card) openExample(card.dataset.example);
+  });
+  document.addEventListener('keydown', e => {
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeExamples(); }
+  });
+}
+
 /* ---------------- acerca de ----------------
    Mismos datos que el resto de los proyectos del autor, traducidos a los
    cuatro idiomas. Es informativo: no toca el proyecto ni el guardado. */
@@ -1646,7 +1917,7 @@ function closeSpriteModal() {
    modales ya llaman updateModalLock() al abrir y al cerrar. además de retener
    Tab se marca el fondo como «inert» y se devuelve el foco al control que
    abrió el diálogo. */
-const MODAL_IDS = ['shareModal', 'spriteModal', 'askModal', 'repPicker', 'projModal', 'aboutModal'];
+const MODAL_IDS = ['shareModal', 'spriteModal', 'askModal', 'repPicker', 'projModal', 'exModal', 'aboutModal'];
 const FOCUSABLE_SEL = 'a[href],button:not([disabled]),input:not([disabled]),' +
   'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 let modalFocusFrom = null;
@@ -3026,6 +3297,7 @@ function render() {
   updateResetButton();
   updateHistoryButtons();
   updateProjectName();
+  renderExamples();
 }
 
 /* ---------------- collapsed sections ---------------- */
@@ -5790,6 +6062,7 @@ function bindEvents() {
   bindAskModal();
   bindRepPicker();
   bindProjects();
+  bindExamples();
   bindAbout();
   bindPwaUpdates();
   bindGameOrientation();

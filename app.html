@@ -593,6 +593,28 @@ footer{padding:18px 20px 8px;text-align:center;font-size:10.5px;color:var(--mute
 .proj-act .ic{width:17px;height:17px}
 .proj-empty{margin:8px 2px;color:var(--muted);font-size:13px}
 
+/* Ejemplos: tarjetas grandes, una por muestra, y la guía numerada debajo. */
+.ex-list{margin:4px 0 2px;max-height:56vh;overflow:auto}
+.ex-cards{display:flex;flex-direction:column;gap:8px}
+.ex-card{
+  display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+  padding:10px 12px;border-radius:14px;border:1.5px solid var(--line);
+  background:#fff;cursor:pointer;transition:border-color .15s,background .15s,transform .1s;
+}
+.ex-card:hover{border-color:#a5b4fc;background:#f8faff}
+.ex-card:active{transform:scale(.99)}
+.ex-card:focus-visible{outline:2px solid #6366f1;outline-offset:2px}
+.ex-face{
+  flex:0 0 auto;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+  font-size:24px;line-height:1;background:#eef2ff;border:1px solid #e0e7ff;
+}
+.ex-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ex-txt b{font-size:13.5px;color:#0f172a}
+.ex-txt small{font-size:11.5px;color:var(--muted);line-height:1.35}
+.ex-guide-title{margin:14px 2px 6px;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.ex-guide{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.ex-guide li{font-size:12.5px;line-height:1.45;color:#334155}
+
 .toast{
   position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));z-index:90;
   transform:translate(-50%,14px);background:#0f172a;color:#fff;
@@ -1468,6 +1490,10 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
             <span class="tool-ic"><svg class="ic" aria-hidden="true"><use href="#i-folder"></use></svg></span>
             <span class="tool-txt"><b data-t="projectsTitle">Mis proyectos</b><small id="projName">—</small></span>
           </button>
+          <button type="button" class="tool" data-kind="examples" id="examplesBtn">
+            <span class="tool-ic"><svg class="ic" aria-hidden="true"><use href="#i-blocks"></use></svg></span>
+            <span class="tool-txt"><b data-t="exTitle">Ejemplos y guía</b><small data-t="exGuide">Guía rápida</small></span>
+          </button>
           <button type="button" class="tool" data-kind="save" id="saveBtn">
             <span class="tool-ic"><svg class="ic" aria-hidden="true"><use href="#i-save"></use></svg></span>
             <span class="tool-txt"><b data-t="save">Guardar</b><small data-t="saveSub">En este dispositivo</small></span>
@@ -1611,6 +1637,20 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
       <button type="button" class="m-btn ghost" id="projExport" data-t="exportLibrary">Exportar biblioteca</button>
       <button type="button" class="m-btn ghost" id="projNew"><span data-t="newProject">Nuevo proyecto</span></button>
       <button type="button" class="m-btn" id="projClose"><span data-t="closeLabel">Cerrar</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="exModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="exTitle">
+    <div class="modal-head">
+      <span class="modal-icon"><svg class="ic" aria-hidden="true"><use href="#i-blocks"></use></svg></span>
+      <h3 id="exTitle" data-t="exTitle">Ejemplos y guía</h3>
+    </div>
+    <p data-t="exIntro">Abrí un ejemplo y mirá cómo está armado. Se copia a un proyecto nuevo: lo que estabas haciendo queda intacto.</p>
+    <div id="exList" class="ex-list"></div>
+    <div class="modal-actions">
+      <button type="button" class="m-btn" id="exClose"><span data-t="closeLabel">Cerrar</span></button>
     </div>
   </div>
 </div>

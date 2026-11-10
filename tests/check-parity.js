@@ -229,8 +229,8 @@ if (!/^\s*bindAbout\(\);/m.test(engine)) { ok = false; console.log('FAIL bindAbo
    recibiendo Tab y se mueve. */
 const listaModales = /const MODAL_IDS = \[([^\]]+)\]/.exec(engine);
 if (!listaModales || ['shareModal', 'spriteModal', 'askModal', 'repPicker',
-  'projModal', 'aboutModal'].some(id => listaModales[1].indexOf("'" + id + "'") < 0)) {
-  ok = false; console.log('FAIL MODAL_IDS no cubre los seis modales (incluido «Acerca de»)');
+  'projModal', 'exModal', 'aboutModal'].some(id => listaModales[1].indexOf("'" + id + "'") < 0)) {
+  ok = false; console.log('FAIL MODAL_IDS no cubre los siete modales (incluidos «Ejemplos» y «Acerca de»)');
 }
 
 /* Modo juego: el campo tiene que conservar la proporción del mundo (480x360 de
@@ -566,6 +566,42 @@ if (fs.existsSync(wfDir)) {
       ok = false; console.log('FAIL falta #' + id + ' en el modal de proyectos');
     }
   });
+}
+
+/* ---------------- ejemplos y guía (P1.9) ----------------
+   Los ejemplos se arman con los constructores del motor, no con JSON copiado:
+   si alguien los pasa a literales, se desincronizan al primer cambio de nodo. */
+{
+  ['exHola', 'exFruta', 'exCometas'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta el ejemplo ' + fn + '()');
+    }
+  });
+  if (!/const EXAMPLES = \[[\s\S]{0,600}?exHola[\s\S]{0,200}?exFruta[\s\S]{0,200}?exCometas/.test(engine)) {
+    ok = false; console.log('FAIL EXAMPLES no lista los tres ejemplos');
+  }
+  /* Abrir un ejemplo tiene que crear un proyecto nuevo, nunca pisar el actual. */
+  if (!/function\s+openExample\s*\([\s\S]{0,900}?stashActiveProject\(\)[\s\S]{0,600}?projects\.unshift\(/.test(engine)) {
+    ok = false; console.log('FAIL openExample() no respalda el proyecto actual ni crea uno nuevo');
+  }
+  /* Un clon de un personaje escondido nace escondido: el guion del clon tiene
+     que mostrar el personaje, o el ejemplo no se ve. */
+  if (!/when_clone'\),\s*\n?\s*makeNode\('show'\)/.test(engine.replace(/\r/g, ''))) {
+    ok = false; console.log('FAIL los clones de los ejemplos no se muestran al nacer');
+  }
+  ['examplesBtn', 'exModal', 'exClose', 'exList'].forEach(id => {
+    if (!new RegExp('id="' + id + '"').test(html)) {
+      ok = false; console.log('FAIL falta #' + id + ' en el editor');
+    }
+  });
+  /* Las claves de la guía tienen que existir en los cuatro idiomas. */
+  for (let i = 1; i <= 5; i++) {
+    const faltan = langs.filter(l => typeof ctx.EX[l]['exStep' + i] !== 'string' ||
+      !ctx.EX[l]['exStep' + i].length);
+    if (faltan.length) {
+      ok = false; console.log('FAIL exStep' + i + ' falta en ' + faltan.join(', '));
+    }
+  }
 }
 
 /* ---------------- despliegue: Vercel ---------------- */

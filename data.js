@@ -293,6 +293,22 @@ const SOUND_LIB = [
   { id: 'bell', name: L('Campana', 'Bell', 'Sino', 'Cloche'), steps: [[1318, .5, 'sine'], [1046, .6, 'sine']] }
 ];
 
+/* Teclas del bloque «al presionar»: el id es el valor de `e.key` en
+   minúsculas —la barra espaciadora es un espacio—, que es con lo que compara
+   el motor. Las letras y los números se agregan abajo. */
+const KEY_LIB = [
+  { id: ' ', name: L('Espacio', 'Space', 'Espaço', 'Espace') },
+  { id: 'enter', name: L('Enter', 'Enter', 'Enter', 'Entrée') },
+  { id: 'arrowup', name: L('↑ Arriba', '↑ Up', '↑ Cima', '↑ Haut') },
+  { id: 'arrowdown', name: L('↓ Abajo', '↓ Down', '↓ Baixo', '↓ Bas') },
+  { id: 'arrowleft', name: L('← Izquierda', '← Left', '← Esquerda', '← Gauche') },
+  { id: 'arrowright', name: L('→ Derecha', '→ Right', '→ Direita', '→ Droite') }
+];
+'abcdefghijklmnopqrstuvwxyz'.split('').concat('0123456789'.split('')).forEach(ch => {
+  const up = ch.toUpperCase();
+  KEY_LIB.push({ id: ch, name: { es: up, en: up, pt: up, fr: up } });
+});
+
 const MELODY_LIB = [
   {
     id: 'happy', name: L('Alegre', 'Happy', 'Alegre', 'Joyeuse'),
@@ -427,7 +443,7 @@ const BLOCKS = [
     d: L('Se activa cuando tocás el escenario.', 'Triggers when you tap the stage.', 'Ativa quando você toca o palco.', 'Se déclenche quand tu touches la scène.')
   },
   {
-    id: 'when_key', cat: 'event', icon: 'keyboard', def: 'espacio', w: 88, hat: 1,
+    id: 'when_key', cat: 'event', icon: 'keyboard', def: ' ', w: 104, hat: 1, pick: 'keys',
     n: L('Al presionar {v}', 'When {v} pressed', 'Ao pressionar {v}', 'Touche {v} pressée'),
     d: L('Se activa al presionar una tecla.', 'Triggers when you press a key.', 'Ativa quando você aperta uma tecla.', 'Se déclenche quand tu appuies sur une touche.')
   },
@@ -691,6 +707,7 @@ const UI_EXTRA = {
     costumeDefault: 'Disfraz',
     costumeMissing: 'Ese disfraz ya no existe',
     soundMissing: 'Ese sonido ya no existe',
+    keyMissing: 'Esa tecla no sirve',
     spriteMissing: 'Ese personaje ya no existe',
     cloneSelf: 'mí mismo',
     importSprite: 'Importar mis imágenes…',
@@ -724,6 +741,7 @@ const UI_EXTRA = {
     stageResizeXY: 'Arrastrá para cambiar el ancho y el alto',
     stageSizeReset: 'Volver al tamaño original del escenario',
     stageSizeResetDone: 'El escenario volvió a su tamaño original',
+    codeResize: 'Arrastrá para cambiar el alto del área de código',
     backToStart: 'Volver al inicio',
     startRestored: 'Personajes en su posición inicial',
     confirmTitle: 'Confirmar',
@@ -784,6 +802,7 @@ const UI_EXTRA = {
     costumeDefault: 'Costume',
     costumeMissing: 'That costume no longer exists',
     soundMissing: 'That sound no longer exists',
+    keyMissing: 'That key does not work',
     spriteMissing: 'That sprite no longer exists',
     cloneSelf: 'myself',
     importSprite: 'Import my images…',
@@ -817,6 +836,7 @@ const UI_EXTRA = {
     stageResizeXY: 'Drag to change the stage width and height',
     stageSizeReset: 'Back to the original stage size',
     stageSizeResetDone: 'The stage is back to its original size',
+    codeResize: 'Drag to change the code area height',
     backToStart: 'Back to start',
     startRestored: 'Sprites back at their start position',
     confirmTitle: 'Confirm',
@@ -877,6 +897,7 @@ const UI_EXTRA = {
     costumeDefault: 'Traje',
     costumeMissing: 'Esse traje não existe mais',
     soundMissing: 'Esse som não existe mais',
+    keyMissing: 'Essa tecla não serve',
     spriteMissing: 'Esse personagem não existe mais',
     cloneSelf: 'eu mesmo',
     importSprite: 'Importar minhas imagens…',
@@ -910,6 +931,7 @@ const UI_EXTRA = {
     stageResizeXY: 'Arraste para mudar a largura e a altura',
     stageSizeReset: 'Voltar ao tamanho original do cenário',
     stageSizeResetDone: 'O cenário voltou ao tamanho original',
+    codeResize: 'Arraste para mudar a altura da área de código',
     backToStart: 'Voltar ao início',
     startRestored: 'Personagens na posição inicial',
     confirmTitle: 'Confirmar',
@@ -970,6 +992,7 @@ const UI_EXTRA = {
     costumeDefault: 'Costume',
     costumeMissing: 'Ce costume n’existe plus',
     soundMissing: 'Ce son n’existe plus',
+    keyMissing: 'Cette touche ne marche pas',
     spriteMissing: 'Ce personnage n’existe plus',
     cloneSelf: 'moi-même',
     importSprite: 'Importer mes images…',
@@ -1003,6 +1026,7 @@ const UI_EXTRA = {
     stageResizeXY: 'Glissez pour changer la largeur et la hauteur',
     stageSizeReset: 'Revenir à la taille originale de la scène',
     stageSizeResetDone: 'La scène a retrouvé sa taille originale',
+    codeResize: 'Faites glisser pour changer la hauteur du code',
     backToStart: 'Revenir au départ',
     startRestored: 'Personnages à leur position de départ',
     confirmTitle: 'Confirmer',

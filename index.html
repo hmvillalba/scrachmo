@@ -312,6 +312,20 @@ body.is-dragging{user-select:none;cursor:grabbing}
 }
 .reorder-hint .ic{width:12px;height:12px;color:#a5b4fc}
 .reorder-hint[hidden]{display:none}
+/* Asa para agrandar el área de código: la tarjeta de al lado no se estira,
+   sólo cambia el alto del lienzo (--code-h). */
+.code-grip{
+  position:relative;height:16px;margin:6px 0 0;border-radius:8px;
+  cursor:ns-resize;touch-action:none;display:grid;place-items:center;
+  color:var(--muted-2);
+}
+.code-grip::after{
+  content:"";width:56px;height:5px;border-radius:3px;
+  background:currentColor;opacity:.5;
+}
+.code-grip:hover::after,.code-grip:focus-visible::after,.code-grip.dragging::after{opacity:.9}
+.code-grip::before{content:"";position:absolute;inset:-6px 0;}
+.code-grip .ic{display:none}
 #blocksCard{scroll-margin-top:calc(78px + env(safe-area-inset-top))}
 
 /* ---------- Variables ---------- */
@@ -828,10 +842,11 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
   background-size:16px 16px;
   border:1px solid var(--line);border-radius:14px;
   padding:14px 10px;
-  /* Alto fijo a propósito: el zoom agranda los bloques, no la tarjeta. Si el
-     área creciera con el contenido, cada clic en «+» estiraba toda la columna
-     y la página saltaba. Lo que no entra se ve con scroll, como en Scratch. */
-  height:clamp(200px,34vh,360px);
+  /* Alto propio, que se puede arrastrar desde el asa de abajo. Es fijo a
+     propósito: el zoom agranda los bloques, no la tarjeta. Si el área creciera
+     con el contenido, cada clic en «+» estiraba toda la columna y la página
+     saltaba. Lo que no entra se ve con scroll, como en Scratch. */
+  height:var(--code-h, clamp(200px,34vh,360px));
   overflow:auto;
   -webkit-overflow-scrolling:touch;
   /* Los bloques se apilan con z-index alto (assignZ(), desde 6000) para que
@@ -1359,6 +1374,8 @@ body.game-mode .sprite-bubble{font-size:14px;bottom:46px}
         <div class="scratch-workspace">
           <div class="code-list" id="codeList"></div>
         </div>
+        <div class="code-grip" id="codeGrip" role="separator" tabindex="0"
+             aria-orientation="horizontal" data-tt="codeResize" aria-label="Cambiar el alto del área de código"></div>
         <div class="reorder-hint" id="blockHint">
           <svg class="ic" aria-hidden="true"><use href="#i-grip"></use></svg>
           <span data-t="blockHint">Arrastrá los bloques a "repetir" o "por siempre" para envolverlos</span>

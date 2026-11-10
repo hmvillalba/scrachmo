@@ -94,6 +94,36 @@ if (!/const\s+VECTOR_TYPE\s*=\s*'image\/svg\+xml'/.test(engine)) { ok = false; c
 });
 if (!/ACCEPT_IMAGE\.join\(/.test(engine)) { ok = false; console.log('FAIL los <input file> no usan ACCEPT_IMAGE'); }
 
+/* Anidar soltando encima: si alguien vuelve a resolver el destino con un
+   `closest('.c-slot')` pelado, soltar sobre el «por siempre» deja el bloque
+   afuera otra vez y sólo entra apuntando al hueco de 26 px. */
+if (!/function\s+dropSlotAt\s*\(/.test(engine)) { ok = false; console.log('FAIL falta dropSlotAt()'); }
+if (!/function\s+dropSlotAt\s*\([\s\S]{0,600}?c-head/.test(engine)) {
+  ok = false; console.log('FAIL dropSlotAt() ya no mira la cabecera del bloque en C');
+}
+['moveBlockDrag', 'paletteDropContainer'].forEach(fn => {
+  if (!new RegExp('function\\s+' + fn + '\\s*\\([\\s\\S]{0,900}?dropSlotAt\\(').test(engine)) {
+    ok = false; console.log('FAIL ' + fn + '() no usa dropSlotAt()');
+  }
+});
+/* Teclado: el bloque guarda el valor de `e.key`, así que la lista de teclas
+   tiene que existir y el desplegable tiene que salir del catálogo. */
+if (!/const\s+KEY_LIB\s*=/.test(fs.readFileSync(path.join(SRC, 'data.js'), 'utf8'))) {
+  ok = false; console.log('FAIL falta KEY_LIB en data.js');
+}
+if (!/kind\s*===\s*'keys'\s*\?\s*KEY_LIB/.test(engine)) {
+  ok = false; console.log('FAIL pickList() no devuelve KEY_LIB');
+}
+if (!/function\s+pickMatch\s*\(/.test(engine)) { ok = false; console.log('FAIL falta pickMatch()'); }
+/* Alto del área de código: el asa y la variable que lo mueve. */
+if (!/id="codeGrip"/.test(html)) { ok = false; console.log('FAIL falta el asa #codeGrip'); }
+['startCodeResize', 'moveCodeResize', 'endCodeResize', 'keyCodeResize',
+  'applyCodeHeight', 'setCodeHeight', 'loadCodeHeight', 'resetCodeHeight', 'codeMaxH'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() del alto del código');
+    }
+  });
+
 /* Exportación a .sb3: las piezas que no pueden faltar. El ZIP, el MD5 y el
    CRC32 son propios (no hay librerías), así que si alguien los borra el botón
    queda muerto sin que ninguna otra prueba se entere. */
@@ -189,7 +219,7 @@ if (!/\.stage-world\{[^}]*transform:scale\(var\(--stage-zoom,1\)\)/.test(html)) 
 if (/\.stage\{[^}]*height:calc\([^}]*var\(--stage-zoom/.test(html)) {
   ok = false; console.log('FAIL el alto del escenario sigue dependiendo del zoom');
 }
-if (!/\.scratch-workspace\{[^}]*height:clamp/.test(html)) {
+if (!/\.scratch-workspace\{[^}]*height:var\(--code-h,\s*clamp/.test(html)) {
   ok = false; console.log('FAIL el área de código no tiene alto fijo: el zoom estiraría la tarjeta');
 }
 if (!/id="stageWorld"/.test(html) || !/id="stageBg"/.test(html)) {

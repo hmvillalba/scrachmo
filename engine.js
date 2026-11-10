@@ -2260,7 +2260,7 @@ function blockContent(node, def, t) {
         const opt = document.createElement('option');
         opt.value = item.id;
         opt.textContent = item.name[lang] || item.name.es;
-        if (item.id === cur) { opt.selected = true; found = true; }
+        if (pickMatch(def.pick, item.id, cur)) { opt.selected = true; found = true; }
         sel.appendChild(opt);
       });
       /* Un id que ya no existe (proyecto viejo o editado a mano) no rompe el
@@ -2268,7 +2268,8 @@ function blockContent(node, def, t) {
       if (!found) {
         const opt = document.createElement('option');
         opt.value = cur;
-        opt.textContent = def.pick === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing;
+        opt.textContent = def.pick === 'sprites' ? UI[lang].spriteMissing
+          : (def.pick === 'keys' ? UI[lang].keyMissing : UI[lang].soundMissing);
         opt.selected = true;
         sel.appendChild(opt);
       }
@@ -2612,12 +2613,21 @@ function pickList(kind) {
       return { id: s.id, name: name };
     }));
   }
-  return kind === 'melodies' ? MELODY_LIB : SOUND_LIB;
+  return kind === 'melodies' ? MELODY_LIB : (kind === 'keys' ? KEY_LIB : SOUND_LIB);
+}
+
+/* Un proyecto viejo guarda el nombre escrito a mano («espacio», «arriba»):
+   se compara por su forma normalizada para que el desplegable muestre la
+   tecla que de verdad escucha el guion. */
+function pickMatch(kind, id, cur) {
+  if (kind === 'keys') return normKeyName(id) === normKeyName(cur);
+  return id === cur;
 }
 
 function pickLabel(kind, id) {
-  const item = pickList(kind).find(x => x.id === id);
+  const item = pickList(kind).find(x => pickMatch(kind, x.id, id));
   if (item) return item.name[lang] || item.name.es;
+  if (kind === 'keys') return UI[lang].keyMissing || String(id);
   return (kind === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing) || String(id);
 }
 
@@ -2904,6 +2914,24 @@ function clearDrop() {
   $$('.c-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
 }
 
+/* Dónde va a caer un bloque. Si el puntero está sobre el hueco, ahí; y si está
+   sobre un bloque en C —la cabecera, el pie o la barra «si no»—, en el hueco de
+   adentro. Sin esto había que apuntar al hueco de 26 px: soltar sobre el
+   «por siempre» dejaba el bloque afuera, que es justo lo que uno hace. */
+function dropSlotAt(el) {
+  if (!el || !el.closest) return null;
+  const overElse = el.closest('.c-else');
+  if (overElse || el.closest('.c-head') || el.closest('.c-foot')) {
+    const item = el.closest('.stack-item.c-item');
+    if (item) {
+      const want = overElse ? 'elseBody' : 'body';
+      const slot = item.querySelector(':scope > .c-slot[data-slot="' + want + '"]');
+      if (slot) return slot;
+    }
+  }
+  return el.closest('.c-slot');
+}
+
 function calcDropTarget(container, draggedItem, clientY) {
   const children = Array.from(container.children).filter(el => el.classList.contains('stack-item') && el !== draggedItem);
   let index = 0;
@@ -2993,10 +3021,10 @@ function moveBlockDrag(e) {
   const el = document.elementFromPoint(e.clientX, e.clientY);
   let container = null;
   if (el) {
-    const slot = el.closest('.c-slot');
-    if (slot) container = slot;
-    else if (el.closest('#codeList')) container = $('#codeList');
-    else if (el.closest('.scratch-workspace')) container = $('#codeList');
+    const slot = dropSlotAt(el);
+    /* Los huecos de la paleta son vistas previas: no cuentan como destino. */
+    if (slot && slot.closest('#codeList')) container = slot;
+    else if (el.closest('#codeList') || el.closest('.scratch-workspace')) container = $('#codeList');
   }
 
   const dragged = findNode(d.id);
@@ -3065,7 +3093,7 @@ function endBlockDrag(e, cancelled) {
 function paletteDropContainer(e, def) {
   const el = document.elementFromPoint(e.clientX, e.clientY);
   if (!el) return null;
-  const slot = el.closest('.c-slot');
+  const slot = dropSlotAt(el);
   /* Sólo sirven los slots del área de código: los de la paleta son vistas previas. */
   if (slot && slot.closest('#codeList')) {
     return (def && def.hat) ? null : slot;
@@ -3325,6 +3353,89 @@ function resetWorldSize() {
   renderProps();
   saveProject();
   toast(UI[lang].stageSizeResetDone);
+}
+
+/* ---------------- alto del área de código ----------------
+   Es una preferencia del dispositivo, no del proyecto: va a localStorage y
+   nunca al guardado, así que el mismo proyecto se ve distinto en el celular
+   y en la compu sin ensuciar el archivo. Con 0 se usa el alto de fábrica. */
+const CODE_H_KEY = 'scrachmo_code_h';
+const CODE_H_MIN = 140;
+let codeH = 0;
+let codeResize = null;
+
+function codeMaxH() {
+  /* La página scrollea, así que el tope no hace falta para que entre: es sólo
+     para que el panel no se vuelva una columna infinita. En una ventana chica
+     igual deja crecer al doble del alto de fábrica. */
+  return Math.min(1400, Math.max(320, window.innerHeight - 120));
+}
+
+function applyCodeHeight() {
+  /* Se recorta al tope de la ventana actual sin perder el valor guardado: al
+     volver a agrandar la ventana, el alto elegido reaparece. */
+  if (codeH > 0) document.body.style.setProperty('--code-h', Math.round(clamp(codeH, CODE_H_MIN, codeMaxH())) + 'px');
+  else document.body.style.removeProperty('--code-h');
+}
+
+function setCodeHeight(px) {
+  codeH = clamp(Math.round(px), CODE_H_MIN, codeMaxH());
+  applyCodeHeight();
+  try { localStorage.setItem(CODE_H_KEY, String(codeH)); } catch (e) { }
+}
+
+function loadCodeHeight() {
+  try {
+    const v = parseInt(localStorage.getItem(CODE_H_KEY), 10);
+    if (v > 0) { codeH = clamp(v, CODE_H_MIN, codeMaxH()); applyCodeHeight(); }
+  } catch (e) { }
+}
+
+function resetCodeHeight() {
+  if (!codeH) return;
+  codeH = 0;
+  applyCodeHeight();
+  try { localStorage.removeItem(CODE_H_KEY); } catch (e) { }
+}
+
+function startCodeResize(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  const box = $('.scratch-workspace');
+  codeResize = {
+    pointerId: e.pointerId,
+    startY: e.clientY,
+    startH: box ? box.getBoundingClientRect().height : codeH,
+    el: e.currentTarget
+  };
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { }
+  e.currentTarget.classList.add('dragging');
+}
+
+function moveCodeResize(e) {
+  if (!codeResize || e.pointerId !== codeResize.pointerId) return;
+  e.preventDefault();
+  setCodeHeight(codeResize.startH + (e.clientY - codeResize.startY));
+}
+
+function endCodeResize(e) {
+  if (!codeResize) return;
+  const d = codeResize;
+  codeResize = null;
+  d.el.classList.remove('dragging');
+  try { d.el.releasePointerCapture(d.pointerId); } catch (err) { }
+}
+
+/* Teclado: el asa enfoca y las flechas cambian el alto de a 40 px. */
+function keyCodeResize(e) {
+  const paso = e.shiftKey ? 120 : 40;
+  const box = $('.scratch-workspace');
+  const actual = box ? box.getBoundingClientRect().height : 0;
+  if (e.key === 'ArrowDown') setCodeHeight((codeH || actual) + paso);
+  else if (e.key === 'ArrowUp') setCodeHeight((codeH || actual) - paso);
+  else if (e.key === 'Home' || e.key === 'Escape') resetCodeHeight();
+  else return;
+  e.preventDefault();
 }
 
 /* ---------------- expressions ----------------
@@ -4013,7 +4124,10 @@ function normKeyName(k) {
     arriba: 'arrowup', abajo: 'arrowdown',
     izquierda: 'arrowleft', derecha: 'arrowright'
   };
-  return map[s] || s;
+  if (map[s]) return map[s];
+  /* La barra espaciadora se guarda como ' ' y `trim()` la deja vacía; un
+     valor vacío también vale espacio, que es el defecto de siempre. */
+  return s || ' ';
 }
 
 /* ---------------- estado de diseño vs ejecución ---------------- */
@@ -5514,18 +5628,21 @@ function bindEvents() {
     if (spriteDrag) moveSpriteDrag(e);
     if (paletteDrag) movePaletteDrag(e);
     if (stageResize) moveStageResize(e);
+    if (codeResize) moveCodeResize(e);
   }, { passive: false });
   window.addEventListener('pointerup', e => {
     if (blockDrag) endBlockDrag(e, false);
     if (spriteDrag) endSpriteDrag(e, false);
     if (paletteDrag) endPaletteDrag(e, false);
     if (stageResize) endStageResize(e);
+    if (codeResize) endCodeResize(e);
   });
   window.addEventListener('pointercancel', e => {
     if (blockDrag) endBlockDrag(e, true);
     if (spriteDrag) endSpriteDrag(e, true);
     if (paletteDrag) endPaletteDrag(e, true);
     if (stageResize) endStageResize(e);
+    if (codeResize) endCodeResize(e);
   });
 
   /* ---- herramientas: zooms, deshacer/rehacer, fondo propio, reinicio ---- */
@@ -5545,6 +5662,14 @@ function bindEvents() {
     el.addEventListener('keydown', e => keyStageResize(e, pair[1]));
   });
   $('#resetStartBtn').addEventListener('click', resetToStart);
+  /* Alto del área de código: asa abajo, teclado y doble clic para volver. */
+  const codeGrip = $('#codeGrip');
+  if (codeGrip) {
+    codeGrip.addEventListener('pointerdown', startCodeResize);
+    codeGrip.addEventListener('keydown', keyCodeResize);
+    codeGrip.addEventListener('dblclick', resetCodeHeight);
+  }
+  window.addEventListener('resize', () => { if (codeH > 0) applyCodeHeight(); });
   $('#undoBtn').addEventListener('click', undo);
   $('#redoBtn').addEventListener('click', redo);
   $('#bgCustomBtn').addEventListener('click', pickBackdropFile);
@@ -5743,6 +5868,9 @@ bindEvents();
 /* El tamaño del mundo manda en el CSS del escenario: se publica antes del
    primer render para que la caja no aparezca con el tamaño de fábrica y salte. */
 applyWorldSize();
+/* El alto del área de código es una preferencia del dispositivo. Se aplica
+   antes del primer render para que la tarjeta no salte de tamaño. */
+loadCodeHeight();
 render();
 /* La primera instantánea es la línea base del historial. Si venimos de un
    link compartido, hydrateShared() la reemplaza al aplicar el proyecto. */

@@ -231,8 +231,16 @@ window.addEventListener('load', function () {
       check('letra_mayuscula_cuenta', runActive === true);
       stopCode();
 
-      check('etiqueta_de_tecla', pickLabel('keys', 'enter') === 'Enter' &&
-        pickLabel('keys', 'espacio') === KEY_LIB[0].name[lang]);
+      /* La etiqueta sale del catálogo y sigue el idioma: «Enter» en español e
+         inglés, «Entrée» en francés. Antes estaba escrito «Enter» a mano y en
+         francés fallaba; el texto se deriva de KEY_LIB. */
+      const tecla = id => {
+        const k = KEY_LIB.find(x => x.id === id);
+        return k ? k.name[lang] : null;
+      };
+      check('etiqueta_de_tecla', pickLabel('keys', 'enter') === tecla('enter') &&
+        pickLabel('keys', 'espacio') === KEY_LIB[0].name[lang] &&
+        pickLabel('keys', 'enter') !== UI[lang].keyMissing);
       check('paleta_muestra_la_tecla', blockPlainName(BYID.when_key).indexOf(KEY_LIB[0].name[lang]) > -1);
 
       /* ================= 3. alto del área de código ================= */

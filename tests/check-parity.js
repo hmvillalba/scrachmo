@@ -758,6 +758,27 @@ if (fs.existsSync(wfDir)) {
   });
 }
 
+/* ---------------- los cuatro idiomas se corren de verdad ----------------
+   La suite filtraba por un mapa que sólo tenía es/en: `SCRACHMO_LANGS=pt`
+   no fallaba, corría CERO escenarios y terminaba en verde. Un idioma que no
+   se ejecuta es peor que uno que falla. */
+{
+  const runJs = fs.readFileSync(path.join(SRC, 'tests/run.js'), 'utf8');
+  ['es', 'en', 'pt', 'fr'].forEach(l => {
+    if (!new RegExp("id: '" + l + "'").test(runJs)) {
+      ok = false; console.log('FAIL tests/run.js no sabe correr en ' + l);
+    }
+  });
+  if (!/SCRACHMO_LANGS \|\| 'es,en,pt,fr'/.test(runJs)) {
+    ok = false; console.log('FAIL la suite no corre los cuatro idiomas por defecto');
+  }
+  /* Y CI tiene que pedirlos explícitos, no confiar en el valor por defecto. */
+  const ci = fs.readFileSync(path.join(SRC, '.github', 'workflows', 'test.yml'), 'utf8');
+  if (!/SCRACHMO_LANGS:\s*es,en,pt,fr/.test(ci)) {
+    ok = false; console.log('FAIL CI no corre los cuatro idiomas');
+  }
+}
+
 /* ---------------- despliegue: Vercel ---------------- */
 {
   const vpath = path.join(SRC, 'vercel.json');

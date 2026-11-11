@@ -24,10 +24,30 @@ const only = process.argv[3] || '';
 /* Códigos de Chrome para cada idioma de la app. `--lang` es el que manda en
    navigator.language; LANG/LC_ALL acompañan para que la comparación de
    cadenas y los formatos no dependan del sistema. */
-const LANGS = [
+const TODOS = [
   { id: 'es', chrome: 'es-419', env: 'es_419.UTF-8' },
-  { id: 'en', chrome: 'en-US', env: 'en_US.UTF-8' }
-].filter(l => (process.env.SCRACHMO_LANGS || 'es,en').split(',').indexOf(l.id) > -1);
+  { id: 'en', chrome: 'en-US', env: 'en_US.UTF-8' },
+  { id: 'pt', chrome: 'pt-BR', env: 'pt_BR.UTF-8' },
+  { id: 'fr', chrome: 'fr-FR', env: 'fr_FR.UTF-8' }
+];
+
+/* Los cuatro por defecto. Un idioma que no estuviera en el mapa no fallaba:
+   se filtraba y la suite terminaba en verde sin haberlo probado nunca. Ahora
+   un id desconocido o una lista que no deja ninguno es un error, no un OK. */
+const pedidos = String(process.env.SCRACHMO_LANGS || 'es,en,pt,fr')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const desconocidos = pedidos.filter(id => !TODOS.some(l => l.id === id));
+const LANGS = TODOS.filter(l => pedidos.indexOf(l.id) > -1);
+
+if (desconocidos.length) {
+  console.error('Idioma desconocido en SCRACHMO_LANGS: ' + desconocidos.join(', ') +
+    '\nDisponibles: ' + TODOS.map(l => l.id).join(', '));
+  process.exit(2);
+}
+if (!LANGS.length) {
+  console.error('SCRACHMO_LANGS no dejó ningún idioma: la suite no correría nada.');
+  process.exit(2);
+}
 
 function findChrome() {
   const candidates = [

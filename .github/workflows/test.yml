@@ -13,6 +13,9 @@ jobs:
       LC_ALL: C.UTF-8
       # Directorio fijo dentro del workspace para poder subir los artefactos.
       SCRACHMO_TMP: ${{ github.workspace }}/tests-out
+      # Los cuatro idiomas, explícitos: la app se publica en cuatro y un idioma
+      # que no se corre no falla, así que la lista no puede quedar implícita.
+      SCRACHMO_LANGS: es,en,pt,fr
     steps:
       - uses: actions/checkout@v5
 

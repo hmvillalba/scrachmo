@@ -779,6 +779,36 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- el README en los cuatro idiomas ----------------
+   La app se publica en cuatro idiomas y el README también. Los traducidos no
+   repiten la sección de verificación (es un registro de CI que cambia en cada
+   release): en su lugar enlazan a la del español. */
+{
+  const readmes = { es: 'README.md', en: 'README.en.md', pt: 'README.pt.md', fr: 'README.fr.md' };
+  Object.keys(readmes).forEach(l => {
+    const f = path.join(SRC, readmes[l]);
+    if (!fs.existsSync(f)) {
+      ok = false; console.log('FAIL falta ' + readmes[l]);
+      return;
+    }
+    const txt = fs.readFileSync(f, 'utf8');
+    /* La barra de idiomas es lo único que hace navegable la traducción: sin
+       ella, quien cae en el inglés no encuentra el español. El idioma activo
+       va en negrita, así que cada archivo enlaza a los otros tres (o a los
+       cuatro, en el español). */
+    const enlaces = new Set(txt.match(/README(?:\.\w\w)?\.md/g) || []);
+    if (enlaces.size < 3) {
+      ok = false; console.log('FAIL ' + readmes[l] + ' no tiene la barra de idiomas');
+    }
+    if (l !== 'es' && txt.indexOf('README.md#verificaci') < 0) {
+      ok = false; console.log('FAIL ' + readmes[l] + ' no enlaza la verificación del español');
+    }
+    if (txt.length < 2000) {
+      ok = false; console.log('FAIL ' + readmes[l] + ' está vacío o truncado');
+    }
+  });
+}
+
 /* ---------------- despliegue: Vercel ---------------- */
 {
   const vpath = path.join(SRC, 'vercel.json');
@@ -814,7 +844,8 @@ if (fs.existsSync(wfDir)) {
      la URL pública en el enlace Y en el texto visible: cambiar sólo el href
      deja el dominio viejo a la vista, que es lo que reportó el usuario. */
   ['index.html', 'app.html', 'landing.js', 'boot.js', 'data.js', 'engine.js',
-    'README.md', 'manifest.webmanifest'].forEach(f => {
+    'README.md', 'README.en.md', 'README.pt.md', 'README.fr.md',
+    'manifest.webmanifest'].forEach(f => {
     const txt = fs.readFileSync(path.join(SRC, f), 'utf8');
     if (/netlify/i.test(txt)) {
       ok = false; console.log('FAIL ' + f + ' todavía menciona Netlify');

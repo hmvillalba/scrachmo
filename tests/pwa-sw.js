@@ -60,13 +60,20 @@ const self = {
   location: { origin: ORIGIN },
   addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
   skipWaiting() { self._skipWaiting = true; return Promise.resolve(); },
-  clients: { claim() { self._claimed = true; return Promise.resolve(); } }
+  clients: { claim() { self._claimed = true; return Promise.resolve(); } },
+  /* El service worker mira onLine para no esperar a una red que ya sabe que
+     no está. */
+  navigator: { onLine: true }
 };
 
+/* `offline` simula que no hay conexión: fetch() rechaza, como en el celular
+   sin datos. */
+let offline = false;
 const fetched = [];
 function fakeFetch(input) {
   const url = typeof input === 'string' ? input : (input && input.url);
   fetched.push(url);
+  if (offline) return Promise.reject(new TypeError('Failed to fetch'));
   return Promise.resolve({
     ok: true, status: 200, type: 'basic', url: url,
     clone() { return this; }
@@ -79,7 +86,9 @@ const ctx = vm.createContext({
   fetch: fakeFetch,
   URL: URL,
   Promise: Promise,
-  console: console
+  console: console,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
 });
 
 try {
@@ -131,40 +140,60 @@ function request(url, mode) {
   ok((await caches.keys()).indexOf('scrachmo-v0') < 0, 'activate no borró la caché vieja');
   ok((await caches.keys()).indexOf(VERSION) >= 0, 'activate borró la caché actual');
 
-  /* Link viejo compartido: la RAÍZ con ?p= tiene que abrir el editor aunque no
-     haya red (landing.js no podría redirigir). Además NO debe refrescar la
-     caché con esa respuesta: en la red la raíz devuelve la landing, y guardar
-     eso como app.html dejaría la PWA rota. */
+  /* Sin conexión: sale el shell guardado. Es lo que hace que la app abra
+     igual en el celular sin datos, y se comprueba antes de que ninguna
+     navegación con red reescriba la caché. */
+  offline = true;
+  for (const [ruta, esperado] of [['/', 'index.html'],
+    ['/?p=g1.abc', 'app.html'], ['/app.html', 'app.html']]) {
+    const off = await fire('fetch', { request: request(ruta, 'navigate') });
+    ok(!!off._response, 'sin conexión no se respondió la navegación ' + ruta);
+    const pag = off._response ? await off._response : null;
+    ok(!!pag && String(pag.url).endsWith('/' + esperado),
+      ruta + ' sin conexión no sirvió ' + esperado + ' (' + (pag && pag.url) + ')');
+  }
+  /* Un archivo de la app también sale de la caché. */
+  const jsOff = await fire('fetch', { request: request('/data.js') });
+  const jsOffRes = jsOff._response ? await jsOff._response : null;
+  ok(!!jsOffRes && String(jsOffRes.url).endsWith('/data.js'),
+    'sin conexión no se sirvió data.js desde la caché');
+  offline = false;
+
+  /* Con red, la navegación trae la respuesta fresca y no la copia guardada:
+     así una versión nueva se ve al recargar, sin esperar a una segunda vuelta.
+     Antes era caché primero y el síntoma era «recargo y sigue la página vieja». */
   const antesNav = fetched.length;
   const nav = await fire('fetch', { request: request('/?p=g1.abc', 'navigate') });
   ok(!!nav._response, 'el handler de fetch no llamó a respondWith en la navegación');
-  let served = nav._response ? await nav._response : null;
-  ok(!!served && !!served.url && served.url.endsWith('/app.html'),
-    'la raíz con ?p= no sirvió el editor cacheado (' + (served && served.url) + ')');
-  ok(fetched.length === antesNav, 'la raíz con ?p= pidió la landing a la red y podría pisar app.html');
-  const appGuardado = await cache.match('app.html', { ignoreSearch: true });
-  ok(!!appGuardado && String(appGuardado.url).endsWith('/app.html'),
+  const served = nav._response ? await nav._response : null;
+  ok(!!served && String(served.url).indexOf('?p=g1.abc') > -1,
+    'la navegación con red no trajo la respuesta del servidor (' + (served && served.url) + ')');
+  ok(fetched.length > antesNav, 'la navegación no consultó la red (¿volvió a servir la caché?)');
+
+  /* Pero esa respuesta NO puede guardarse como app.html: en la red la raíz
+     devuelve la LANDING y la PWA quedaría abriendo la landing sin conexión. */
+  const appAntes = await cache.match('app.html', { ignoreSearch: true });
+  ok(!!appAntes && String(appAntes.url).endsWith('/app.html'),
     'la respuesta de la raíz con ?p= pisó el app.html de la caché');
 
-  /* El enlace directo a la app, con y sin proyecto compartido. */
+  /* El enlace directo a la app. */
   for (const ruta of ['/app.html', '/app.html?p=g1.abc']) {
     const directo = await fire('fetch', { request: request(ruta, 'navigate') });
     const pagina = directo._response ? await directo._response : null;
-    ok(!!pagina && String(pagina.url).endsWith('/app.html'),
-      ruta + ' no sirvió el editor cacheado (' + (pagina && pagina.url) + ')');
+    ok(!!pagina && String(pagina.url).indexOf('/app.html') > -1,
+      ruta + ' no abrió el editor (' + (pagina && pagina.url) + ')');
   }
 
-  /* La raíz sin ?p= es la landing. Se deja al final porque su refresco en
-     segundo plano reescribe la entrada index.html del doble de caché. */
+  /* La raíz sin ?p= es la landing, y también viene de la red. */
   const raiz = await fire('fetch', { request: request('/', 'navigate') });
   const landing = raiz._response ? await raiz._response : null;
-  ok(!!landing && String(landing.url).endsWith('/index.html'),
-    'la raíz no sirvió la landing cacheada (' + (landing && landing.url) + ')');
+  ok(!!landing && String(landing.url) === ORIGIN + '/',
+    'la raíz no sirvió la landing (' + (landing && landing.url) + ')');
 
-  /* Un archivo de la app se sirve desde la caché. */
+  /* Un archivo de la app se sirve desde la caché (los assets no cambian). */
   const js = await fire('fetch', { request: request('/data.js') });
-  served = js._response ? await js._response : null;
-  ok(!!served && String(served.url).endsWith('/data.js'), 'data.js no se sirvió desde la caché');
+  const jsRes = js._response ? await js._response : null;
+  ok(!!jsRes && String(jsRes.url).endsWith('/data.js'), 'data.js no se sirvió desde la caché');
 
   /* Otro origen: se deja pasar, no se cachea ni se intercepta. */
   const antes = fetched.length;

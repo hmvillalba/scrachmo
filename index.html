@@ -321,5 +321,11 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- El registro del service worker va acá también: si sólo lo hiciera el
+     editor, quien llega a la landing se quedaría con el service worker viejo
+     (que sirve el editor cacheado en la raíz) y la landing no abriría sin
+     conexión. boot.js no toca nada con file://. -->
+<script src="boot.js"></script>
 </body>
 </html>

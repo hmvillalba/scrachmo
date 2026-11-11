@@ -10,12 +10,16 @@
    redirige con landing.js, pero sin conexión es más rápido servir app.html
    directamente desde acá: el editor lee ?p= igual que antes.
 
+   Las NAVEGACIONES van red primero y caché como respaldo: así una versión
+   nueva se ve al recargar y no a la segunda vuelta. Los archivos (JS, CSS,
+   iconos) siguen saliendo de la caché, que es lo que hace que abra rápido.
+
    NO EDITAR VERSION A MANO: corré `node tests/bump-sw.js`. El nombre de la
    caché lleva la versión visible y una huella de todos los archivos que la
    caché sirve; tests/check-parity.js falla si la huella está desactualizada.
    En Vercel, vercel.json evita que la CDN cachee este archivo. */
 
-const VERSION = 'scrachmo-v11-4be944dd';
+const VERSION = 'scrachmo-v11-fca482e4';
 
 /* Todo lo que se pide en install tiene que existir: si un solo archivo falta,
    addAll() rechaza y el service worker no se instala. */
@@ -42,10 +46,25 @@ function shellPara(url) {
   const esApp = comparte || /\/app\.html$/.test(url.pathname);
   return {
     nombre: esApp ? 'app.html' : 'index.html',
-    /* No se puede refrescar la caché con la respuesta de /?p=: en la red eso
-       devuelve la LANDING y guardarla como app.html rompería la PWA. */
+    /* No se puede guardar como app.html la respuesta de /?p=: en la red eso
+       devuelve la LANDING y guardarla ahí rompería la PWA. */
     refrescar: comparte ? /\/app\.html$/.test(url.pathname) : true
   };
+}
+
+/* Si la red no contesta, se usa el shell guardado en vez de dejar la pantalla
+   en blanco. Cuatro segundos es más que cualquier 3G decente y menos que la
+   paciencia de quien abre la app en el colectivo. */
+const NAV_TIMEOUT_MS = 4000;
+
+function conLimite(promesa, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    promesa.then(
+      v => { clearTimeout(t); resolve(v); },
+      e => { clearTimeout(t); reject(e); }
+    );
+  });
 }
 
 self.addEventListener('install', event => {
@@ -76,17 +95,31 @@ self.addEventListener('fetch', event => {
   event.respondWith((async () => {
     const cache = await caches.open(VERSION);
 
-    /* Navegación: siempre el shell guardado, aunque la URL traiga ?p=<link>.
-       Es lo que hace que un proyecto compartido abra igual estando offline. */
+    /* Navegación: RED PRIMERO y la caché como respaldo.
+       Al revés (caché primero) una versión nueva sólo se veía a la segunda
+       recarga, o nunca si el service worker anterior seguía mandando: el
+       síntoma es «recargo y me sigue apareciendo la página vieja». Sin
+       conexión, o si la red tarda más de NAV_TIMEOUT_MS, sale el shell
+       guardado, que es lo que hace que la app abra igual. */
     if (req.mode === 'navigate') {
-      const pagina = await cache.match(shell.nombre, { ignoreSearch: true });
-      if (pagina) {
-        if (shell.refrescar) {
-          fetch(req).then(res => {
-            if (res && res.ok) cache.put(shell.nombre, res.clone());
-          }).catch(() => {});
+      const guardada = await cache.match(shell.nombre, { ignoreSearch: true });
+
+      /* Sin red conocida no tiene sentido esperar: el shell sale al instante. */
+      if (self.navigator && self.navigator.onLine === false) {
+        if (guardada) return guardada;
+      }
+
+      try {
+        const red = await conLimite(fetch(req), NAV_TIMEOUT_MS);
+        if (red && red.ok) {
+          if (shell.refrescar) cache.put(shell.nombre, red.clone());
+          return red;
         }
-        return pagina;
+        if (guardada) return guardada;
+        return red;
+      } catch (err) {
+        if (guardada) return guardada;
+        throw err;
       }
     }
 

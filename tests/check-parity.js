@@ -451,6 +451,12 @@ if (fs.existsSync(wfDir)) {
   if (!/<script src="landing\.js"><\/script>/.test(landingHtml)) {
     ok = false; console.log('FAIL la landing no carga landing.js');
   }
+  /* La landing tiene que registrar el service worker: si sólo lo hiciera el
+     editor, quien llega a la raíz se queda con el SW viejo (que servía el
+     editor en /) y la landing no abre sin conexión. */
+  if (!/<script src="boot\.js"><\/script>/.test(landingHtml)) {
+    ok = false; console.log('FAIL la landing no carga boot.js (no registra el service worker)');
+  }
   if (!/app\.html/.test(landingHtml) || !/id="shareApp"/.test(landingHtml) ||
       !/id="appUrl"/.test(landingHtml)) {
     ok = false; console.log('FAIL la landing no ofrece el enlace directo y compartible a app.html');

@@ -3092,7 +3092,7 @@ function updateStageHint() {
   const hint = $('#stageHint');
   if (!hint) return;
   const t = UI[lang];
-  hint.textContent = hasTopNode('when_tap') ? t.stageHint : t.stageHintRun;
+  hint.textContent = stageHintText(t);
 }
 
 /* ---------------- category chips ---------------- */
@@ -3287,7 +3287,7 @@ function render() {
   codeTitle();
 
   const hint = $('#stageHint');
-  if (hint) hint.textContent = hasTopNode('when_tap') ? t.stageHint : t.stageHintRun;
+  if (hint) hint.textContent = stageHintText(t);
 
   updateHUD();
   updateStatus();
@@ -6032,14 +6032,149 @@ function enterGame() {
   if (hint) hint.classList.remove('is-off');
   syncGameOrientation();
   window.scrollTo(0, 0);
+  buildPad();
   runAll();
 }
 
 function exitGame() {
   stopCode();
   document.body.classList.remove('game-mode');
+  const pad = $('#pad');
+  if (pad) pad.hidden = true;
   syncGameOrientation();
   window.scrollTo(0, gameScrollY || 0);
+}
+
+/* ---------------- mando en pantalla ----------------
+   «Al presionar» se dispara con un keydown de verdad, y un teléfono no tiene
+   teclado: cualquier juego de flechas era injugable ahí. Este mando toca los
+   MISMOS guiones que la tecla física, así que el proyecto no cambia y sigue
+   funcionando igual con teclado. Mantener apretado repite, como el
+   auto-repeat del sistema operativo. */
+
+const PAD_REPEAT_MS = 110;
+const PAD_DIRS = ['arrowup', 'arrowleft', 'arrowright', 'arrowdown'];
+
+/* Teclas que usa el proyecto, sin repetir y en orden de aparición. */
+function projectKeys() {
+  const out = [];
+  const walk = nodes => (nodes || []).forEach(n => {
+    if (!n) return;
+    if (n.type === 'when_key') {
+      const k = normKeyName(n.val || 'espacio');
+      if (out.indexOf(k) < 0) out.push(k);
+    }
+    if (n.body) walk(n.body);
+    if (n.elseBody) walk(n.elseBody);
+  });
+  sprites.forEach(s => walk(s.code));
+  return out;
+}
+
+/* Dispara los guiones de una tecla. Devuelve cuántos arrancaron. */
+function fireKey(key) {
+  const list = scriptsFor('when_key', sc => normKeyName(sc.hat.val || 'espacio') === key);
+  if (!list.length) return 0;
+  runScripts(list);
+  return list.length;
+}
+
+function keyLabel(k) {
+  const t = UI[lang];
+  if (k === ' ') return t.padFire;
+  if (k === 'enter') return '⏎';
+  if (k === 'arrowup') return t.padUp;
+  if (k === 'arrowdown') return t.padDown;
+  if (k === 'arrowleft') return t.padLeft;
+  if (k === 'arrowright') return t.padRight;
+  return String(k).toUpperCase();
+}
+
+/* Arma el mando con lo que el proyecto pide: si no hay flechas, el D-pad no
+   se muestra; si no hay acciones, no queda un botón de más. */
+function buildPad() {
+  const pad = $('#pad');
+  if (!pad) return;
+  const t = UI[lang];
+  const keys = projectKeys();
+  const dirs = keys.filter(k => PAD_DIRS.indexOf(k) > -1);
+  const otros = keys.filter(k => PAD_DIRS.indexOf(k) < 0);
+
+  const padDir = $('#padDir');
+  if (padDir) {
+    padDir.hidden = !dirs.length;
+    Array.prototype.forEach.call(padDir.querySelectorAll('[data-key]'), b => {
+      b.classList.toggle('is-off', dirs.indexOf(b.dataset.key) < 0);
+    });
+  }
+
+  const acts = $('#padActs');
+  if (acts) {
+    acts.textContent = '';
+    otros.forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pad-btn';
+      b.dataset.key = k;
+      b.textContent = keyLabel(k);
+      b.title = keyLabel(k);
+      b.setAttribute('aria-label', keyLabel(k));
+      acts.appendChild(b);
+    });
+    acts.hidden = !otros.length;
+  }
+
+  pad.setAttribute('aria-label', t.padTitle);
+  pad.hidden = !keys.length || !document.body.classList.contains('game-mode');
+}
+
+function padPress(btn) {
+  const key = btn.dataset.key;
+  if (!key) return;
+  btn.classList.add('is-down');
+  fireKey(key);
+  /* Mientras se mantiene apretado, se repite: así el personaje camina de
+     corrido en vez de dar un paso por toque. */
+  let timer = setInterval(() => fireKey(key), PAD_REPEAT_MS);
+  const stop = () => {
+    if (timer) clearInterval(timer);
+    timer = null;
+    btn.classList.remove('is-down');
+    btn.removeEventListener('pointerup', stop);
+    btn.removeEventListener('pointercancel', stop);
+    btn.removeEventListener('lostpointercapture', stop);
+  };
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointercancel', stop);
+  btn.addEventListener('lostpointercapture', stop);
+}
+
+function bindPad() {
+  const pad = $('#pad');
+  if (!pad) return;
+  pad.addEventListener('pointerdown', e => {
+    const btn = e.target.closest('.pad-btn');
+    if (!btn) return;
+    /* El toque no puede llegar al escenario: además de la tecla se dispararía
+       «al tocar» y el personaje haría las dos cosas a la vez. */
+    e.preventDefault();
+    e.stopPropagation();
+    try { btn.setPointerCapture(e.pointerId); } catch (err) { }
+    padPress(btn);
+  });
+  pad.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+/* La pista del escenario avisa por dónde se juega en cada aparato. */
+const mqCoarse = (typeof window.matchMedia === 'function')
+  ? window.matchMedia('(pointer: coarse)')
+  : null;
+
+function stageHintText(t) {
+  /* En un teléfono no hay teclado: si el proyecto usa teclas, el camino es
+     Jugar, que es donde aparece el mando. */
+  if (projectKeys().length && mqCoarse && mqCoarse.matches) return t.padHint;
+  return hasTopNode('when_tap') ? t.stageHint : t.stageHintRun;
 }
 
 /* ---------------- events ---------------- */
@@ -6066,6 +6201,7 @@ function bindEvents() {
   bindAbout();
   bindPwaUpdates();
   bindGameOrientation();
+  bindPad();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {
       lang = btn.dataset.lang;
@@ -6451,10 +6587,8 @@ function bindEvents() {
     }
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const key = e.key === ' ' ? ' ' : e.key.toLowerCase();
-    const list = scriptsFor('when_key', sc => normKeyName(sc.hat.val || 'espacio') === key);
-    if (!list.length) return;
+    if (!fireKey(key)) return;
     e.preventDefault();
-    runScripts(list);
   });
 
   window.addEventListener('devicemotion', e => {

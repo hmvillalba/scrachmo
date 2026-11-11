@@ -658,6 +658,49 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- mando en pantalla (móvil) ----------------
+   «Al presionar» sólo se dispara con un keydown, y un teléfono no tiene
+   teclado: sin mando, cualquier juego de flechas es injugable ahí. */
+{
+  ['projectKeys', 'fireKey', 'buildPad', 'bindPad', 'padPress', 'stageHintText']
+    .forEach(fn => {
+      if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+        ok = false; console.log('FAIL falta ' + fn + '() del mando en pantalla');
+      }
+    });
+  /* El teclado físico y el mando tienen que pasar por la misma función: si
+     se duplica la lógica, una de las dos se queda atrás. */
+  if (!/if \(!fireKey\(key\)\) return;/.test(engine)) {
+    ok = false; console.log('FAIL el keydown no dispara por fireKey()');
+  }
+  if (!/function\s+padPress[\s\S]{0,400}?fireKey\(key\)/.test(engine)) {
+    ok = false; console.log('FAIL el mando no dispara las teclas del proyecto');
+  }
+  if (!/function\s+enterGame[\s\S]{0,400}?buildPad\(\)/.test(engine)) {
+    ok = false; console.log('FAIL el modo juego no arma el mando');
+  }
+  if (!/function\s+exitGame[\s\S]{0,300}?\$\('#pad'\)[\s\S]{0,80}?hidden = true/.test(engine)) {
+    ok = false; console.log('FAIL salir del modo juego no esconde el mando');
+  }
+  ['pad', 'padDir', 'padActs'].forEach(id => {
+    if (!new RegExp('id="' + id + '"').test(html)) {
+      ok = false; console.log('FAIL falta #' + id + ' en el escenario');
+    }
+  });
+  /* Los cuatro botones direccionales tienen que estar en el HTML con su
+     tecla y su etiqueta traducida. */
+  ['arrowup', 'arrowleft', 'arrowright', 'arrowdown'].forEach(k => {
+    if (html.indexOf('data-key="' + k + '"') < 0) {
+      ok = false; console.log('FAIL el mando no tiene el botón ' + k);
+    }
+  });
+  ['padUp', 'padDown', 'padLeft', 'padRight'].forEach(k => {
+    if (html.indexOf('data-tt="' + k + '"') < 0) {
+      ok = false; console.log('FAIL el botón ' + k + ' no tiene etiqueta traducida');
+    }
+  });
+}
+
 /* ---------------- despliegue: Vercel ---------------- */
 {
   const vpath = path.join(SRC, 'vercel.json');

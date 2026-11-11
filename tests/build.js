@@ -13,7 +13,7 @@ const HARNESS = [
   'harness5.js', 'harness6.js', 'harness7.js', 'harness8.js',
   'harness9.js', 'harness10.js', 'harness11.js', 'harness12.js', 'harness13.js', 'harness14.js',
   'harness15.js', 'harness16.js', 'harness17.js', 'harness18.js', 'harness19.js', 'harness20.js',
-  'harness21.js', 'harness22.js'
+  'harness21.js', 'harness22.js', 'harness23.js'
 ];
 /* La landing no carga el motor, así que sus pruebas no pueden ir dentro de
    app.html: necesitan una página armada desde index.html. */

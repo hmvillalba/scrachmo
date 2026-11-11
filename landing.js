@@ -236,12 +236,27 @@
   };
 
   const IDS = ['es', 'en', 'pt', 'fr'];
+  /* Dos claves distintas a propósito: la de la landing recuerda lo que se
+     eligió acá y la del editor es la misma que usa app.html, así el idioma
+     viaja de una página a la otra. */
+  const LANDING_KEY = 'scrachmo_landing_lang';
+  const APP_KEY = 'scrachmo_lang';
   let actual = 'es';
 
+  function leer(k) {
+    try { return localStorage.getItem(k); } catch (e) { return null; }
+  }
+  function guardar(k, v) {
+    try { localStorage.setItem(k, v); } catch (e) { }
+  }
+
   function elegir() {
-    let guardado = null;
-    try { guardado = localStorage.getItem('scrachmo_landing_lang'); } catch (e) { }
-    if (IDS.indexOf(guardado) > -1) return guardado;
+    const propio = leer(LANDING_KEY);
+    if (IDS.indexOf(propio) > -1) return propio;
+    /* Si ya había elegido idioma dentro del editor, la landing arranca en ese
+       en vez de volver al del sistema. */
+    const deLaApp = leer(APP_KEY);
+    if (IDS.indexOf(deLaApp) > -1) return deLaApp;
     const n = String(navigator.language || 'es').toLowerCase().slice(0, 2);
     return IDS.indexOf(n) > -1 ? n : 'es';
   }
@@ -307,7 +322,10 @@
     const sel = document.getElementById('langSel');
     if (sel) sel.addEventListener('change', function () {
       aplicar(sel.value);
-      try { localStorage.setItem('scrachmo_landing_lang', actual); } catch (e) { }
+      guardar(LANDING_KEY, actual);
+      /* Que el editor abra en el mismo idioma: si no, elegís francés acá y
+         «Abrir la app» te recibe en el idioma del sistema. */
+      guardar(APP_KEY, actual);
     });
 
     const url = document.getElementById('appUrl');

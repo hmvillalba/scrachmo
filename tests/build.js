@@ -15,6 +15,9 @@ const HARNESS = [
   'harness15.js', 'harness16.js', 'harness17.js', 'harness18.js', 'harness19.js', 'harness20.js',
   'harness21.js', 'harness22.js'
 ];
+/* La landing no carga el motor, así que sus pruebas no pueden ir dentro de
+   app.html: necesitan una página armada desde index.html. */
+const LANDING_HARNESS = ['landing-test.js'];
 
 function build() {
   /* En CI conviene un directorio fijo dentro del workspace para poder subir
@@ -34,6 +37,9 @@ function build() {
     fs.copyFileSync(path.join(SRC, f), path.join(T, f));
   }
   for (const f of HARNESS) {
+    fs.copyFileSync(path.join(__dirname, f), path.join(T, f));
+  }
+  for (const f of LANDING_HARNESS) {
     fs.copyFileSync(path.join(__dirname, f), path.join(T, f));
   }
 
@@ -58,8 +64,19 @@ function build() {
     targets.push([page.replace(/\.html$/, ''), pathToFileURL(path.join(T, page)).href]);
   }
 
-  /* Link compartido real: mismo formato g1.<gzip base64url> que genera la app. */
-  const PNG1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+  /* Página de la landing: se arma desde index.html y se le cuelga su prueba
+     después de landing.js (que va en el <head>). */
+  const landingHtml = fs.readFileSync(path.join(SRC, 'index.html'), 'utf8');
+  const landingTag = '<script src="landing.js"></script>';
+  if (landingHtml.indexOf(landingTag) < 0) {
+    throw new Error('No se encontró el tag de landing.js en index.html');
+  }
+  const landingPage = landingHtml.replace(landingTag,
+    early + landingTag + '\n<script src="landing-test.js"></script>');
+  fs.writeFileSync(path.join(T, 'landing.html'), landingPage);
+  targets.push(['landing', pathToFileURL(path.join(T, 'landing.html')).href]);
+
+  /* Link compartido real: mismo formato g1.<gzip base64url> que genera la app. */  const PNG1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
   const payload = {
     version: '2.0',
     sprites: [{

@@ -489,6 +489,25 @@ if (fs.existsSync(wfDir)) {
       !/serviceWorker\.register\(\s*'sw\.js'\s*\)/.test(bootJs)) {
     ok = false; console.log('FAIL el registro del service worker no está en boot.js');
   }
+  /* Selector de idioma de la landing: si desaparece, la única forma de
+     cambiarlo vuelve a ser el idioma del sistema. Y tiene que compartir la
+     clave del editor (`scrachmo_lang`), o elegir francés ahí y abrir la app
+     te deja en el idioma del sistema. */
+  const selLang = /<select[^>]*id="langSel"[\s\S]*?<\/select>/.exec(landingHtml);
+  if (!selLang) {
+    ok = false; console.log('FAIL la landing no tiene selector de idioma (#langSel)');
+  } else {
+    ['es', 'en', 'pt', 'fr'].forEach(l => {
+      if (selLang[0].indexOf('value="' + l + '"') < 0) {
+        ok = false; console.log('FAIL el selector de la landing no ofrece ' + l);
+      }
+    });
+  }
+  if (!/const APP_KEY = 'scrachmo_lang'/.test(landingJs) ||
+      !/leer\(APP_KEY\)/.test(landingJs) || !/guardar\(APP_KEY, actual\)/.test(landingJs)) {
+    ok = false;
+    console.log('FAIL landing.js no comparte el idioma con el editor (scrachmo_lang)');
+  }
 }
 
 /* ---------------- P1.5 / P1.6 / P1.7: seguridad y accesibilidad ---------------- */

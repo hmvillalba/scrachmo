@@ -134,6 +134,102 @@ window.addEventListener('load', function () {
       check('la_pista_sale_de_las_tres_conocidas',
         [t.padHint, t.stageHint, t.stageHintRun].indexOf(pista) > -1);
 
+      /* ============ 9. inclinación: el acelerómetro como flechas ============
+         El acelerómetro NO gira con la pantalla, así que el eje «derecha» hay
+         que rotarlo a mano. Con el aparato vertical la derecha es +x; girado
+         90° pasa a ser -y. */
+      check('el_eje_derecha_en_vertical', tiltBasis(0).join(',') === '1,0');
+      check('el_eje_derecha_girado_90', tiltBasis(90).join(',') === '0,-1');
+      check('el_eje_derecha_al_reves', tiltBasis(180).join(',') === '-1,0');
+      check('el_eje_derecha_girado_270', tiltBasis(270).join(',') === '0,1');
+
+      /* La gravedad reportada apunta hacia arriba del mundo. Con el teléfono
+         derecho va por +y; con el borde derecho abajo gana -x, y por eso el
+         roll se invierte para que «derecha» quede positivo. */
+      const enReposo = tiltRead({ x: 0, y: 9.81, z: 0 }, 0);
+      check('en_reposo_no_hay_inclinacion',
+        Math.abs(enReposo.roll) < 1e-9 && Math.abs(enReposo.pitch) < 1e-9);
+      check('el_borde_derecho_abajo_da_roll_positivo',
+        tiltRead({ x: -4.9, y: 8.5, z: 0 }, 0).roll > 0.4);
+      check('alejar_la_pantalla_sube_el_pitch',
+        tiltRead({ x: 0, y: 9.22, z: 3.35 }, 0).pitch > 0.3);
+      check('en_horizontal_la_derecha_cambia_de_eje',
+        tiltRead({ x: 0, y: 4.9, z: 0 }, 90).roll > 0.4);
+
+      /* Zona muerta: sin ella el pulso encendería y apagaría la tecla. */
+      check('la_zona_muerta_conserva_el_estado', tiltAxis(0.16, 1) === 1);
+      check('pasado_el_umbral_enciende', tiltAxis(0.3, 0) === 1);
+      check('volver_al_centro_apaga', tiltAxis(0.05, 1) === 0);
+      check('no_se_dispara_una_tecla_que_el_proyecto_no_usa',
+        tiltKeys(0, 1, projectKeys()).length === 0);
+      check('se_dispara_la_flecha_que_corresponde',
+        tiltKeys(1, 0, projectKeys()).join(',') === 'arrowright' &&
+        tiltKeys(-1, 0, projectKeys()).join(',') === 'arrowleft');
+
+      /* Integración: el sensor mueve al personaje de verdad. */
+      const enviarG = a => {
+        const ev = new Event('devicemotion');
+        Object.defineProperty(ev, 'accelerationIncludingGravity', { value: a });
+        window.dispatchEvent(ev);
+      };
+      sprites = [nave];
+      selectedSpriteId = nave.id;
+      render();
+      enterGame();
+      await sleep(80);
+
+      const antesApagado = nave.x;
+      /* Dos lecturas DISTINTAS: la primera sólo calibraría, así que con una
+         sola la prueba pasaría aunque el modo apagado no frenara nada. */
+      enviarG({ x: -6, y: 7.8, z: 0 });
+      await sleep(60);
+      enviarG({ x: 6, y: 7.8, z: 0 });
+      await sleep(180);
+      check('con_el_modo_apagado_la_inclinacion_no_hace_nada', nave.x === antesApagado);
+
+      setTilt(true);
+      await sleep(20);
+      check('el_modo_encendido_se_guarda', store.get('scrachmo_tilt') === '1');
+      /* La primera lectura es el cero: la postura en la que estabas. */
+      const antesCalibrar = nave.x;
+      enviarG({ x: -6, y: 7.8, z: 0 });
+      await sleep(180);
+      check('la_primera_lectura_calibra_y_no_mueve', nave.x === antesCalibrar);
+
+      const antesInclinar = nave.x;
+      enviarG({ x: 6, y: 7.8, z: 0 });
+      await sleep(220);
+      check('inclinar_mueve_al_personaje', nave.x !== antesInclinar);
+      check('la_flecha_del_mando_se_ilumina',
+        boton('arrowleft') && boton('arrowleft').classList.contains('is-down'));
+
+      setTilt(false);
+      await sleep(20);
+      check('el_modo_apagado_se_guarda', store.get('scrachmo_tilt') === '0');
+      check('al_apagar_se_apaga_la_luz',
+        boton('arrowleft') && !boton('arrowleft').classList.contains('is-down'));
+      const antesDeApagar = nave.x;
+      enviarG({ x: 6, y: 7.8, z: 0 });
+      await sleep(60);
+      enviarG({ x: -6, y: 7.8, z: 0 });
+      await sleep(220);
+      check('apagado_deja_de_mover', nave.x === antesDeApagar);
+
+      /* El interruptor sólo aparece donde hay sensor: acá se simula un táctil. */
+      Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true });
+      setTilt(true);
+      buildPad();
+      check('en_un_tactil_aparece_el_interruptor', $('#tiltBtn').hidden === false);
+      check('el_interruptor_avisa_que_esta_prendido',
+        $('#tiltBtn').getAttribute('aria-pressed') === 'true' &&
+        $('#tiltBtn').getAttribute('aria-label') === UI[lang].padTiltTip);
+      setTilt(false);
+      buildPad();
+      check('el_interruptor_avisa_que_esta_apagado',
+        $('#tiltBtn').getAttribute('aria-pressed') === 'false');
+      exitGame();
+      await sleep(60);
+
       check('sin_errores_final', errs.length === 0);
     } catch (err) {
       out.push('ERROR ' + err.message + ' @ ' + (err.stack || '').split('\n')[1]);

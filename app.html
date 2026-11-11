@@ -671,6 +671,24 @@ body.game-mode .bubble{top:calc(58px + env(safe-area-inset-top))}
    el D-pad no se desarma cuando sólo hay izquierda y derecha. */
 .pad-btn.is-off{visibility:hidden}
 .pad-acts .pad-btn{width:68px;height:68px;border-radius:50%;font-size:15px;letter-spacing:.02em;padding:0 4px;text-align:center}
+/* Inclinar el teléfono en vez de buscar la flecha. Es un interruptor, no un
+   control: por eso va fuera del flujo del mando (arriba y a la derecha) y no
+   le quita ancho al D-pad ni a los botones de acción, que ya van justos en un
+   teléfono angosto. */
+.pad-tilt{
+  position:absolute;right:14px;bottom:calc(100% + 8px);pointer-events:auto;
+  display:flex;align-items:center;gap:6px;
+  border:1.5px solid rgba(255,255,255,.45);border-radius:999px;
+  background:rgba(15,23,42,.55);color:#fff;font-size:12px;font-weight:700;
+  padding:7px 11px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;transition:background .1s,transform .1s;
+  box-shadow:0 2px 10px rgba(0,0,0,.28);
+}
+.pad-tilt[hidden]{display:none}
+.pad-tilt .ic{width:15px;height:15px}
+.pad-tilt.is-on{background:rgba(99,102,241,.92);border-color:rgba(255,255,255,.8)}
+.pad-tilt:active{transform:scale(.94)}
+.pad-tilt:focus-visible{outline:2px solid #fff;outline-offset:2px}
 
 /* Aviso de girar: sólo en modo juego y con la pantalla en vertical, que es
    donde el campo 4:3 queda como una franja y girar casi duplica el área. */
@@ -1250,6 +1268,14 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
              y sólo se ve en modo juego. Sin esto, un juego de flechas no se
              podía jugar en el celular: «al presionar» escucha el teclado. -->
         <div class="pad" id="pad" hidden role="group" aria-label="Controles">
+          <!-- Acelerómetro como control: inclinar el teléfono dispara la misma
+               tecla que el teclado. Apagado por defecto y con interruptor
+               propio, porque hay juegos en los que no sirve. -->
+          <button type="button" class="pad-tilt" id="tiltBtn" data-tt="padTiltTip"
+                  aria-pressed="false" hidden>
+            <svg class="ic" aria-hidden="true"><use href="#i-tilt"></use></svg>
+            <span data-t="padTilt">Inclinar</span>
+          </button>
           <div class="pad-dir" id="padDir">
             <button type="button" class="pad-btn pad-up" data-key="arrowup" data-tt="padUp" aria-label="Arriba">▲</button>
             <button type="button" class="pad-btn pad-left" data-key="arrowleft" data-tt="padLeft" aria-label="Izquierda">◀</button>

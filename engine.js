@@ -84,6 +84,12 @@ let threadSeq = 0;
 let lastShakeAt = 0;
 let lastMsgAt = 0;
 let motionRequested = false;
+/* Estado del acelerómetro como control. Vive acá arriba, con el resto del
+   estado, porque `stopCode()` tiene que poder cortarlo desde cualquier lado. */
+let tiltOn = false;
+let tiltBase = null;
+let tiltState = { roll: 0, pitch: 0 };
+let tiltTimer = null;
 let spriteSearchTerm = '';
 
 /* disfraces: límites pensados para no reventar el guardado local (5 MB)
@@ -4944,6 +4950,10 @@ function stopCode() {
   /* Un «crear variable» puede haber abierto un diálogo en medio de un guion:
      al detener, lo cerramos para que el hilo no quede esperando para siempre. */
   if (wasRunning && askResolver) closeAsk(null);
+  /* La inclinación repite mientras el teléfono siga inclinado: si no se corta
+     acá, el personaje seguiría caminando con el juego detenido. */
+  stopTiltRepeat();
+  tiltPaint([]);
 }
 
 function findTopNode(type) {
@@ -6032,6 +6042,9 @@ function enterGame() {
   if (hint) hint.classList.remove('is-off');
   syncGameOrientation();
   window.scrollTo(0, 0);
+  /* Cada partida recalibra: la postura con la que sostenés el teléfono al
+     empezar es el cero de la inclinación. */
+  tiltReset();
   buildPad();
   runAll();
 }
@@ -6041,6 +6054,7 @@ function exitGame() {
   document.body.classList.remove('game-mode');
   const pad = $('#pad');
   if (pad) pad.hidden = true;
+  tiltReset();
   syncGameOrientation();
   window.scrollTo(0, gameScrollY || 0);
 }
@@ -6124,6 +6138,18 @@ function buildPad() {
     acts.hidden = !otros.length;
   }
 
+  /* El interruptor de inclinación sólo tiene sentido si hay flechas que
+     disparar y si el aparato tiene sensor: en una computadora no aparece. */
+  const tiltBtn = $('#tiltBtn');
+  if (tiltBtn) {
+    const sirve = dirs.length > 0 && canTilt();
+    tiltBtn.hidden = !sirve || !document.body.classList.contains('game-mode');
+    tiltBtn.classList.toggle('is-on', tiltOn);
+    tiltBtn.setAttribute('aria-pressed', tiltOn ? 'true' : 'false');
+    tiltBtn.title = t.padTiltTip;
+    tiltBtn.setAttribute('aria-label', t.padTiltTip);
+  }
+
   pad.setAttribute('aria-label', t.padTitle);
   pad.hidden = !keys.length || !document.body.classList.contains('game-mode');
 }
@@ -6163,6 +6189,18 @@ function bindPad() {
     padPress(btn);
   });
   pad.addEventListener('contextmenu', e => e.preventDefault());
+
+  /* Interruptor de inclinación: apagado por defecto, porque hay juegos en los
+     que el sensor molesta más de lo que ayuda. */
+  const tiltBtn = $('#tiltBtn');
+  if (tiltBtn) {
+    tiltBtn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      setTilt(!tiltOn);
+    });
+    tiltBtn.addEventListener('contextmenu', e => e.preventDefault());
+  }
 }
 
 /* La pista del escenario avisa por dónde se juega en cada aparato. */
@@ -6177,9 +6215,149 @@ function stageHintText(t) {
   return hasTopNode('when_tap') ? t.stageHint : t.stageHintRun;
 }
 
+/* ---------------- inclinación como control ----------------
+   «Al presionar» espera una tecla. El mando resuelve el pulgar, pero para
+   mover un personaje inclinar el teléfono es más cómodo que buscar el botón:
+   acá el acelerómetro se usa como DETECTOR DE EVENTOS y dispara las mismas
+   teclas, así que ningún proyecto cambia y el teclado sigue funcionando.
+
+   Dos cosas hacen que esto no sea un temblor:
+   - El cero no es «teléfono derecho» sino la postura que tenías al activarlo
+     (`tiltBase`): nadie juega con el aparato vertical.
+   - Entre el umbral de encendido y el de apagado hay una zona muerta; sin ella
+     el pulso encendería y apagaría la tecla sin parar. */
+
+const TILT_ON = 0.22;   /* seno del ángulo: unos 13° desde la postura de reposo */
+const TILT_OFF = 0.13;  /* unos 7,5°: por debajo de esto el eje está centrado */
+
+/* Eje «derecha de la pantalla» en coordenadas del aparato. El acelerómetro NO
+   gira con la pantalla: si no se rota a mano, en horizontal las flechas salen
+   cruzadas. */
+function tiltBasis(angle) {
+  const a = ((Math.round(Number(angle) || 0) % 360) + 360) % 360;
+  if (a === 90) return [0, -1];
+  if (a === 180) return [-1, 0];
+  if (a === 270) return [0, 1];
+  return [1, 0];
+}
+
+function screenAngle() {
+  const o = window.screen && window.screen.orientation;
+  if (o && typeof o.angle === 'number') return o.angle;
+  if (typeof window.orientation === 'number') return window.orientation;
+  return 0;
+}
+
+/* Inclinación normalizada por la gravedad: 0 es la postura de reposo y ±1 el
+   aparato acostado. `roll` positivo = borde derecho abajo; `pitch` positivo =
+   la pantalla mira hacia arriba (lo alejás de vos). */
+function tiltRead(acc, angle) {
+  const x = Number(acc && acc.x) || 0;
+  const y = Number(acc && acc.y) || 0;
+  const z = Number(acc && acc.z) || 0;
+  const g = Math.sqrt(x * x + y * y + z * z) || 1;
+  const b = tiltBasis(angle);
+  /* La gravedad apunta hacia arriba del mundo, así que con el borde derecho
+     abajo el producto da negativo: se invierte para que «a la derecha» quede
+     positivo. */
+  return { roll: -(x * b[0] + y * b[1]) / g, pitch: z / g };
+}
+
+/* Zona muerta con memoria: dentro de la banda el eje conserva su estado. */
+function tiltAxis(delta, prev) {
+  if (delta > TILT_ON) return 1;
+  if (delta < -TILT_ON) return -1;
+  if (Math.abs(delta) < TILT_OFF) return 0;
+  return prev || 0;
+}
+
+/* Qué tecla pide cada eje, y sólo si el proyecto la usa. */
+function tiltKeys(roll, pitch, keys) {
+  const usa = k => keys.indexOf(k) > -1;
+  const out = [];
+  if (roll > 0 && usa('arrowright')) out.push('arrowright');
+  if (roll < 0 && usa('arrowleft')) out.push('arrowleft');
+  if (pitch > 0 && usa('arrowup')) out.push('arrowup');
+  if (pitch < 0 && usa('arrowdown')) out.push('arrowdown');
+  return out;
+}
+
+function stopTiltRepeat() {
+  if (tiltTimer) clearInterval(tiltTimer);
+  tiltTimer = null;
+}
+
+/* El mando muestra qué tecla está disparando la inclinación: sin eso no se
+   sabe si el sensor está leyendo o si el modo quedó apagado. */
+function tiltPaint(keys) {
+  const pad = $('#pad');
+  if (!pad) return;
+  Array.prototype.forEach.call(pad.querySelectorAll('.pad-btn[data-key]'), b => {
+    b.classList.toggle('is-down', keys.indexOf(b.dataset.key) > -1);
+  });
+}
+
+function tiltReset() {
+  tiltBase = null;
+  tiltState = { roll: 0, pitch: 0 };
+  stopTiltRepeat();
+  tiltPaint([]);
+}
+
+function tiltFireNow() {
+  const keys = tiltKeys(tiltState.roll, tiltState.pitch, projectKeys());
+  tiltPaint(keys);
+  if (!keys.length) { stopTiltRepeat(); return; }
+  keys.forEach(k => fireKey(k));
+  /* Igual que el mando: mantener la inclinación repite. */
+  if (!tiltTimer) tiltTimer = setInterval(() => {
+    const again = tiltKeys(tiltState.roll, tiltState.pitch, projectKeys());
+    if (!again.length) { stopTiltRepeat(); return; }
+    again.forEach(k => fireKey(k));
+  }, PAD_REPEAT_MS);
+}
+
+function tiltStep(acc) {
+  if (!tiltOn || !document.body.classList.contains('game-mode')) return;
+  const r = tiltRead(acc, screenAngle());
+  if (!tiltBase) { tiltBase = r; return; }
+  const roll = tiltAxis(r.roll - tiltBase.roll, tiltState.roll);
+  const pitch = tiltAxis(r.pitch - tiltBase.pitch, tiltState.pitch);
+  if (roll === tiltState.roll && pitch === tiltState.pitch) return;
+  tiltState = { roll, pitch };
+  tiltFireNow();
+}
+
+/* En una computadora no hay sensor que leer: mejor no ofrecer el interruptor. */
+function canTilt() {
+  if (typeof window.DeviceMotionEvent !== 'function') return false;
+  return (mqCoarse && mqCoarse.matches) || (navigator.maxTouchPoints || 0) > 0;
+}
+
+function setTilt(on) {
+  tiltOn = !!on;
+  store.set('scrachmo_tilt', tiltOn ? '1' : '0');
+  tiltReset();
+  if (tiltOn) ensureMotionPermission(true);
+  const btn = $('#tiltBtn');
+  if (btn) {
+    btn.classList.toggle('is-on', tiltOn);
+    btn.setAttribute('aria-pressed', tiltOn ? 'true' : 'false');
+  }
+  const t = UI[lang];
+  toast(tiltOn ? t.padTiltOn : t.padTiltOff);
+  return tiltOn;
+}
+
+function loadTilt() {
+  tiltOn = store.get('scrachmo_tilt') === '1';
+  const btn = $('#tiltBtn');
+  if (btn) btn.setAttribute('aria-pressed', tiltOn ? 'true' : 'false');
+}
+
 /* ---------------- events ---------------- */
-function ensureMotionPermission() {
-  if (motionRequested || !projectUsesMotion()) return;
+function ensureMotionPermission(force) {
+  if (motionRequested || (!force && !projectUsesMotion())) return;
   const DME = window.DeviceMotionEvent;
   if (!DME || typeof DME.requestPermission !== 'function') {
     motionRequested = true;
@@ -6201,6 +6379,7 @@ function bindEvents() {
   bindAbout();
   bindPwaUpdates();
   bindGameOrientation();
+  loadTilt();
   bindPad();
   $$('.lang-switch button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -6603,6 +6782,7 @@ function bindEvents() {
       lastShakeAt = now;
       fireEvent('when_shake');
     }
+    tiltStep(acc);
   });
 
   window.addEventListener('storage', e => {

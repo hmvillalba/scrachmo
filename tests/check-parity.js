@@ -701,6 +701,50 @@ if (fs.existsSync(wfDir)) {
   });
 }
 
+/* ---------------- inclinación: el acelerómetro como flechas ----------------
+   El sensor no gira con la pantalla, el cero es la postura de arranque y el
+   modo tiene que poder apagarse: las tres cosas se rompen en silencio, así
+   que quedan como guardas. */
+{
+  ['tiltBasis', 'tiltRead', 'tiltAxis', 'tiltKeys', 'tiltStep', 'setTilt', 'canTilt']
+    .forEach(fn => {
+      if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+        ok = false; console.log('FAIL falta ' + fn + '() de la inclinación');
+      }
+    });
+  /* Sin este `return`, la primera lectura inclinada dispararía la tecla en vez
+     de servir de cero. */
+  if (!/if \(!tiltBase\) \{ tiltBase = r; return; \}/.test(engine)) {
+    ok = false; console.log('FAIL la inclinación no calibra con la primera lectura');
+  }
+  if (!/function\s+tiltStep[\s\S]{0,200}?if \(!tiltOn/.test(engine)) {
+    ok = false; console.log('FAIL la inclinación no se puede apagar');
+  }
+  if (!/addEventListener\('devicemotion'[\s\S]{0,600}?tiltStep\(/.test(engine)) {
+    ok = false; console.log('FAIL el sensor no alimenta la inclinación');
+  }
+  if (!/function\s+stopCode[\s\S]{0,900}?stopTiltRepeat\(\)/.test(engine)) {
+    ok = false; console.log('FAIL detener no corta la inclinación');
+  }
+  if (!/function\s+ensureMotionPermission\(force\)/.test(engine)) {
+    ok = false; console.log('FAIL el permiso de movimiento no se puede forzar');
+  }
+  if (!/scrachmo_tilt/.test(engine)) {
+    ok = false; console.log('FAIL el modo inclinación no se recuerda');
+  }
+  if (html.indexOf('id="tiltBtn"') < 0 || html.indexOf('data-tt="padTiltTip"') < 0 ||
+      html.indexOf('data-t="padTilt"') < 0) {
+    ok = false; console.log('FAIL falta el interruptor de inclinación en el escenario');
+  }
+  ['padTilt', 'padTiltTip', 'padTiltOn', 'padTiltOff'].forEach(k => {
+    langs.forEach(l => {
+      if (typeof ctx.EX[l][k] !== 'string' || !ctx.EX[l][k].length) {
+        ok = false; console.log('FAIL falta ' + k + ' en ' + l);
+      }
+    });
+  });
+}
+
 /* ---------------- despliegue: Vercel ---------------- */
 {
   const vpath = path.join(SRC, 'vercel.json');

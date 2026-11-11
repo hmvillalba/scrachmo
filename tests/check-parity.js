@@ -514,6 +514,19 @@ if (fs.existsSync(wfDir)) {
     ok = false;
     console.log('FAIL landing.js no comparte el idioma con el editor (scrachmo_lang)');
   }
+  /* La lista desplegable la pinta el sistema con SU fondo, no el de la página:
+     si las opciones no llevan color propio, heredan el texto claro del tema
+     oscuro y quedan letras blancas sobre fondo blanco. El bug es invisible en
+     una captura (el popup no sale en la foto), así que va como guarda. */
+  if (!/\.lang\s*\{[^}]*color-scheme:\s*dark/.test(landingHtml)) {
+    ok = false;
+    console.log('FAIL el selector de la landing no declara color-scheme:dark (popup ilegible)');
+  }
+  if (!/\.lang\s+option\s*\{[^}]*background/.test(landingHtml) ||
+      !/\.lang\s+option\s*\{[^}]*color/.test(landingHtml)) {
+    ok = false;
+    console.log('FAIL las opciones del selector de la landing no tienen fondo y color propios');
+  }
 }
 
 /* ---------------- P1.5 / P1.6 / P1.7: seguridad y accesibilidad ---------------- */

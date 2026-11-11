@@ -52,6 +52,19 @@ window.addEventListener('load', function () {
       check('el_selector_muestra_el_idioma_activo', !!sel && sel.value === esperado);
       check('el_selector_es_accesible', !!sel &&
         /idioma|language/i.test(sel.getAttribute('aria-label') || ''));
+      /* La lista desplegable la pinta el sistema con su propio fondo, así que
+         las opciones necesitan color y fondo explícitos: sin eso heredan el
+         texto claro del tema oscuro y quedan letras blancas sobre blanco. En
+         una captura no se ve (el popup no sale en la foto), por eso se mide. */
+      const opcion = sel.options[0];
+      const csOp = getComputedStyle(opcion);
+      const fondoOp = csOp.backgroundColor;
+      check('las_opciones_tienen_fondo_propio',
+        fondoOp && fondoOp !== 'rgba(0, 0, 0, 0)' && fondoOp !== 'transparent');
+      check('las_opciones_no_son_texto_claro_sobre_blanco',
+        csOp.color !== fondoOp && csOp.color !== 'rgb(255, 255, 255)');
+      check('el_selector_declara_esquema_oscuro',
+        getComputedStyle(sel).colorScheme.indexOf('dark') > -1);
 
       /* ============ 4. los textos están traducidos ============ */
       const i18n = textos();

@@ -55,7 +55,13 @@ button{font:inherit}
 .nav-links{display:flex;gap:6px;margin-left:auto}
 .nav-links a{padding:8px 13px;border-radius:10px;font-size:14px;font-weight:650;color:var(--muted)}
 .nav-links a:hover{color:var(--ink);background:var(--card)}
-.lang{background:rgba(255,255,255,.07);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:13px;font-weight:750;cursor:pointer}
+.lang{background:rgba(255,255,255,.07);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:13px;font-weight:750;cursor:pointer;color-scheme:dark}
+/* La lista desplegable NO la dibuja la página: la dibuja el sistema, con su
+   propio fondo. Sin colores propios, las opciones heredan el texto claro del
+   <select> y quedan letras blancas sobre fondo blanco. `color-scheme:dark`
+   arregla el popup nativo (Chrome, Edge, Firefox, Safari) y el color explícito
+   cubre los navegadores que igual lo pintan con el fondo del sistema. */
+.lang option{background:#101642;color:var(--ink)}
 .btn-nav{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;font-size:14px;font-weight:800;white-space:nowrap;background:linear-gradient(120deg,var(--brand),var(--pink));color:#190b12;box-shadow:0 10px 26px -12px var(--pink);transition:transform .2s,box-shadow .2s}
 .btn-nav:hover{transform:translateY(-2px);box-shadow:0 16px 30px -12px var(--pink)}
 

@@ -10,6 +10,17 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="ScrachMo — Programá con bloques desde el celular">
 <meta property="og:description" content="Sin cuenta, sin instalar, en 4 idiomas y funciona sin internet. Abrí el editor y creá tu primer juego.">
+<link rel="canonical" href="https://scrachmo.vercel.app/">
+<meta property="og:url" content="https://scrachmo.vercel.app/">
+<meta property="og:site_name" content="ScrachMo">
+<meta property="og:image" content="https://scrachmo.vercel.app/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ScrachMo: programá con bloques desde el celular">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ScrachMo — Programá con bloques desde el celular">
+<meta name="twitter:description" content="Sin cuenta, sin instalar, en 4 idiomas y funciona sin internet. Abrí el editor y creá tu primer juego.">
+<meta name="twitter:image" content="https://scrachmo.vercel.app/og-image.png">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -21,7 +32,7 @@
 :root{
   --bg:#080c1c; --bg2:#101642; --ink:#f7f8ff; --muted:#aab4d8;
   --line:rgba(255,255,255,.13); --card:rgba(255,255,255,.055);
-  --brand:#ff9147; --pink:#ff5f92; --violet:#9b8cff; --cyan:#4fdcff; --lime:#b6f36a;
+  --indigo:#6366f1; --brand:#ff9147; --pink:#ff5f92; --violet:#9b8cff; --cyan:#4fdcff; --lime:#b6f36a;
   --r:22px; --max:1140px;
 }
 *{box-sizing:border-box}
@@ -39,7 +50,7 @@ button{font:inherit}
 /* ---------- fondo ---------- */
 .aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
 .aurora::before,.aurora::after,.aurora span{content:"";position:absolute;border-radius:50%;filter:blur(90px);opacity:.5}
-.aurora::before{width:680px;height:680px;left:-180px;top:-260px;background:radial-gradient(circle,#6d4bff,transparent 68%);animation:flotar 22s ease-in-out infinite alternate}
+.aurora::before{width:680px;height:680px;left:-180px;top:-260px;background:radial-gradient(circle,var(--indigo),transparent 68%);animation:flotar 22s ease-in-out infinite alternate}
 .aurora::after{width:620px;height:620px;right:-200px;top:80px;background:radial-gradient(circle,#ff4f8b,transparent 68%);animation:flotar 26s ease-in-out infinite alternate-reverse}
 .aurora span{width:560px;height:560px;left:38%;top:620px;background:radial-gradient(circle,#12a5d8,transparent 70%);opacity:.32;animation:flotar 30s ease-in-out infinite alternate}
 .aurora i{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);background-size:26px 26px;opacity:.18;mask-image:linear-gradient(#000,transparent 78%)}
@@ -50,7 +61,8 @@ button{font:inherit}
 .nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);background:rgba(8,12,28,.72);border-bottom:1px solid var(--line)}
 .nav-in{display:flex;align-items:center;gap:16px;min-height:70px;padding-block:10px}
 .brand{display:flex;align-items:center;gap:11px;font-weight:850;letter-spacing:-.02em;font-size:19px;white-space:nowrap}
-.brand-mark{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;font-size:21px;background:linear-gradient(140deg,var(--brand),var(--pink));box-shadow:0 8px 24px -8px var(--pink)}
+.brand-mark{width:38px;height:38px;flex:none;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px -8px var(--indigo)}
+.brand-mark img{display:block;width:100%;height:100%}
 .brand small{display:block;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--muted);line-height:1}
 .nav-links{display:flex;gap:6px;margin-left:auto}
 .nav-links a{padding:8px 13px;border-radius:10px;font-size:14px;font-weight:650;color:var(--muted)}
@@ -85,7 +97,7 @@ h1 span{background:linear-gradient(100deg,#fff 8%,var(--cyan) 46%,var(--violet) 
 
 /* ---------- maqueta del editor ---------- */
 .visual{position:relative}
-.glow{position:absolute;inset:-14% -10% -14% -10%;background:radial-gradient(closest-side,rgba(155,140,255,.28),transparent 72%);filter:blur(24px);z-index:-1}
+.glow{position:absolute;inset:-14% -10% -14% -10%;background:radial-gradient(closest-side,rgba(99,102,241,.32),transparent 72%);filter:blur(24px);z-index:-1}
 .mock{border:1px solid var(--line);border-radius:26px;background:linear-gradient(160deg,rgba(28,34,74,.94),rgba(12,16,40,.96));box-shadow:0 40px 90px -32px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.04) inset;overflow:hidden;transform:rotate(-1.2deg)}
 .mock-bar{display:flex;align-items:center;gap:7px;padding:13px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.035)}
 .mock-bar i{width:9px;height:9px;border-radius:50%;background:#ff6b6b}.mock-bar i:nth-child(2){background:#ffcf5c}.mock-bar i:nth-child(3){background:#61d68a}
@@ -123,7 +135,7 @@ h2{font-size:clamp(27px,3.8vw,42px);line-height:1.15;letter-spacing:-.035em;marg
 .features{padding-bottom:84px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .card{border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:26px 24px;transition:transform .25s,border-color .25s,background .25s}
-.card:hover{transform:translateY(-5px);border-color:rgba(155,140,255,.5);background:rgba(155,140,255,.09)}
+.card:hover{transform:translateY(-5px);border-color:rgba(99,102,241,.6);background:rgba(99,102,241,.12)}
 .ic{width:46px;height:46px;display:grid;place-items:center;border-radius:14px;font-size:23px;background:rgba(255,255,255,.09);border:1px solid var(--line);margin-bottom:17px}
 .card h3{margin:0 0 7px;font-size:17.5px;letter-spacing:-.02em}
 .card p{margin:0;color:var(--muted);font-size:14px}
@@ -171,7 +183,7 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
 }
 @media(max-width:620px){
   .nav-in{gap:9px;min-height:62px}
-  .brand{font-size:16px}.brand-mark{width:34px;height:34px;font-size:18px}
+  .brand{font-size:16px}.brand-mark{width:34px;height:34px}
   .btn-nav{padding:9px 12px;font-size:13px}
   .hero{padding-top:38px}
   .stats{grid-template-columns:repeat(2,1fr);gap:10px;padding-bottom:56px}
@@ -189,6 +201,11 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
   .chip code{flex:1 0 100%;overflow-wrap:anywhere}
   .features,.how,.support{padding-bottom:56px}
 }
+/* En celulares el fondo queda estático y con menos blur: una capa difuminada
+   que se repinta todo el tiempo gasta batería y trabaja de más en gama baja. */
+@media(max-width:980px),(pointer:coarse){
+  .aurora::before,.aurora::after,.aurora span{filter:blur(56px);animation:none}
+}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
@@ -200,7 +217,7 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="./" aria-label="ScrachMo, inicio">
-      <span class="brand-mark" aria-hidden="true">🐱</span>
+      <span class="brand-mark" aria-hidden="true"><img src="icons/icon.svg" alt="" width="38" height="38"></span>
       <span>ScrachMo<small data-i18n="brand.tag">ESTUDIO MÓVIL</small></span>
     </a>
     <nav class="nav-links" aria-label="Secciones">
@@ -256,7 +273,7 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
   </section>
 
   <section class="stats wrap" aria-label="ScrachMo en números">
-    <div class="stat"><b>53</b><span data-i18n="stat.blocks">bloques para armar</span></div>
+    <div class="stat"><b>64</b><span data-i18n="stat.blocks">bloques para armar</span></div>
     <div class="stat"><b>321</b><span data-i18n="stat.sprites">personajes y objetos</span></div>
     <div class="stat"><b>4</b><span data-i18n="stat.langs">idiomas de interfaz</span></div>
     <div class="stat"><b>100%</b><span data-i18n="stat.offline">usable sin internet</span></div>
@@ -271,7 +288,7 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
     <div class="grid">
       <article class="card"><div class="ic" aria-hidden="true">🧩</div><h3 data-i18n="f1.title">Bloques que se encastran</h3><p data-i18n="f1.text">Movimiento, sensores, sonidos, variables, condicionales, clones y reporteros. Arrastrá, soltá y probá al instante.</p></article>
       <article class="card"><div class="ic" aria-hidden="true">🎭</div><h3 data-i18n="f2.title">Personajes con disfraces</h3><p data-i18n="f2.text">321 figuras en 16 grupos, imágenes propias, SVG y hasta 12 disfraces por personaje.</p></article>
-      <article class="card"><div class="ic" aria-hidden="true">📱</div><h3 data-i18n="f3.title">Pensada para el celular</h3><p data-i18n="f3.text">Interfaz vertical, controles táctiles, modo juego a pantalla completa y zoom tanto del escenario como del código.</p></article>
+      <article class="card"><div class="ic" aria-hidden="true">📱</div><h3 data-i18n="f3.title">Pensada para el celular</h3><p data-i18n="f3.text">Interfaz vertical, controles táctiles, modo juego a pantalla completa y zoom del escenario y del código.</p></article>
       <article class="card"><div class="ic" aria-hidden="true">🔗</div><h3 data-i18n="f4.title">Compartir con un link</h3><p data-i18n="f4.text">Tu proyecto viaja comprimido en la URL. Se la pasás a quien quieras y abre igual, sin servidor ni registros.</p></article>
       <article class="card"><div class="ic" aria-hidden="true">📦</div><h3 data-i18n="f5.title">Se instala y funciona offline</h3><p data-i18n="f5.text">Es una PWA: agregala a la pantalla de inicio y seguí programando sin conexión. Guardá varios proyectos en el navegador.</p></article>
       <article class="card"><div class="ic" aria-hidden="true">🐈</div><h3 data-i18n="f6.title">Puente a Scratch</h3><p data-i18n="f6.text">Exportá a .sb3 para seguir en Scratch. Lo que no tiene equivalente se avisa y queda comentado en el proyecto.</p></article>
@@ -311,7 +328,7 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
 
 <footer>
   <div class="wrap foot">
-    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">🐱</span><span>ScrachMo<small data-i18n="brand.tag">ESTUDIO MÓVIL</small></span></a>
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"><img src="icons/icon.svg" alt="" width="38" height="38"></span><span>ScrachMo<small data-i18n="brand.tag">ESTUDIO MÓVIL</small></span></a>
     <nav class="foot-links" aria-label="Enlaces">
       <a href="app.html" data-i18n="foot.app">Ir directo a la app</a>
       <a href="https://github.com/hmvillalba/scrachmo" target="_blank" rel="noopener noreferrer">GitHub</a>

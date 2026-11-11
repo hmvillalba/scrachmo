@@ -64,6 +64,14 @@ window.addEventListener('load', function () {
       const s = sprites[0];
       const x0 = s.x;
       const y0 = s.y;
+      const size0 = s.size;
+      const rot0 = s.rot;
+      /* El borde seguro depende del tamaño del DIBUJO: con el gato de fábrica
+         (size 100 y rotación libre) y:100 ya queda afuera y el motor lo recorta
+         a 95. Para medir 100 unidades limpias se achica el personaje sólo
+         durante la medición; el centro y la escala del escenario no cambian. */
+      s.size = 50;
+      s.rot = 'none';
       const punto = () => $('.sprite-wrap').getBoundingClientRect();
       s.x = 0; s.y = 0;
       render();
@@ -80,6 +88,7 @@ window.addEventListener('load', function () {
       check('pixeles_por_unidad_coherentes',
         Math.abs(dx - r.width / 4.8) <= 1.5 && Math.abs(dy - r.height / 3.6) <= 1.5);
       s.x = x0; s.y = y0;
+      s.size = size0; s.rot = rot0;
       render();
 
       /* ============ 4. el aviso, sólo en vertical ============ */

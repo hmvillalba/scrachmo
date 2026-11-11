@@ -73,6 +73,46 @@ if (!/function\s+touchingEdge\s*\(/.test(engine)) { ok = false; console.log('FAI
 if (!/function\s+touchingOther\s*\(/.test(engine)) { ok = false; console.log('FAIL falta touchingOther()'); }
 if (!/function\s+bounceSprite\s*\(/.test(engine)) { ok = false; console.log('FAIL falta bounceSprite()'); }
 if (!/timerStart\s*=\s*Date\.now\(\)/.test(engine)) { ok = false; console.log('FAIL falta el cronómetro'); }
+
+/* Borde VISUAL: el personaje no se corta contra `overflow:hidden`. El margen
+   es CONSTANTE en unidades del mundo; lo que se ajusta es el tamaño del
+   dibujo, con --sprite-cap. Si el margen vuelve a medirse en píxeles, una
+   caja chica se come coordenadas normales (`ir a x: 120 y: -75` quedaba
+   afuera) y agrandar el mundo reduce el espacio hacia arriba. */
+['edgeRadius', 'clampSpritePos', 'applySpriteCap', 'reclampAllSprites'].forEach(fn => {
+  if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+    ok = false; console.log('FAIL falta ' + fn + '() del borde visual');
+  }
+});
+if (!/const\s+EDGE_RADIUS\s*=/.test(engine)) {
+  ok = false; console.log('FAIL falta el radio visual del borde');
+}
+const cuerpoEdge = (engine.match(/function\s+edgeRadius\s*\([\s\S]*?\n}/) || [''])[0];
+if (/getBoundingClientRect|offsetWidth|getComputedStyle/.test(cuerpoEdge)) {
+  ok = false; console.log('FAIL edgeRadius() volvió a medir píxeles: el margen va en unidades');
+}
+if (!/--sprite-cap/.test(html) || !/--sprite-cap/.test(engine)) {
+  ok = false; console.log('FAIL el tope del dibujo no está en el CSS y en el motor');
+}
+if ((html.match(/font-size:min\(clamp\(/g) || []).length < 2) {
+  ok = false; console.log('FAIL editor y modo juego deben limitar el font-size con min(clamp(…), var(--sprite-cap))');
+}
+if (!/function\s+applyWorldSize\s*\([\s\S]{0,900}?applySpriteCap\(\)/.test(engine)) {
+  ok = false; console.log('FAIL applyWorldSize() no recalcula el tope del dibujo');
+}
+['touchingEdge', 'bounceSprite'].forEach(fn => {
+  const c = (engine.match(new RegExp('function\\s+' + fn + '\\s*\\([\\s\\S]{0,400}')) || [''])[0];
+  if (!/edgeRadius\(/.test(c)) {
+    ok = false; console.log('FAIL ' + fn + '() no usa el radio del dibujo');
+  }
+});
+/* Todo recorte de x/y pasa por el punto central: un clamp(...) suelto en un
+   bloque dejaría otra vez al personaje en el borde pelado. */
+const sinCentral = engine.replace(/function\s+clampSpritePos\s*\([\s\S]*?\n}/, '');
+if (/clamp\([^)]*worldLeft\(\)[^)]*worldRight\(\)/.test(sinCentral)) {
+  ok = false; console.log('FAIL hay un recorte de x/y fuera de clampSpritePos()');
+}
+
 /* Audio: la síntesis y, sobre todo, que Detener corte la música. Si alguien
    quita ese stopAllSounds(), una melodía en bucle quedaría sonando para
    siempre y ninguna prueba de navegador lo notaría. */

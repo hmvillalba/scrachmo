@@ -48,24 +48,53 @@ window.addEventListener('load', function () {
       check('sin_huecos_de_mas', (BYID.bounce.n.es.match(/\{[vxy]\}/g) || []).length === 0 &&
         (BYID.if_edge.n.es.match(/\{[vxy]\}/g) || []).length === 0);
 
-      /* ============ 2. radio del personaje ============ */
+      /* ============ 2. radio del personaje ============
+         Hay DOS radios y no hay que mezclarlos: `spriteRadius()` (26 u) es el
+         de los choques entre personajes; `edgeRadius()` es el del DIBUJO y se
+         mide del DOM en píxeles, convertido con la escala mundo→caja. */
       check('radio_base', spriteRadius({ size: 100 }) === 26);
       check('radio_doble', spriteRadius({ size: 200 }) === 52);
       /* size 0 o vacío cae al 100%, igual que en spriteTransform(). */
       check('radio_size_invalido', spriteRadius({ size: 0 }) === 26);
       check('radio_minimo', Math.abs(spriteRadius({ size: 10 }) - 2.6) < 0.001);
       check('radio_tope', spriteRadius({ size: 999 }) === 78);
+      const R = edgeRadius(make('A', 0, 0));
+      check('radio_visual_mayor_que_el_de_choque', R > spriteRadius({ size: 100 }));
+      check('radio_visual_crece_con_size',
+        Math.abs(edgeRadius(make('A', 0, 0, { size: 200 })) - 2 * R) < 0.001);
+      check('radio_visual_baja_con_size',
+        Math.abs(edgeRadius(make('A', 0, 0, { size: 50 })) - R / 2) < 0.001);
+      check('radio_visual_no_invierte_los_bordes', R < worldW / 2 && R < worldH / 2);
+      /* El margen es constante en unidades: lo que se ajusta es el DIBUJO,
+         mediante --sprite-cap. Sin eso, medir el radio en píxeles se comía
+         coordenadas normales cuando la caja era chica. */
+      check('radio_visual_no_depende_del_mundo', (() => {
+        const antes = edgeRadius(make('A', 0, 0));
+        const w = worldW; worldW = 1440; applyWorldSize();
+        const despues = edgeRadius(make('A', 0, 0));
+        worldW = w; applyWorldSize();
+        return Math.abs(antes - despues) < 0.001;
+      })());
+      check('tope_del_dibujo_calculado',
+        parseFloat(document.body.style.getPropertyValue('--sprite-cap')) > 0);
+      check('tope_del_dibujo_baja_con_el_mundo', (() => {
+        const cap0 = parseFloat(document.body.style.getPropertyValue('--sprite-cap'));
+        const w = worldW; worldW = 1440; applyWorldSize();
+        const cap1 = parseFloat(document.body.style.getPropertyValue('--sprite-cap'));
+        worldW = w; applyWorldSize();
+        return cap1 < cap0;
+      })());
 
       /* ============ 3. tocar el borde ============ */
       check('centro_no_toca', touchingEdge(make('A', 0, 0)) === false);
-      check('borde_derecho', touchingEdge(make('A', 240, 0)) === true);
-      check('borde_izquierdo', touchingEdge(make('A', -240, 0)) === true);
-      check('borde_arriba', touchingEdge(make('A', 0, 180)) === true);
-      check('borde_abajo', touchingEdge(make('A', 0, -180)) === true);
-      check('justo_afuera_del_radio', touchingEdge(make('A', 213, 0)) === false);
-      check('justo_dentro_del_radio', touchingEdge(make('A', 215, 0)) === true);
-      check('grande_toca_antes', touchingEdge(make('A', 190, 0, { size: 200 })) === true);
-      check('chico_toca_despues', touchingEdge(make('A', 190, 0, { size: 50 })) === false);
+      check('borde_derecho', touchingEdge(make('A', worldRight(), 0)) === true);
+      check('borde_izquierdo', touchingEdge(make('A', worldLeft(), 0)) === true);
+      check('borde_arriba', touchingEdge(make('A', 0, worldTop())) === true);
+      check('borde_abajo', touchingEdge(make('A', 0, worldBottom())) === true);
+      check('justo_afuera_del_radio', touchingEdge(make('A', worldRight() - R - 1, 0)) === false);
+      check('justo_dentro_del_radio', touchingEdge(make('A', worldRight() - R + 1, 0)) === true);
+      check('grande_toca_antes', touchingEdge(make('A', worldRight() - R - 10, 0, { size: 200 })) === true);
+      check('chico_toca_despues', touchingEdge(make('A', worldRight() - R - 10, 0, { size: 50 })) === false);
 
       /* ============ 4. tocar a otro personaje ============ */
       const a = make('A', 0, 0);
@@ -92,13 +121,13 @@ window.addEventListener('load', function () {
       const der = make('D', 240, 0);
       der.dir = 90;
       check('rebote_derecha_mueve', bounceSprite(der) === true);
-      check('rebote_derecha_dentro', der.x === 214);
+      check('rebote_derecha_dentro', Math.abs(der.x - (worldRight() - edgeRadius(der))) < 0.001);
       check('rebote_derecha_dir', der.dir === -90);
 
       const arr = make('U', 0, 180);
       arr.dir = 0;
       bounceSprite(arr);
-      check('rebote_arriba_dentro', arr.y === 154);
+      check('rebote_arriba_dentro', Math.abs(arr.y - (worldTop() - edgeRadius(arr))) < 0.001);
       /* normDir(180) devuelve -180: media vuelta es la misma dirección. */
       check('rebote_arriba_dir', Math.abs(Math.abs(arr.dir) - 180) < 0.001);
 
@@ -110,7 +139,9 @@ window.addEventListener('load', function () {
       const esquina = make('E', 240, 180);
       esquina.dir = 90;
       bounceSprite(esquina);
-      check('rebote_esquina_dentro', esquina.x === 214 && esquina.y === 154);
+      check('rebote_esquina_dentro',
+        Math.abs(esquina.x - (worldRight() - edgeRadius(esquina))) < 0.001 &&
+        Math.abs(esquina.y - (worldTop() - edgeRadius(esquina))) < 0.001);
       check('rebote_esquina_dir', esquina.dir === -90);
 
       /* ============ 6. condiciones ============ */
@@ -130,7 +161,8 @@ window.addEventListener('load', function () {
       selectedSpriteId = mov.id;
       render();
       await execBlock(makeNode('bounce'), mov);
-      check('exec_bounce', mov.dir === -90 && mov.x === 214);
+      check('exec_bounce', mov.dir === -90 &&
+        Math.abs(mov.x - (worldRight() - edgeRadius(mov))) < 0.001);
 
       timerStart = Date.now() - 2500;
       check('cronometro_valor', Math.abs(evalReporter(makeNode('rep_timer'), mov) - 2.5) < 0.4);
@@ -212,6 +244,56 @@ window.addEventListener('load', function () {
       check('picker_ofrece_cronometro',
         Array.from($('#repChoices').children).some(el => el.dataset.repPick === 'rep_timer'));
       closeRepPicker();
+
+      /* ============ 9. el dibujo entero cabe en la caja ============
+         El bug original: el centro llegaba al borde pelado y `overflow:hidden`
+         cortaba la mitad del personaje, peor cuanto más grande el mundo.
+         Acá se mide el DOM de verdad, no las coordenadas. El zoom se deja en
+         1: es una lupa y recortar el mundo es justamente su trabajo. */
+      const recorte = () => {
+        const c = $('#stage').getBoundingClientRect();
+        const e = $('#spritesLayer .sprite-emoji').getBoundingClientRect();
+        return Math.max(0, c.left - e.left, e.right - c.right,
+          c.top - e.top, e.bottom - c.bottom);
+      };
+      const bordeSolo = make('Borde', 0, 0);
+      sprites = [bordeSolo];
+      selectedSpriteId = bordeSolo.id;
+      stageZoom = 1;
+      applyStageZoom();
+      const poner = (ww, hh, x, y) => {
+        worldW = ww; worldH = hh;
+        applyWorldSize();
+        bordeSolo.x = x; bordeSolo.y = y;
+        reclampAllSprites();
+      };
+      poner(480, 360, 9999, 0);
+      check('dibujo_dentro_fabrica_derecha', recorte() < 1);
+      poner(480, 360, -9999, -9999);
+      check('dibujo_dentro_fabrica_esquina', recorte() < 1);
+      poner(960, 720, 9999, -9999);
+      check('dibujo_dentro_mundo_960', recorte() < 1);
+      poner(1440, 1080, 9999, -9999);
+      check('dibujo_dentro_mundo_maximo', recorte() < 1);
+      /* El margen es el MISMO en unidades para cualquier mundo. Si creciera
+         con los píxeles, `ir a x: 120 y: -75` dejaría de funcionar en una
+         caja chica: fue el callejón sin salida del primer intento. Lo que se
+         ajusta es el tope del dibujo, no las coordenadas del proyecto. */
+      poner(480, 360, 0, 0);
+      const rFabrica = edgeRadius(bordeSolo);
+      poner(1440, 1080, 0, 0);
+      const rMaximo = edgeRadius(bordeSolo);
+      check('margen_constante_con_el_mundo', Math.abs(rFabrica - rMaximo) < 0.001);
+      poner(480, 360, 120, -75);
+      check('coordenadas_normales_siguen_vigentes',
+        bordeSolo.x === 120 && bordeSolo.y === -75);
+      poner(1440, 1080, 9999, -9999);
+      document.body.classList.add('game-mode');
+      reclampAllSprites();
+      check('dibujo_dentro_modo_juego', recorte() < 1);
+      document.body.classList.remove('game-mode');
+      poner(480, 360, 0, 0);
+      check('dibujo_dentro_al_volver_al_editor', recorte() < 1);
 
       check('sin_errores_final', errs.length === 0);
     } catch (err) {

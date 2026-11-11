@@ -761,7 +761,12 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
 .sprite-wrap.dragging .sprite-emoji{transition:none}
 .sprite-emoji{
   position:absolute;left:0;top:0;transform-origin:50% 50%;
-  font-size:clamp(48px,15vw,68px);line-height:1;
+  /* El personaje se dibuja en px, pero el margen del borde se mide en
+     unidades del mundo. `--sprite-cap` (lo calcula applySpriteCap()) lo
+     achica lo justo cuando la caja es chica o el mundo es grande, para que
+     nunca se corte. En condiciones normales el tope no se aplica. El
+     fallback enorme vale para el primer frame, antes de que corra el motor. */
+  font-size:min(clamp(48px,15vw,68px),var(--sprite-cap,9999px));line-height:1;
   transform:translate(-50%,-50%) rotate(0deg) scale(1);
   filter:drop-shadow(0 12px 14px rgba(15,23,42,.24));
   transition:transform .2s ease;
@@ -1108,7 +1113,9 @@ body.game-mode.game-portrait .rotate-hint:not(.is-off){
 body.game-mode #spritesCard{display:none}
 body.game-mode .sprite-wrap.selected::before{display:none}
 body.game-mode .sprite-wrap{cursor:default}
-body.game-mode .sprite-emoji{font-size:clamp(64px,20vw,120px)}
+/* El mismo tope que en el editor: a pantalla completa la caja es otra, así
+   que el cap se recalcula en enterGame()/exitGame(). */
+body.game-mode .sprite-emoji{font-size:min(clamp(64px,20vw,120px),var(--sprite-cap,9999px))}
 body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
 
 /* ---------------- disfraces ---------------- */
@@ -1363,11 +1370,14 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
           <div class="props-grid">
             <label class="prop-field">
               <span class="prop-label">x</span>
-              <input id="propX" type="number" inputmode="decimal" min="-240" max="240" step="1">
+              <!-- Valores de fábrica: borde ± el radio visual del dibujo.
+                   applyWorldSize() los recalcula con el mundo y el tamaño
+                   reales del personaje elegido; son sólo el primer frame. -->
+              <input id="propX" type="number" inputmode="decimal" min="-155" max="155" step="1">
             </label>
             <label class="prop-field">
               <span class="prop-label">y</span>
-              <input id="propY" type="number" inputmode="decimal" min="-180" max="180" step="1">
+              <input id="propY" type="number" inputmode="decimal" min="-95" max="95" step="1">
             </label>
             <label class="prop-field">
               <span class="prop-label" data-t="spriteDirection">Dirección</span>

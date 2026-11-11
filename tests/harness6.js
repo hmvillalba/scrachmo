@@ -84,9 +84,15 @@ window.addEventListener('load', function () {
       changeStageZoom(ZOOM_STEP); changeStageZoom(ZOOM_STEP);
       const fg0 = parseFloat(getComputedStyle($('.sprite-emoji')).fontSize);
       document.body.classList.add('game-mode');
+      /* `--sprite-cap` se calcula con el ancho de la caja del editor, que es
+         chica. Al pasar a pantalla completa hay que recalcularlo: es justo lo
+         que hace enterGame() vía reclampAllSprites(). Sin ese paso las dos
+         fuentes quedan topadas por el mismo número y la comparación miente. */
+      reclampAllSprites();
       const fg1 = parseFloat(getComputedStyle($('.sprite-emoji')).fontSize);
       check('game_mode_respeta_zoom', fg1 > fg0 && getComputedStyle($('.stage-bottom')).display === 'none');
       document.body.classList.remove('game-mode');
+      reclampAllSprites();
       resetStageZoom(); applyStageZoom();
       /* loadProject() reemplazó `sprites`: hay que redibujar la capa antes
          de buscar el globo, si no queda apuntando al sprite viejo. */

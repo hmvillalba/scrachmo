@@ -230,13 +230,65 @@ function worldBottom() { return -(worldH - WORLD_H0 / 2); }
 function posLeft(s) { return (s.x - worldLeft()) / worldW * 100; }
 function posTop(s) { return (worldTop() - s.y) / worldH * 100; }
 
-/* Deja un personaje adentro del mundo. Se usa al cargar y al achicar. */
-function clampToWorld(s) {
+/* Margen VISUAL del personaje, en unidades del mundo.
+
+   El radio lógico de los choques (SPRITE_RADIUS = 26) sirve para «tocar otro
+   personaje», pero con él el centro llegaba al borde exacto y la mitad del
+   dibujo quedaba afuera, cortada por `overflow:hidden`. Acá se usa el radio
+   del DIBUJO, no el de los choques.
+
+   El margen es CONSTANTE en unidades, y lo que se ajusta es el DIBUJO: el
+   personaje se pinta con `font-size` en píxeles, mientras la caja representa
+   `worldW` unidades. En una caja chica, o con el mundo agrandado, esos píxeles
+   valen demasiadas unidades y un margen medido en píxeles se comía coordenadas
+   normales (`ir a x: 120 y: -75` quedaba fuera). `applySpriteCap()` le pone un
+   tope al font-size para que el semiancho nunca pase de EDGE_RADIUS unidades.
+   En condiciones normales el tope no se aplica y se ve igual que siempre.
+
+   El ZOOM no entra acá a propósito: es una lupa sobre `.stage-world`, así que
+   agranda juntos la posición y el dibujo y recorta el mundo deliberadamente.
+   Meterlo en el margen dejaría zonas visibles pero inalcanzables. */
+const EDGE_RADIUS = 68;
+
+/* El glifo 🐱 mide ~1,37 × font-size de ancho (93 px con 68 px de fuente).
+   Se redondea a 1,40 para dejar colchón: si en otro sistema el emoji fuera
+   un poco más ancho, o el navegador redondeara distinto, el tope lo deja más
+   chico, nunca más grande. Sin ese margen quedaban 0,1 px de recorte. */
+const SPRITE_GLYPH_RATIO = 1.40;
+
+function edgeRadius(s) {
+  const size = Math.max(10, Math.min(300, Number(s && s.size) || 100)) / 100;
+  /* Con rotación libre el rectángulo girado necesita ~25 % más de radio. */
+  const rot = s && s.rot === 'all' ? 1.25 : 1;
+  /* Un personaje enorme no cabe en el mundo: se deja 1 unidad para que los
+     límites nunca queden invertidos (mínimo mayor que máximo). */
+  return Math.min(EDGE_RADIUS * size * rot, worldW / 2 - 1, worldH / 2 - 1);
+}
+
+/* Tope del font-size para que el dibujo mida, como mucho, 2*EDGE_RADIUS
+   unidades del mundo. Se recalcula cuando cambia la caja: tamaño del mundo,
+   modo juego o tamaño de la ventana. */
+function applySpriteCap() {
+  if (typeof document === 'undefined') return;
+  const stage = $('#stage');
+  const rect = stage && stage.getBoundingClientRect();
+  if (!rect || rect.width <= 0) return;
+  const fs = 2 * EDGE_RADIUS / SPRITE_GLYPH_RATIO * rect.width / worldW;
+  document.body.style.setProperty('--sprite-cap', fs.toFixed(2) + 'px');
+}
+
+/* ÚNICO punto que recorta x/y. Si se le pasan x/y los usa; si no, corrige los
+   que ya tiene el personaje. Carga, arrastre, mover, ir a x:y:, las casillas
+   de propiedades y «volver al tamaño original» pasan todos por acá. */
+function clampSpritePos(s, x, y) {
   if (!s) return s;
-  s.x = clamp(num(s.x, 0), worldLeft(), worldRight());
-  s.y = clamp(num(s.y, 0), worldBottom(), worldTop());
+  const r = edgeRadius(s);
+  s.x = clamp(num(x === undefined ? s.x : x, 0), worldLeft() + r, worldRight() - r);
+  s.y = clamp(num(y === undefined ? s.y : y, 0), worldBottom() + r, worldTop() - r);
   return s;
 }
+
+function clampToWorld(s) { return clampSpritePos(s); }
 
 /* Lleva el tamaño del mundo al CSS (la caja del escenario sale de ahí) y
    muestra u oculta el botón de volver al tamaño original. */
@@ -248,12 +300,21 @@ function applyWorldSize() {
   document.body.style.setProperty('--stage-h', String(Math.round(worldH)));
   const btn = $('#stageSizeReset');
   if (btn) btn.hidden = (Math.round(worldW) === WORLD_W0 && Math.round(worldH) === WORLD_H0);
-  /* Las casillas de x/y siguen los bordes del mundo, si no el navegador marca
-     como inválido un valor que el motor acepta perfectamente. */
+  /* Las casillas de x/y siguen los bordes SEGUROS del mundo (borde ± radio
+     visual), no el borde pelado: si no, el navegador acepta un valor que el
+     motor recorta y la casilla muestra una cosa distinta de la realidad. */
   const px = $('#propX');
   const py = $('#propY');
-  if (px) px.max = String(Math.round(worldRight()));
-  if (py) py.min = String(Math.round(worldBottom()));
+  const r = edgeRadius(selectedSprite());
+  if (px) {
+    px.min = String(Math.round(worldLeft() + r));
+    px.max = String(Math.round(worldRight() - r));
+  }
+  if (py) {
+    py.min = String(Math.round(worldBottom() + r));
+    py.max = String(Math.round(worldTop() - r));
+  }
+  applySpriteCap();
 }
 
 /* ---------------- project ---------------- */
@@ -620,8 +681,8 @@ function normalizeSprites(list) {
       const s = {
         id: id,
         name: name,
-        x: clamp(num(raw.x, 0), worldLeft(), worldRight()),
-        y: clamp(num(raw.y, 0), worldBottom(), worldTop()),
+        x: num(raw.x, 0),
+        y: num(raw.y, 0),
         dir: normDir(num(raw.dir, 90)),
         size: clamp(num(raw.size, 100), 20, 200),
         visible: raw.visible !== false,
@@ -630,6 +691,7 @@ function normalizeSprites(list) {
         costumeIndex: clamp(Math.floor(num(raw.costumeIndex, 0)), 0, costumes.length - 1),
         code: normalizeNodes(raw.code, new Set())
       };
+      clampSpritePos(s);
       syncCostume(s);
       out.push(s);
     });
@@ -671,6 +733,9 @@ function applyPayloadInner(payload) {
     worldH = clamp(Math.round(num(payload.worldH, WORLD_H0)), WORLD_MIN_H, WORLD_MAX_H);
     applyWorldSize();
     sprites = normalizeSprites(payload.sprites);
+    /* Segunda pasada: ahora `selectedSprite()` ya existe y las casillas de
+       x/y pueden usar SU tamaño real, no el del proyecto anterior. */
+    applyWorldSize();
     variables = (payload.variables && typeof payload.variables === 'object' && !Array.isArray(payload.variables)) ? payload.variables : {};
     loadHidden(payload.hidden);
     stageBg = clamp(Math.floor(num(payload.stageBg, 0)), 0, BG.length - 1);
@@ -698,6 +763,7 @@ function applyPayloadInner(payload) {
   applyWorldSize();
   sprites = [createSpriteData('🐱', 'Gato', migrateOldCode(oldCode))];
   selectedSpriteId = sprites[0].id;
+  applyWorldSize();
   variables = (oldVars && typeof oldVars === 'object' && !Array.isArray(oldVars)) ? oldVars : {};
   loadHidden(oldHidden);
   Object.keys(hiddenVars).forEach(k => { if (!(k in variables)) delete hiddenVars[k]; });
@@ -713,6 +779,7 @@ function resetProjectData(withCode) {
   applyWorldSize();
   sprites = [createSpriteData('🐱', 'Gato', withCode ? defaultCode() : [])];
   selectedSpriteId = sprites[0].id;
+  applyWorldSize();
   variables = {};
   hiddenVars = {};
   stageBg = 0;
@@ -1315,6 +1382,15 @@ function exSay(text, zoom) {
   return n;
 }
 
+/* Coordenadas de los ejemplos. El centro del personaje no llega al borde: el
+   margen visual (`EDGE_RADIUS` × 1,25 por la rotación libre) deja el mundo
+   útil en x −155…155 e y −95…95. Si un ejemplo pidiera −140 o 170, el motor
+   lo recortaría y el bloque mostraría un número que no es donde se ve el
+   dibujo. Se deja además un poco de colchón para que se lea redondo. */
+const EX_Y_FONDO = -90;
+const EX_Y_CIELO = 90;
+const EX_X_AZAR = '-150,150';
+
 /* Caminar sólo en horizontal: «ir a x: (posición x) + delta, y: fija». Es el
    patrón que evita que el personaje se dé vuelta mientras camina, y de paso
    muestra cómo se anida un reportero dentro de otro. */
@@ -1329,7 +1405,7 @@ function exStepX(delta, y) {
 /* Clon que aparece en un punto al azar de la parte de arriba. */
 function exDrop(y) {
   const ir = makeNode('go_xy', '0,' + y);
-  ir.reps = [makeNode('rep_random', '-190,190'), null];
+  ir.reps = [makeNode('rep_random', EX_X_AZAR), null];
   return ir;
 }
 
@@ -1353,13 +1429,13 @@ function exHola(t) {
 function exFruta(t) {
   const cesta = createSpriteData('🧺', t.exBasket, [
     makeNode('when_flag'),
-    makeNode('go_xy', '0,-140'),
+    makeNode('go_xy', '0,' + EX_Y_FONDO),
     makeNode('when_key', 'arrowleft'),
-    exStepX(-18, -140),
+    exStepX(-18, EX_Y_FONDO),
     makeNode('when_key', 'arrowright'),
-    exStepX(18, -140)
+    exStepX(18, EX_Y_FONDO)
   ]);
-  cesta.y = -140;
+  cesta.y = EX_Y_FONDO;
 
   /* El clon se borra al tocar la cesta: «borrar este clon» corta el hilo en
      el siguiente punto de espera, así que no sigue cayendo. */
@@ -1379,7 +1455,7 @@ function exFruta(t) {
     makeNode('when_clone'),
     /* Un clon de un personaje escondido nace escondido: hay que mostrarlo. */
     makeNode('show'),
-    exDrop(170),
+    exDrop(EX_Y_CIELO),
     makeNode('point_dir', 180),
     caer,
     makeNode('delete_clone')
@@ -1400,7 +1476,7 @@ function exCometas(t) {
     lluvia,
     makeNode('when_clone'),
     makeNode('show'),
-    exDrop(175),
+    exDrop(EX_Y_CIELO),
     makeNode('point_dir', 180),
     caer,
     makeNode('delete_clone')
@@ -1414,15 +1490,15 @@ function exCometas(t) {
 
   const nave = createSpriteData('🚀', t.exShip, [
     makeNode('when_flag'),
-    makeNode('go_xy', '0,-140'),
+    makeNode('go_xy', '0,' + EX_Y_FONDO),
     makeNode('score_reset'),
     vigilar,
     makeNode('when_key', 'arrowleft'),
-    exStepX(-18, -140),
+    exStepX(-18, EX_Y_FONDO),
     makeNode('when_key', 'arrowright'),
-    exStepX(18, -140)
+    exStepX(18, EX_Y_FONDO)
   ]);
-  nave.y = -140;
+  nave.y = EX_Y_FONDO;
 
   /* Los puntos suben solos mientras sobrevivís: así se nota el reinicio. */
   const puntos = makeNode('forever');
@@ -2196,8 +2272,37 @@ function spriteHTML(s, index) {
 function renderSprites() {
   const layer = $('#spritesLayer');
   if (!layer) return;
-  layer.innerHTML = sprites.concat(clones).map((s, i) => spriteHTML(s, i)).join('');
+  const todos = sprites.concat(clones);
+  layer.innerHTML = todos.map((s, i) => spriteHTML(s, i)).join('');
   applyStageBg();
+  /* Segunda pasada de seguridad: corrige posiciones que puedan haber llegado
+     de un proyecto viejo (guardado cuando el borde era el pelado) y repinta
+     sólo lo que se movió. Se escriben left/top directo, sin updateSpriteEl(),
+     para no reentrar acá. */
+  todos.forEach(s => {
+    const ax = s.x, ay = s.y;
+    clampToWorld(s);
+    if (s.x !== ax || s.y !== ay) {
+      const el = findSpriteEl(s.id);
+      if (el) {
+        el.style.left = posLeft(s) + '%';
+        el.style.top = posTop(s) + '%';
+      }
+    }
+  });
+}
+
+/* Cambió la caja (modo juego, ventana, tamaño del mundo): el tope del dibujo
+   hay que recalcularlo y las posiciones se vuelven a recortar y a dibujar.
+   A diferencia de renderSprites(), acá sí se puede usar updateSpriteEl()
+   porque los elementos ya existen. */
+function reclampAllSprites() {
+  applySpriteCap();
+  sprites.concat(clones).forEach(s => {
+    clampToWorld(s);
+    updateSpriteEl(s);
+  });
+  applyWorldSize();
 }
 
 /* ---------------- clones ----------------
@@ -3777,8 +3882,7 @@ function moveSpriteDrag(e) {
   const dx = (e.clientX - spriteDrag.startX) * spriteDrag.perX;
   const dy = (e.clientY - spriteDrag.startY) * spriteDrag.perY;
   if (Math.abs(e.clientX - spriteDrag.startX) > 3 || Math.abs(e.clientY - spriteDrag.startY) > 3) spriteDrag.moved = true;
-  s.x = clamp(spriteDrag.x + dx, worldLeft(), worldRight());
-  s.y = clamp(spriteDrag.y - dy, worldBottom(), worldTop());
+  clampSpritePos(s, spriteDrag.x + dx, spriteDrag.y - dy);
   updateSpriteEl(s);
   if (s.id === selectedSpriteId) updatePropPosition();
 }
@@ -4363,7 +4467,7 @@ function spriteRadius(s) {
 
 function touchingEdge(s) {
   if (!s) return false;
-  const r = spriteRadius(s);
+  const r = edgeRadius(s);
   return s.x <= worldLeft() + r || s.x >= worldRight() - r ||
     s.y <= worldBottom() + r || s.y >= worldTop() - r;
 }
@@ -4428,7 +4532,7 @@ function touchingSprite(s, key) {
    una horizontal invierte el coseno (dir → 180 - dir). */
 function bounceSprite(s) {
   if (!s) return false;
-  const r = spriteRadius(s);
+  const r = edgeRadius(s);
   let hitX = false;
   let hitY = false;
   if (s.x <= worldLeft() + r) { s.x = worldLeft() + r; hitX = true; }
@@ -4491,8 +4595,7 @@ async function execBlock(node, sprite) {
     case 'move': {
       const steps = num(v, 10);
       const rad = sprite.dir * Math.PI / 180;
-      sprite.x = clamp(sprite.x + steps * Math.sin(rad), worldLeft(), worldRight());
-      sprite.y = clamp(sprite.y + steps * Math.cos(rad), worldBottom(), worldTop());
+      clampSpritePos(sprite, sprite.x + steps * Math.sin(rad), sprite.y + steps * Math.cos(rad));
       updateSpriteEl(sprite);
       await sleep(180);
       return;
@@ -4510,8 +4613,7 @@ async function execBlock(node, sprite) {
     case 'go_xy': {
       /* node.val guarda "x,y"; una casilla vacía o inválida vale 0. */
       const xy = String(v == null ? '' : v).split(',');
-      sprite.x = clamp(num(xy[0], 0), worldLeft(), worldRight());
-      sprite.y = clamp(num(xy[1], 0), worldBottom(), worldTop());
+      clampSpritePos(sprite, num(xy[0], 0), num(xy[1], 0));
       updateSpriteEl(sprite);
       await sleep(180);
       return;
@@ -6045,6 +6147,10 @@ function enterGame() {
   /* Cada partida recalibra: la postura con la que sostenés el teléfono al
      empezar es el cero de la inclinación. */
   tiltReset();
+  /* A pantalla completa cambian el ancho de la caja y el tamaño del emoji:
+     el tope del dibujo se recalcula ANTES de runAll(), para que
+     snapshotRuntime() guarde el estado ya corregido. */
+  reclampAllSprites();
   buildPad();
   runAll();
 }
@@ -6054,6 +6160,9 @@ function exitGame() {
   document.body.classList.remove('game-mode');
   const pad = $('#pad');
   if (pad) pad.hidden = true;
+  /* La vuelta al editor cambia la caja otra vez: se recalcula el tope del
+     dibujo y los límites de las casillas x/y, y se vuelve a recortar. */
+  reclampAllSprites();
   tiltReset();
   syncGameOrientation();
   window.scrollTo(0, gameScrollY || 0);
@@ -6467,12 +6576,12 @@ function bindEvents() {
   const py = $('#propY');
   const pd = $('#propDir');
   const ps = $('#propSize');
-  px.addEventListener('input', () => { const s = selectedSprite(); if (s && px.value !== '') { s.x = clamp(num(px.value, s.x), worldLeft(), worldRight()); updateSpriteEl(s); scheduleSave(); } });
-  py.addEventListener('input', () => { const s = selectedSprite(); if (s && py.value !== '') { s.y = clamp(num(py.value, s.y), worldBottom(), worldTop()); updateSpriteEl(s); scheduleSave(); } });
+  px.addEventListener('input', () => { const s = selectedSprite(); if (s && px.value !== '') { clampSpritePos(s, num(px.value, s.x)); updateSpriteEl(s); scheduleSave(); } });
+  py.addEventListener('input', () => { const s = selectedSprite(); if (s && py.value !== '') { clampSpritePos(s, undefined, num(py.value, s.y)); updateSpriteEl(s); scheduleSave(); } });
   /* La dirección se normaliza a −180…180, no se recorta: escribir 270 tiene
      que girar el personaje (queda como −90), no quedarse en 180. */
   pd.addEventListener('input', () => { const s = selectedSprite(); if (s && pd.value !== '') { s.dir = normDir(num(pd.value, s.dir)); updateSpriteEl(s); scheduleSave(); } });
-  ps.addEventListener('input', () => { const s = selectedSprite(); if (s && ps.value !== '') { s.size = clamp(num(ps.value, s.size), 20, 200); updateSpriteEl(s); scheduleSave(); } });
+  ps.addEventListener('input', () => { const s = selectedSprite(); if (s && ps.value !== '') { s.size = clamp(num(ps.value, s.size), 20, 200); clampSpritePos(s); applyWorldSize(); updateSpriteEl(s); scheduleSave(); } });
   px.addEventListener('change', () => { const s = selectedSprite(); if (s) { px.value = fmt(s.x); saveProject(); } });
   py.addEventListener('change', () => { const s = selectedSprite(); if (s) { py.value = fmt(s.y); saveProject(); } });
   pd.addEventListener('change', () => { const s = selectedSprite(); if (s) { s.dir = normDir(s.dir); pd.value = fmt(s.dir); saveProject(); } });
@@ -6618,7 +6727,12 @@ function bindEvents() {
     codeGrip.addEventListener('keydown', keyCodeResize);
     codeGrip.addEventListener('dblclick', resetCodeHeight);
   }
-  window.addEventListener('resize', () => { if (codeH > 0) applyCodeHeight(); });
+  window.addEventListener('resize', () => {
+    if (codeH > 0) applyCodeHeight();
+    /* `clamp(48px,15vw,68px)` y el ancho de la caja cambian con la ventana:
+       girar el celular puede dejar un personaje del borde cortado. */
+    reclampAllSprites();
+  });
   $('#undoBtn').addEventListener('click', undo);
   $('#redoBtn').addEventListener('click', redo);
   $('#bgCustomBtn').addEventListener('click', pickBackdropFile);

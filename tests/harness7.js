@@ -162,14 +162,20 @@ window.addEventListener('load', function () {
       check('no_mueve_otro_sprite', s1.x === 0 && s1.y === 0);
       await execBlock(makeNode('go_xy', '12.5,-30.25'), s0);
       check('exec_decimales', s0.x === 12.5 && s0.y === -30.25);
+      /* El límite ya no es el borde pelado: se deja el radio del DIBUJO para
+         que el personaje no salga cortado por `overflow:hidden`. Se deriva de
+         edgeRadius() porque depende del tamaño real de la caja. */
       await execBlock(makeNode('go_xy', '9999,0'), s0);
-      check('clamp_x_pos', s0.x === 240);
+      check('clamp_x_pos', Math.abs(s0.x - (worldRight() - edgeRadius(s0))) < 0.001);
       await execBlock(makeNode('go_xy', '-9999,0'), s0);
-      check('clamp_x_neg', s0.x === -240);
+      check('clamp_x_neg', Math.abs(s0.x - (worldLeft() + edgeRadius(s0))) < 0.001);
       await execBlock(makeNode('go_xy', '0,9999'), s0);
-      check('clamp_y_pos', s0.y === 180);
+      check('clamp_y_pos', Math.abs(s0.y - (worldTop() - edgeRadius(s0))) < 0.001);
       await execBlock(makeNode('go_xy', '0,-9999'), s0);
-      check('clamp_y_neg', s0.y === -180);
+      check('clamp_y_neg', Math.abs(s0.y - (worldBottom() + edgeRadius(s0))) < 0.001);
+      check('limites_de_casillas_iguales_al_motor',
+        Math.abs(Number($('#propX').max) - Math.round(worldRight() - edgeRadius(s0))) < 1 &&
+        Math.abs(Number($('#propY').min) - Math.round(worldBottom() + edgeRadius(s0))) < 1);
       await execBlock(makeNode('go_xy', '45,'), s0);
       check('campo_vacio_y', s0.x === 45 && s0.y === 0);
       await execBlock(makeNode('go_xy', ',60'), s0);

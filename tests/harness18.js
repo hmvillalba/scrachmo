@@ -87,15 +87,17 @@ window.addEventListener('load', function () {
       check('reset_visible', resetBtn.hidden === false);
 
       /* ============ 4. los bordes siguen al tamaño ============ */
-      s.x = 0; s.y = -530;   // el borde nuevo está en -540 y el radio es 26
+      s.x = 0; s.y = -530;   // el borde nuevo está en -540
       check('toca_el_borde_nuevo', touchingEdge(s) === true);
       s.y = -180;
       check('ya_no_toca_el_borde', touchingEdge(s) === false);
-      /* Rebotar contra el fondo nuevo lo devuelve adentro. */
+      /* Rebotar contra el fondo nuevo lo devuelve adentro. El freno lo pone
+         el radio del DIBUJO (edgeRadius), no el de los choques entre
+         personajes: con 26 u la mitad del emoji quedaba cortada. */
       s.y = -1000;
       s.dir = 180;
       bounceSprite(s);
-      check('rebota_en_el_fondo_nuevo', s.y > worldBottom() && s.y <= worldBottom() + spriteRadius(s) + 0.01);
+      check('rebota_en_el_fondo_nuevo', s.y > worldBottom() && s.y <= worldBottom() + edgeRadius(s) + 0.01);
       s.x = 0; s.y = 0;
 
       /* ============ 5. agrandar a la derecha ============ */
@@ -141,7 +143,8 @@ window.addEventListener('load', function () {
       resetWorldSize();
       check('vuelve_al_original', worldW === 480 && worldH === 360);
       check('recorta_lo_que_quedaba_afuera',
-        sprites[0].x === 240 && sprites[0].y === -180);
+        Math.abs(sprites[0].x - (worldRight() - edgeRadius(sprites[0]))) < 0.001 &&
+        Math.abs(sprites[0].y - (worldBottom() + edgeRadius(sprites[0]))) < 0.001);
       check('reset_oculto_otra_vez', resetBtn.hidden === true);
       check('caja_de_vuelta', Math.abs(box().width - b0.width) < 1);
 

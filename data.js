@@ -21,6 +21,13 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch (e) { } }
 };
 
+/* Mensajes con nombre. El nombre de fábrica mantiene vivos los proyectos
+   viejos, que no guardaban ninguno: un sombrero sin `val` escucha «mensaje»
+   y un envío sin `val` lo despierta. MSG_NEW es el centinela del
+   desplegable para crear otro nombre; NUNCA se guarda en un bloque. */
+const MSG_DEFAULT = 'mensaje';
+const MSG_NEW = '__new__';
+
 /* ---------------- texts ---------------- */
 const UI = {
   es: {
@@ -602,13 +609,15 @@ const BLOCKS = [
   },
   {
     id: 'when_msg', cat: 'multi', icon: 'message', hat: 1,
-    n: L('Al recibir mensaje', 'On message', 'Ao receber mensagem', 'À la réception'),
-    d: L('Se activa con un mensaje de este navegador. No llega de otros dispositivos.', 'Triggers on a message from this same browser, not from another device.', 'Ativa com uma mensagem deste navegador, não de outro aparelho.', 'Se déclenche avec un message de ce navigateur, pas d’un autre appareil.')
+    def: MSG_DEFAULT, w: 112, pick: 'messages',
+    n: L('Al recibir {v}', 'On {v}', 'Ao receber {v}', 'Quand je reçois {v}'),
+    d: L('Se activa sólo con el mensaje de ese nombre, desde este navegador. No llega de otros dispositivos.', 'Triggers only on the message with that name, from this same browser, not from another device.', 'Ativa só com a mensagem desse nome, neste navegador, não de outro aparelho.', 'Se déclenche seulement pour le message de ce nom, depuis ce navigateur, pas d’un autre appareil.')
   },
   {
     id: 'send_msg', cat: 'multi', icon: 'send',
-    n: L('Enviar mensaje', 'Send message', 'Enviar mensagem', 'Envoyer un message'),
-    d: L('Avisa a los guiones del proyecto y a otras pestañas del mismo navegador. No usa la red.', 'Notifies this project’s scripts and other tabs of the same browser. No network involved.', 'Avisa os scripts do projeto e outras abas do mesmo navegador. Sem rede.', 'Prévient les scripts du projet et les autres onglets du même navigateur. Sans réseau.')
+    def: MSG_DEFAULT, w: 112, pick: 'messages',
+    n: L('Enviar {v}', 'Broadcast {v}', 'Enviar {v}', 'Envoyer {v}'),
+    d: L('Avisa a los guiones que escuchan ese nombre y a otras pestañas del mismo navegador. No usa la red.', 'Notifies the scripts listening to that name and other tabs of the same browser. No network involved.', 'Avisa os scripts que escutam esse nome e outras abas do mesmo navegador. Sem rede.', 'Prévient les scripts qui écoutent ce nom et les autres onglets du même navigateur. Sans réseau.')
   },
   /* ---------------- reporteros ----------------
      Un reportero NO es un enunciado: devuelve un valor y vive dentro de la
@@ -709,6 +718,9 @@ const UI_EXTRA = {
     libraryExported: 'Biblioteca exportada: {n} proyectos',
     undoDelete: 'Deshacer borrado',
     projectRestored: 'Proyecto restaurado',
+    msgNew: 'Nuevo mensaje…', msgNameTitle: 'Nombre del mensaje',
+    msgNameHint: 'Hasta 24 caracteres. Los guiones con el mismo nombre se despiertan juntos.',
+    msgBadName: 'Ese nombre no sirve',
     noFlagScripts: 'Ningún personaje tiene «al presionar bandera»: agregá ese sombrero para que Ejecutar arranque',
     padTitle: 'Controles',
     padUp: 'Arriba',
@@ -844,6 +856,9 @@ const UI_EXTRA = {
     libraryExported: 'Library exported: {n} projects',
     undoDelete: 'Undo delete',
     projectRestored: 'Project restored',
+    msgNew: 'New message…', msgNameTitle: 'Message name',
+    msgNameHint: 'Up to 24 characters. Scripts with the same name wake up together.',
+    msgBadName: 'That name is not valid',
     noFlagScripts: 'No character has “when green flag clicked”: add that hat so Run starts',
     padTitle: 'Controls',
     padUp: 'Up',
@@ -979,6 +994,9 @@ const UI_EXTRA = {
     libraryExported: 'Biblioteca exportada: {n} projetos',
     undoDelete: 'Desfazer exclusão',
     projectRestored: 'Projeto restaurado',
+    msgNew: 'Nova mensagem…', msgNameTitle: 'Nome da mensagem',
+    msgNameHint: 'Até 24 caracteres. Os scripts com o mesmo nome acordam juntos.',
+    msgBadName: 'Esse nome não serve',
     noFlagScripts: 'Nenhum personagem tem “ao clicar na bandeira”: adicione esse chapéu para que Executar inicie',
     padTitle: 'Controles',
     padUp: 'Cima',
@@ -1114,6 +1132,9 @@ const UI_EXTRA = {
     libraryExported: 'Bibliothèque exportée : {n} projets',
     undoDelete: 'Annuler la suppression',
     projectRestored: 'Projet restauré',
+    msgNew: 'Nouveau message…', msgNameTitle: 'Nom du message',
+    msgNameHint: 'Jusqu’à 24 caractères. Les scripts du même nom se réveillent ensemble.',
+    msgBadName: 'Ce nom n’est pas valide',
     noFlagScripts: 'Aucun personnage n’a « quand le drapeau est cliqué » : ajoutez ce chapeau pour que Exécuter démarre',
     padTitle: 'Commandes',
     padUp: 'Haut',

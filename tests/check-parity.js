@@ -916,6 +916,76 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- mensajes con nombre (P2.12, fase 1) ----------------
+   Antes había UN aviso anónimo: cualquier «enviar» despertaba a todos los
+   sombreros y el .sb3 declaraba un solo broadcast. El arnés 24 lo comprueba en
+   el navegador; esto avisa antes, sin abrir Chrome. */
+{
+  const dataRaw2 = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const buildSrc = fs.readFileSync(path.join(__dirname, 'build.js'), 'utf8');
+  ['msgNew', 'msgNameTitle', 'msgNameHint', 'msgBadName'].forEach(k => {
+    if (typeof ctx.EX.es[k] !== 'string' || !ctx.EX.es[k].length) {
+      ok = false; console.log('FAIL falta la clave UI_EXTRA.' + k + ' (mensajes con nombre)');
+    }
+  });
+  if (!/const\s+MSG_DEFAULT\s*=\s*'mensaje'/.test(dataRaw2) ||
+      !/const\s+MSG_NEW\s*=\s*'__new__'/.test(dataRaw2)) {
+    ok = false; console.log('FAIL faltan MSG_DEFAULT / MSG_NEW en data.js');
+  }
+  [['when_msg', ctx.BY.when_msg], ['send_msg', ctx.BY.send_msg]].forEach(par => {
+    const def = par[1];
+    if (!def || def.pick !== 'messages' || def.def !== 'mensaje' ||
+        !langs.every(l => /\{v\}/.test(def.n[l]))) {
+      ok = false; console.log('FAIL ' + par[0] + ' no es desplegable de nombres en los 4 idiomas');
+    }
+  });
+  if (ctx.PB.filter(b => b.pick === 'messages').length !== 2) {
+    ok = false; console.log('FAIL tiene que haber exactamente dos bloques de mensaje');
+  }
+  ['isMsgNode', 'msgName', 'cleanMsgName', 'msgScripts', 'broadcastMsg', 'sb3MsgId'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() de los mensajes con nombre');
+    }
+  });
+  /* Un único contador global silenciaba a TODOS los nombres durante 250 ms. */
+  if (/let\s+lastMsgAt\s*=\s*0/.test(engine) || !/lastMsgAt\[name\]/.test(engine)) {
+    ok = false; console.log('FAIL el corte de rebotes de mensajes no va por nombre');
+  }
+  if (!/function\s+pickList\s*\(/.test(engine) || !/kind === 'messages'/.test(engine) ||
+      !/nueva\.name\[l\] = UI\[l\]\.msgNew/.test(engine)) {
+    ok = false; console.log('FAIL la lista de nombres no es dinámica o «Nuevo mensaje…» no está traducido');
+  }
+  /* El centinela abre el modal: jamás puede quedar guardado en un bloque. */
+  if (!/input\.value === MSG_NEW/.test(engine) || !/sel\.value === MSG_NEW/.test(engine) ||
+      !/newMessageFor\(sel\.dataset\.input\)/.test(engine) ||
+      !/s === MSG_NEW/.test(engine) || !/msgNameHint, 24\)/.test(engine)) {
+    ok = false; console.log('FAIL «Nuevo mensaje…» no está protegido contra guardarse');
+  }
+  if (!/JSON\.stringify\(\{\s*t:\s*Date\.now\(\),\s*name:\s*name\s*\}\)/.test(engine) ||
+      !/name = msgName\(dato && dato\.name\)/.test(engine)) {
+    ok = false; console.log('FAIL el aviso entre pestañas no lleva (ni lee) el nombre');
+  }
+  if (/fireEvent\('when_msg'\s*\)/.test(engine) ||
+      !/fireEvent\('when_msg', sc => msgName\(sc\.hat\.val\) === name\)/.test(engine)) {
+    ok = false; console.log('FAIL el despacho de mensajes no filtra por nombre');
+  }
+  if (!/broadcastMsg\(nodeVal\(node, sprite\)\)/.test(engine)) {
+    ok = false; console.log('FAIL «enviar» no usa el nombre de su casilla');
+  }
+  /* Exportación: un broadcast por nombre, con ids distintos y declarados. */
+  if (/SB3_MSG_ID/.test(engine) || !/stageBroadcasts/.test(engine) ||
+      !/allMsgs\.forEach\(nm =>/.test(engine) || !/usedMsgs/.test(engine)) {
+    ok = false; console.log('FAIL el .sb3 volvió a un único broadcast anónimo');
+  }
+  if (!/BROADCAST_OPTION = \[nm, sb3MsgId\(nm\)\]/.test(engine) ||
+      !/BROADCAST_INPUT = \[1, \[11, nm, sb3MsgId\(nm\)\]\]/.test(engine)) {
+    ok = false; console.log('FAIL los bloques .sb3 no usan el id del nombre elegido');
+  }
+  if (!/'harness24\.js'/.test(buildSrc)) {
+    ok = false; console.log('FAIL tests/build.js no registra harness24.js');
+  }
+}
+
 console.log((ok ? 'OK' : 'FALLO') + ' | claves UI=' + base.length +
   ' | UI_EXTRA=' + exBase.length + ' | data-t=' + tKeys.length +
   ' | data-tt=' + ttKeys.length + ' | bloques=' + ctx.PB.length +

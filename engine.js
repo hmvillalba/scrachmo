@@ -82,7 +82,9 @@ let runActive = false;
 let runtimeSnapshot = null;
 let threadSeq = 0;
 let lastShakeAt = 0;
-let lastMsgAt = 0;
+/* El corte de rebotes va POR NOMBRE: antes era un único número y un aviso
+   de «nivel2» silenciaba durante 250 ms al de «perdiste». */
+const lastMsgAt = Object.create(null);
 let motionRequested = false;
 /* Estado del acelerómetro como control. Vive acá arriba, con el resto del
    estado, porque `stopCode()` tiene que poder cortarlo desde cualquier lado. */
@@ -2128,8 +2130,9 @@ function askConfirm(message, title) {
     .then(v => v === true);
 }
 
-function askText(title, value, message) {
-  return askUser({ title: title, value: value === undefined ? '' : value, message: message || '' })
+function askText(title, value, message, maxLength) {
+  return askUser({ title: title, value: value === undefined ? '' : value,
+    message: message || '', maxLength: maxLength || 60 })
     .then(v => (typeof v === 'string' ? v : null));
 }
 
@@ -2146,6 +2149,24 @@ function bindAskModal() {
   document.addEventListener('keydown', e => {
     if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeAsk(null); }
   });
+}
+
+/* La opción «Nuevo mensaje…» del desplegable no es un nombre: abre el modal
+   y el nombre elegido queda guardado en el bloque (y disponible para todos).
+   Si se cancela, el bloque conserva el nombre que tenía. */
+async function newMessageFor(id) {
+  const antes = findNode(id);
+  if (!antes || !isMsgNode(antes.node)) return;
+  const anterior = msgName(antes.node.val);
+  const crudo = await askText(UI[lang].msgNameTitle, '', UI[lang].msgNameHint, 24);
+  /* El bloque pudo borrarse mientras el modal estaba abierto. */
+  const info = findNode(id);
+  if (!info || !isMsgNode(info.node)) return;
+  const limpio = cleanMsgName(crudo);
+  info.node.val = limpio || anterior;
+  renderCode();
+  saveProject();
+  if (!limpio && typeof crudo === 'string' && crudo.trim()) toast(UI[lang].msgBadName);
 }
 
 /* ---------------- selector de reporteros ----------------
@@ -2886,7 +2907,8 @@ function blockContent(node, def, t) {
         const opt = document.createElement('option');
         opt.value = cur;
         opt.textContent = def.pick === 'sprites' ? UI[lang].spriteMissing
-          : (def.pick === 'keys' ? UI[lang].keyMissing : UI[lang].soundMissing);
+          : (def.pick === 'keys' ? UI[lang].keyMissing
+            : (def.pick === 'messages' ? msgName(cur) : UI[lang].soundMissing));
         opt.selected = true;
         sel.appendChild(opt);
       }
@@ -3240,6 +3262,22 @@ function previewNode(def) {
 /* Listas de nombres que se eligen con un <select>: sonidos y melodías.
    El bloque guarda el id (estable) y se muestra el nombre del idioma. */
 function pickList(kind) {
+  /* Los mensajes también son dinámicos: son los nombres que el proyecto ya
+     usa, más el de fábrica y la opción para crear otro. El nombre elegido por
+     el usuario NO se traduce; sí se traduce la opción «Nuevo mensaje…». */
+  if (kind === 'messages') {
+    const nombres = new Set([MSG_DEFAULT]);
+    const walk = nodes => (nodes || []).forEach(n => {
+      if (isMsgNode(n)) nombres.add(msgName(n.val));
+      walk(n.body); walk(n.elseBody);
+    });
+    sprites.forEach(s => walk(s.code));
+    const lista = Array.from(nombres).sort((a, b) => a < b ? -1 : (a > b ? 1 : 0));
+    const out = lista.map(nm => ({ id: nm, name: { es: nm, en: nm, pt: nm, fr: nm } }));
+    const nueva = { id: MSG_NEW, name: {} };
+    ['es', 'en', 'pt', 'fr'].forEach(l => { nueva.name[l] = UI[l].msgNew; });
+    return out.concat([nueva]);
+  }
   /* Los personajes son dinámicos: la lista sale del proyecto, no del catálogo.
      El nombre de cada uno se repite en los 4 idiomas porque lo que se traduce
      es «mí mismo», no el nombre que eligió el usuario. */
@@ -3260,12 +3298,16 @@ function pickList(kind) {
    tecla que de verdad escucha el guion. */
 function pickMatch(kind, id, cur) {
   if (kind === 'keys') return normKeyName(id) === normKeyName(cur);
+  if (kind === 'messages') return id === msgName(cur);
   return id === cur;
 }
 
 function pickLabel(kind, id) {
   const item = pickList(kind).find(x => pickMatch(kind, x.id, id));
   if (item) return item.name[lang] || item.name.es;
+  /* Un nombre de mensaje huérfano se muestra tal cual: es texto del usuario,
+     no una clave que falte traducir. */
+  if (kind === 'messages') return String(id);
   if (kind === 'keys') return UI[lang].keyMissing || String(id);
   return (kind === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing) || String(id);
 }
@@ -4761,20 +4803,12 @@ async function execBlock(node, sprite) {
       await sleep(130);
       return;
     }
-    case 'send_msg': {
-      /* No hay red: el aviso viaja por localStorage a otras pestañas del mismo
-         origen. El evento storage no llega a la propia pestaña, así que acá se
-         reenvía dentro del proyecto, con tope para cortar cadenas. */
-      store.set('scrachmo_msg', JSON.stringify({ t: Date.now() }));
-      const now = Date.now();
-      if (now - lastMsgAt > 250) {
-        lastMsgAt = now;
-        setTimeout(() => fireEvent('when_msg'), 0);
-      }
-      toast(UI[lang].msgSent);
+    case 'send_msg':
+      /* El nombre sale de la casilla; un bloque viejo sin `val` cae en
+         «mensaje» y sigue despertando a los sombreros viejos. */
+      broadcastMsg(nodeVal(node, sprite));
       await sleep(150);
       return;
-    }
     default:
       await sleep(30);
   }
@@ -4809,6 +4843,46 @@ function collectScripts() {
 
 function scriptsFor(event, test) {
   return collectScripts().filter(sc => sc.event === event && (!test || test(sc)));
+}
+
+/* ---------------- mensajes con nombre ----------------
+   El nombre vive en node.val. Un proyecto viejo no lo guardaba: msgName()
+   le da el de fábrica, así que sus sombreros y sus envíos siguen
+   encontrándose. No hay migración que escriba en el proyecto guardado. */
+function isMsgNode(node) {
+  return !!node && (node.type === 'when_msg' || node.type === 'send_msg');
+}
+
+function msgName(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  return s || MSG_DEFAULT;
+}
+
+function cleanMsgName(v) {
+  if (typeof v !== 'string') return '';
+  const s = v.replace(/\s+/g, ' ').trim().slice(0, 24);
+  if (!s || s === MSG_NEW || s === '__proto__' || s === 'constructor' ||
+    s === 'prototype') return '';
+  return s;
+}
+
+function msgScripts(name) {
+  const buscado = msgName(name);
+  return scriptsFor('when_msg', sc => msgName(sc.hat.val) === buscado);
+}
+
+/* Un solo despachador para el envío de adentro del proyecto. El aviso viaja
+   por localStorage a las otras pestañas; el evento `storage` NO llega a la
+   pestaña que escribe, así que acá se reenvía con el mismo nombre. */
+function broadcastMsg(raw) {
+  const name = msgName(raw);
+  store.set('scrachmo_msg', JSON.stringify({ t: Date.now(), name: name }));
+  const now = Date.now();
+  if (now - (lastMsgAt[name] || 0) > 250) {
+    lastMsgAt[name] = now;
+    setTimeout(() => fireEvent('when_msg', sc => msgName(sc.hat.val) === name), 0);
+  }
+  toast(UI[lang].msgSent);
 }
 
 function projectUsesMotion() {
@@ -5449,6 +5523,7 @@ function sb3SpriteBlocks(sprite, index) {
   const dropped = [];
   const usedSounds = new Set();
   const usedVars = new Set();
+  const usedMsgs = new Set();
   let seq = 0;
   let scriptY = 0;
 
@@ -5780,8 +5855,10 @@ function sb3SpriteBlocks(sprite, index) {
         return bid;
       }
       case 'send_msg': {
+        const nm = msgName(node.val);
+        usedMsgs.add(nm);
         const bid = mk('event_broadcast', parentId);
-        blocks[bid].inputs.BROADCAST_INPUT = [1, [11, 'mensaje', SB3_MSG_ID]];
+        blocks[bid].inputs.BROADCAST_INPUT = [1, [11, nm, sb3MsgId(nm)]];
         return bid;
       }
       /* Clones: los tres opcodes existen en Scratch, así que se exportan tal
@@ -5809,8 +5886,10 @@ function sb3SpriteBlocks(sprite, index) {
       return bid;
     }
     if (node.type === 'when_msg') {
+      const nm = msgName(node.val);
+      usedMsgs.add(nm);
       const bid = mk('event_whenbroadcastreceived', null);
-      blocks[bid].fields.BROADCAST_OPTION = ['mensaje', SB3_MSG_ID];
+      blocks[bid].fields.BROADCAST_OPTION = [nm, sb3MsgId(nm)];
       return bid;
     }
     return null;
@@ -5864,26 +5943,36 @@ function sb3SpriteBlocks(sprite, index) {
     prev = id;
   });
 
-  return { blocks: blocks, dropped: dropped, usedSounds: usedSounds, usedVars: usedVars };
+  return { blocks: blocks, dropped: dropped, usedSounds: usedSounds,
+    usedVars: usedVars, usedMsgs: usedMsgs };
 }
 
-/* Ids de variables y del mensaje: estables dentro de un mismo export. */
-const SB3_MSG_ID = 'bc_mensaje';
+/* Ids de variables y de mensajes: estables dentro de un mismo export. Antes
+   había UN solo broadcast (`bc_mensaje`) y todos los bloques apuntaban a él:
+   en Scratch un «nivel2» despertaba también al sombrero de «perdiste». */
 let sb3VarIds = null;
+let sb3MsgIds = null;
 function sb3VarId(name) {
   if (!sb3VarIds) sb3VarIds = new Map();
   if (!sb3VarIds.has(name)) sb3VarIds.set(name, 'var_' + (sb3VarIds.size + 1));
   return sb3VarIds.get(name);
+}
+function sb3MsgId(name) {
+  if (!sb3MsgIds) sb3MsgIds = new Map();
+  if (!sb3MsgIds.has(name)) sb3MsgIds.set(name, 'bc_' + (sb3MsgIds.size + 1));
+  return sb3MsgIds.get(name);
 }
 
 /* Arma project.json + los archivos del ZIP. Devuelve también la lista de lo
    que quedó afuera, para poder avisarlo. */
 async function sb3Build() {
   sb3VarIds = null;
+  sb3MsgIds = null;
   const files = [];
   const seen = new Set();
   const dropped = [];
   const allVars = new Map();
+  const allMsgs = new Set();
   const soundsNeeded = new Set();
   let assets = 0;
 
@@ -5919,6 +6008,7 @@ async function sb3Build() {
     built.dropped.forEach(d => { if (dropped.indexOf(d) < 0) dropped.push(d); });
     built.usedVars.forEach(v => allVars.set(v, true));
     built.usedSounds.forEach(k => soundsNeeded.add(k));
+    built.usedMsgs.forEach(m => allMsgs.add(m));
 
     const costumes = [];
     const list = (s.costumes && s.costumes.length) ? s.costumes : [{ kind: 'emoji', src: '🐱', name: 'disfraz1' }];
@@ -6001,12 +6091,18 @@ async function sb3Build() {
     delete t._dropped;
   });
 
+  /* Un broadcast por nombre. El de fábrica siempre se declara: es el que
+     usan los proyectos viejos y el que ofrece el desplegable al empezar. */
+  allMsgs.add(MSG_DEFAULT);
+  const stageBroadcasts = {};
+  allMsgs.forEach(nm => { stageBroadcasts[sb3MsgId(nm)] = nm; });
+
   const stage = {
     isStage: true,
     name: 'Stage',
     variables: stageVars,
     lists: {},
-    broadcasts: { [SB3_MSG_ID]: 'mensaje' },
+    broadcasts: stageBroadcasts,
     blocks: {},
     comments: {},
     currentCostume: 0,
@@ -6642,6 +6738,8 @@ function bindEvents() {
     }
     const info = findNode(input.dataset.input);
     if (!info) return;
+    /* El centinela del desplegable nunca se guarda: lo atiende el change. */
+    if (input.value === MSG_NEW && isMsgNode(info.node)) return;
     if (input.dataset.xy !== undefined) {
       /* Bloque de varios campos: node.val es "a,b". Se actualiza sólo el
          índice editado para no pisar la otra casilla ni los reporteros. */
@@ -6654,8 +6752,17 @@ function bindEvents() {
     scheduleSave();
   };
   $('#codeList').addEventListener('input', applyBlockValue);
-  /* Los <select> de «cambiar disfraz a» también disparan change. */
-  $('#codeList').addEventListener('change', e => { applyBlockValue(e); saveProject(); });
+  /* Los <select> (disfraz, tecla, sonido y mensaje) también disparan change.
+     Elegir «Nuevo mensaje…» abre el modal en vez de guardar el centinela. */
+  $('#codeList').addEventListener('change', e => {
+    const sel = e.target;
+    if (sel && sel.value === MSG_NEW && sel.dataset && sel.dataset.input) {
+      const info = findNode(sel.dataset.input);
+      if (info && isMsgNode(info.node)) { newMessageFor(sel.dataset.input); return; }
+    }
+    applyBlockValue(e);
+    saveProject();
+  });
   $('#codeList').addEventListener('click', e => {
     const fx = e.target.closest('.rep-fx');
     if (fx) { openRepPicker(fx.dataset.repHost, Number(fx.dataset.repSlot)); return; }
@@ -6900,7 +7007,19 @@ function bindEvents() {
   });
 
   window.addEventListener('storage', e => {
-    if (e.key === 'scrachmo_msg' && multiOn) fireEvent('when_msg');
+    if (e.key !== 'scrachmo_msg' || !multiOn) return;
+    /* Un aviso de una pestaña con la versión vieja no traía nombre: cae en
+       el de fábrica, igual que un bloque guardado sin `val`. */
+    let name = MSG_DEFAULT;
+    try {
+      const dato = JSON.parse(e.newValue || '{}');
+      name = msgName(dato && dato.name);
+    } catch (err) { /* marca ilegible: se trata como el mensaje de siempre */ }
+    const now = Date.now();
+    if (now - (lastMsgAt[name] || 0) > 250) {
+      lastMsgAt[name] = now;
+      fireEvent('when_msg', sc => msgName(sc.hat.val) === name);
+    }
   });
 
   /* iOS 13+ exige pedir permiso dentro de un gesto del usuario y con HTTPS. */

@@ -280,6 +280,53 @@ window.addEventListener('load', function () {
         vacio.project.targets[1].costumes.length >= 1 &&
         Object.keys(vacio.project.targets[1].blocks).length === 0);
 
+      /* ============ 8. mensajes con nombre ============
+         Dos nombres tienen que exportarse como dos broadcast distintos. Antes
+         todos los bloques apuntaban al mismo `bc_mensaje`, así que en Scratch
+         un «nivel2» despertaba también al sombrero de «perdiste». El tercer
+         sombrero no tiene `val`: es un proyecto viejo y escucha «mensaje». */
+      sprites = [
+        make('N1', [
+          { id: 'nm1', type: 'when_msg', val: 'nivel2' },
+          { id: 'nm2', type: 'score_add', val: '1' },
+          { id: 'nm3', type: 'send_msg', val: 'nivel2' }
+        ]),
+        make('N2', [
+          { id: 'nm4', type: 'when_msg', val: 'perdiste' },
+          { id: 'nm5', type: 'score_add', val: '2' },
+          { id: 'nm6', type: 'when_msg' },
+          { id: 'nm7', type: 'score_add', val: '3' }
+        ])
+      ];
+      selectedSpriteId = sprites[0].id;
+      const conNombres = await sb3Build();
+      const declN = conNombres.project.targets[0].broadcasts || {};
+      const nombresDeclarados = Object.values(declN);
+      check('broadcasts_por_nombre', ['mensaje', 'nivel2', 'perdiste']
+        .every(n => nombresDeclarados.indexOf(n) > -1));
+      check('tres_broadcasts_distintos', Object.keys(declN).length === 3);
+
+      const sombrerosN = [];
+      const enviosN = [];
+      conNombres.project.targets.forEach(t => {
+        Object.keys(t.blocks || {}).forEach(id => {
+          const b = t.blocks[id];
+          const f = b.fields && b.fields.BROADCAST_OPTION;
+          if (f) sombrerosN.push(f);
+          if (b.opcode === 'event_broadcast') enviosN.push(b.inputs.BROADCAST_INPUT[1]);
+        });
+      });
+      check('sombreros_con_su_nombre', sombrerosN.length === 3 &&
+        ['nivel2', 'perdiste', 'mensaje'].every(n => sombrerosN.some(f => f[0] === n)));
+      check('ids_de_broadcast_distintos', new Set(sombrerosN.map(f => f[1])).size === 3);
+      check('ids_de_broadcast_declarados', sombrerosN.every(f =>
+        Object.prototype.hasOwnProperty.call(declN, f[1])));
+      check('nombre_y_id_coherentes', sombrerosN.every(f => declN[f[1]] === f[0]));
+      check('envio_lleva_nombre_e_id', enviosN.length === 1 &&
+        enviosN[0][1] === 'nivel2' && declN[enviosN[0][2]] === 'nivel2');
+      check('grafo_de_mensajes_sano',
+        conNombres.project.targets.every(t => graphProblems(t).length === 0));
+
       /* El botón existe y está enganchado. */
       check('boton_sb3', !!document.getElementById('sb3Btn') &&
         typeof exportSb3 === 'function');

@@ -14,7 +14,7 @@ No frameworks, no dependencies, no build step: static files that work in any mod
 
 ### Blocks like Scratch
 
-- 53 blocks in 9 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables and **local messages**.
+- 53 blocks in 9 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables and **named local messages**.
 - Hat blocks (green flag, tap, key, shake the phone, receive message, score) and C blocks: `Repeat {v} times`, `Forever` and conditionals with `if... else`.
 - Real nesting: drop a block **on top of** a `Repeat`, `Forever` or `if` and it goes inside —also onto the "else" bar—, or aim at the slot if you prefer. With guards that stop you nesting a block inside itself or putting a hat block inside.
 - **Several scripts per sprite**: each hat starts an independent script and only the ones that match the event that happened run. A single sprite can react to the flag, a key and a tap at the same time.
@@ -77,7 +77,7 @@ No frameworks, no dependencies, no build step: static files that work in any mod
 
 - Run / Stop, with the running block highlighted at every moment. Several scripts can run in parallel without losing the highlight or mixing up their conditions.
 - **The flag starts the whole project, not just the sprite being edited**: the selected sprite having no blocks gets in the way of nothing, because scripts are walked in every sprite. What does matter is the **hat**: a script only starts with *Run* if it begins with **On start** (or if the blocks are loose, which count as the flag). If the project has blocks but none hangs from that hat —for example, everything is under "When a key is pressed"— the app says so with a notice instead of staying silent.
-- Events: green flag, tap on the stage, **When {v} pressed** (a dropdown with space, Enter, the four arrows, the 26 letters and the 10 digits), shake the device, score and messages. The score hat fires once per threshold, it does not re-trigger in a loop.
+- Events: green flag, tap on the stage, **When {v} pressed** (a dropdown with space, Enter, the four arrows, the 26 letters and the 10 digits), shake the device, score and **named messages**. The score hat fires once per threshold, it does not re-trigger in a loop.
 - **Sprites stay where they ended**: on stopping or finishing the scripts they no longer go back to zero. The position, costume, size, visibility and background the program left become the design state: they are saved and are the starting point of the next run. If you want to undo that journey, tap **Back to start** (it appears below the stage after the first run) and the snapshot taken at launch is restored. Nothing is auto-saved during a run; the score is kept between runs.
 - Loops with a safety cap: a runaway `Repeat` or `Forever` does not hang the browser.
 - On iOS 13+ the motion permission is requested on the first tap, as the system requires.
@@ -108,7 +108,8 @@ The gamepad solves the thumb, but to move a sprite in four directions **tilting 
 ### Local messages (formerly "Multiplayer")
 
 - The old name **lied**: the category was called "Multiplayer" and the blocks talked about "other players on the local network". It is now called **Messages** and says what it does.
-- `Send message` writes a mark in `localStorage`; `On message` listens for the `storage` event. **There is no network, no server, no other devices**: it reaches the scripts of the same project and other tabs of the same browser and the same origin. The *Messages* button in the tools turns only the reception from other tabs on or off; the notice inside the project always arrives (the `storage` event does not fire in the tab that writes).
+- **Every message has a name**: `On {v}` and `Broadcast {v}` share a dropdown with the names the project already uses, plus **New message…** to create another one (up to 24 characters). Only the scripts listening to **that** name wake up: a `nivel2` does not touch `perdiste`. The rebound cut is **per name**, so one broadcast does not silence the others. Old projects, which stored no name, still listen for and send **"mensaje"**: nothing rewrites the saved project, and a broadcast from a tab running the old version falls back to that name too. In the `.sb3`, each name is declared as a *broadcast* with its own id.
+- `Broadcast {v}` writes a mark **with the name** in `localStorage`; `On {v}` listens for the `storage` event. **There is no network, no server, no other devices**: it reaches the scripts of the same project and other tabs of the same browser and the same origin. The *Messages* button in the tools turns only the reception from other tabs on or off; the notice inside the project always arrives (the `storage` event does not fire in the tab that writes).
 - Playing between two phones would need a backend with WebSockets or a real-time service. ScrachMo has no backend by design: that is what lets it open with a double click and be published as a static site on Vercel.
 
 ### Sensing and collisions
@@ -140,7 +141,7 @@ The gamepad solves the thumb, but to move a sprite in four directions **tilting 
 
 - **To Scratch (.sb3)** is in the tools card and downloads a file that **Scratch 3 opens as is** (`File → Load from your computer`). It is not a "save as": ScrachMo builds the ZIP by hand —`project.json` plus one file per costume and per sound, each named after its **MD5**— with its own ZIP writer, its own MD5 and its own CRC32, with no libraries and no connection.
 - **Sprites**: each one travels as a sprite with its costume (the emoji is drawn to a 128 px PNG; your own images are rescaled to 480 px), its position, direction, size, rotation style and visibility. The stage background —the gradient or the image you uploaded— goes as the *Stage*'s costume.
-- **Scripts**: the full block graph is rebuilt (`next`, `parent`, `SUBSTACK`, `SUBSTACK2`, hats and dropdowns). The project variables are declared on the *Stage* and the message is declared so the send/receive blocks find it.
+- **Scripts**: the full block graph is rebuilt (`next`, `parent`, `SUBSTACK`, `SUBSTACK2`, hats and dropdowns). The project variables are declared on the *Stage* and **each message name** is declared as a *broadcast* with its own id, so send and receive meet without mixing names.
 - **Sounds and melodies**: no files are copied, they are **synthesised to WAV** (22050 Hz, mono, 16-bit) with the same step recipe the engine uses, so they sound the same as here. The noise uses a pseudo-random generator with a fixed seed: two exports of the same project give identical files.
 - **What gets translated and what does not**:
 
@@ -149,12 +150,13 @@ The gamepad solves the thumb, but to move a sprite in four directions **tilting 
 | `Move`, `Turn`, `Go to x: y:`, `Point in direction`, `Bounce if on edge` | `motion_*` (the bounce uses Scratch's own block) |
 | `Say`, `Think`, `Show`, `Hide`, `Size`, `Next costume`, `Switch costume to` | `looks_*` with the names of your costumes |
 | `Play sound`, `Stop all sounds`, `volume` | `sound_*` with the generated sounds |
-| `On start`, `On tap`, `When key pressed`, `On message` | `event_*` |
+| `On start`, `On tap`, `When key pressed`, `On {v}`, `Broadcast {v}` | `event_*`, with one *broadcast* per name |
 | `Wait`, `Repeat`, `Forever`, `if`, `if/else`, `If on the edge`, `If touching` | `control_*` and `sensing_touchingobject` |
 | `Create clone of`, `When I start as a clone`, `Delete this clone` | `control_create_clone_of`, `control_start_as_clone`, `control_delete_this_clone` |
 | `score` and the variables | global variables of the *Stage* |
-| Local messages, shake, tilt, vibrate, create/show variables, friends, loose `else`, `delete the clone I'm touching` | **no equivalent** |
+| Shake, tilt, vibrate, create/show variables, friends, loose `else`, `delete the clone I'm touching` and the notice to other tabs | **no equivalent** |
 
+- **Messages do travel**: each name is exported as a separate Scratch *broadcast*, with its id declared on the *Stage*. What has no equivalent is the notice to other tabs of the same browser, which is ScrachMo-only.
 - **What is left out is reported, not lost silently**: at the end the app says how many blocks it could not translate, and each affected sprite carries a **comment attached to its first block** inside Scratch with the list. That way the project opens, runs and shows where it has to be completed by hand.
 - **Two differences to keep in mind**: a melody plays **once** in Scratch (not looped, because a loop inside the script would hang it) and the bounce is left with Scratch's native block, which uses the costume's box and not the circle ScrachMo uses. The reverse path (opening an `.sb3` in ScrachMo) is not implemented.
 
@@ -250,7 +252,7 @@ Want to add a new block? It is an entry in `data.js` and its logic in `engine.js
 
 ## Verification
 
-The project has **1187 automated checks per language, 4748 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, the landing page and the on-screen gamepad with tilt.
+The project has **1244 automated checks per language, 4976 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), the landing page and the on-screen gamepad with tilt.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -258,7 +260,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # text parity + static checks
 node tests/pwa-check.js          # manifest, icons and served routes
 node tests/pwa-sw.js             # service worker logic
-node tests/run.js my-run         # 25 scenarios × 4 languages in headless Chrome
+node tests/run.js my-run         # 26 scenarios × 4 languages in headless Chrome
 ```
 
 `tests/build.js` builds the test pages and the shared link; `tests/run.js` launches Chrome with an isolated profile per suite and per language, and counts `PASS` / `FAIL` / `ERROR`. On GitHub Actions, `.github/workflows/test.yml` repeats the same thing on every push and pull request.
@@ -294,7 +296,7 @@ If something fails, write down **model, iOS version and whether it happened in S
 
 Better honest than a sales pitch:
 
-- **The `.sb3` export is one-way, and not complete**: ScrachMo opens its own formats (`.scmo` and `?p=`, which are its own JSON) but **cannot import an `.sb3`**. And on the export side there are blocks with no equivalent in Scratch (local messages, shake, tilt, vibrate, create/show variables, friends and the loose `else`): they are not invented, they are left out and reported in a comment inside the project. And if you enlarged the stage, the notice says so too: Scratch's always measures 480 × 360, so whatever falls outside the original frame will not be visible. A melody also plays **once** in Scratch instead of looping, and the bounce uses Scratch's costume box rather than ScrachMo's circle, so a very elongated sprite may bounce a little earlier or later.
+- **The `.sb3` export is one-way, and not complete**: ScrachMo opens its own formats (`.scmo` and `?p=`, which are its own JSON) but **cannot import an `.sb3`**. And on the export side there are blocks with no equivalent in Scratch (shake, tilt, vibrate, create/show variables, friends and the loose `else`): they are not invented, they are left out and reported in a comment inside the project. **Named messages are exported**, each one as a broadcast with its own id; what does not travel is the notice to other browser tabs, which Scratch has no concept of. And if you enlarged the stage, the notice says so too: Scratch's always measures 480 × 360, so whatever falls outside the original frame will not be visible. A melody also plays **once** in Scratch instead of looping, and the bounce uses Scratch's costume box rather than ScrachMo's circle, so a very elongated sprite may bounce a little earlier or later.
 - **Collisions are not pixel-perfect**: each sprite is a circle of radius 26 at 100 % size, scaled by its size. It is fast and stable, but a very elongated sprite collides earlier or later than the drawing suggests, and there is no colour or "touching the pointer" detection.
 - **The timer lives in the session**: it counts from when you opened the project (or from the last `Reset timer`), it is not saved in the `.scmo`, it does not reset with *Run* and it does not stop with *Stop*. If the game needs a time, reset it at the start of the script.
 - **Sounds cannot be imported and there is no microphone recording**: the catalog is closed (8 sounds and 3 synthesised melodies) and there is no audio editor. Adding your own sounds would mean files or recording, with its cost in project weight and in the PWA cache.
@@ -308,7 +310,7 @@ Better honest than a sales pitch:
 - **The PWA cache is invalidated with every release, and now CI requires it**: the cache name in `sw.js` is `scrachmo-<APP_VERSION>-<fingerprint>`, where the fingerprint is the first 8 characters of the SHA-256 of `index.html + app.html + landing.js + boot.js + data.js + engine.js` (with normalised line endings so it comes out the same on Windows and on Linux). `tests/check-parity.js` recalculates that fingerprint and **fails if any of those six files changed without updating `sw.js`**; it also fails if `APP_VERSION` in `data.js`, the version in `landing.js` and the one in `sw.js` do not match. To publish you run `node tests/bump-sw.js` (or `node tests/bump-sw.js v12`), which bumps all three versions and recalculates the fingerprint. Without this, the service worker serves those files from the cache without revalidating and the installed app stays old indefinitely. `tests/pwa-sw.js` reads the version from `sw.js` itself, so it does not get pinned to a number. On Vercel, `vercel.json` also stops the CDN from caching `sw.js`.
 - A project opened from a `?p=` link or from a `.scmo` is loaded **into the current project**, so it replaces whatever was there. If you want to keep it, create a new one before opening it.
 - The project's name lives in the device's library: it does not travel inside the `.scmo` or the `?p=` link. There are no folders or manual ordering either: the list is sorted by last change.
-- **Messages are not multiplayer**: they use `localStorage` and reach the sprites of the same browser (and other tabs of the same origin), never other devices. See *Local messages* above.
+- **Messages are not multiplayer**: they use `localStorage` and reach the sprites of the same browser (and other tabs of the same origin), never other devices. Names only choose which scripts wake up inside that browser; they are not a network channel. See *Local messages* above.
 - There is zoom for the block area and for the stage, and a two-column layout from 900 px, but the wide arrangement cannot be forced by hand on a phone: it comes out on its own according to the screen width.
 
 ## License

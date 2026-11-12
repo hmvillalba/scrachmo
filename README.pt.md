@@ -14,7 +14,7 @@ Sem frameworks, sem dependências, sem build: arquivos estáticos que funcionam 
 
 ### Blocos como no Scratch
 
-- 53 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis e **mensagens locais**.
+- 53 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis e **mensagens locais com nome**.
 - Blocos chapéu (bandeira verde, toque, tecla, agitar o celular, receber mensagem, pontuação) e blocos C: `Repetir {v} vezes`, `Para sempre` e condicionais com `se... senão`.
 - Aninhamento de verdade: solte um bloco **em cima** de um `Repetir`, `Para sempre` ou `se` e ele fica dentro —também na barra «senão»—, ou mire no encaixe se preferir. Com travas que impedem aninhar um bloco dentro de si mesmo ou colocar um chapéu dentro.
 - **Vários scripts por personagem**: cada chapéu inicia um script independente e só rodam os que correspondem ao evento ocorrido. Um mesmo personagem pode reagir à bandeira, a uma tecla e a um toque ao mesmo tempo.
@@ -77,7 +77,7 @@ Sem frameworks, sem dependências, sem build: arquivos estáticos que funcionam 
 
 - Executar / Parar, com destaque do bloco que roda a cada momento. Vários scripts podem rodar em paralelo sem perder o destaque nem misturar as suas condições.
 - **A bandeira inicia o projeto inteiro, não só o personagem em edição**: o personagem selecionado não ter blocos não impede nada, porque os scripts são percorridos em todos os personagens. O que importa é o **chapéu**: um script só começa com *Executar* se começa com **Ao iniciar** (ou se os blocos estão soltos, que contam como bandeira). Se o projeto tem blocos mas nenhum pendurado nesse chapéu —por exemplo, tudo está em «Ao pressionar uma tecla»— o app avisa em vez de ficar mudo.
-- Eventos: bandeira verde, toque no palco, **Ao pressionar {v}** (um menu com espaço, Enter, as quatro setas, as 26 letras e os 10 números), agitar o dispositivo, pontuação e mensagens. O chapéu de pontuação dispara uma única vez por limite, não volta a disparar em loop.
+- Eventos: bandeira verde, toque no palco, **Ao pressionar {v}** (um menu com espaço, Enter, as quatro setas, as 26 letras e os 10 números), agitar o dispositivo, pontuação e **mensagens com nome**. O chapéu de pontuação dispara uma única vez por limite, não volta a disparar em loop.
 - **Os personagens ficam onde terminaram**: ao parar ou ao terminar os scripts eles não voltam mais a zero. A posição, o traje, o tamanho, a visibilidade e o fundo que o programa deixou passam a ser o estado de projeto: são salvos e são o ponto de partida da próxima execução. Se quiser desfazer esse percurso, toque em **Voltar ao início** (aparece embaixo do palco depois da primeira execução) e o instantâneo tirado na largada é restaurado. Durante a execução não há salvamento automático; a pontuação sim é mantida entre execuções.
 - Laços com limite de segurança: um `Repetir` ou `Para sempre` descontrolado não trava o navegador.
 - No iOS 13+ a permissão de movimento é pedida no primeiro toque, como o sistema exige.
@@ -108,7 +108,8 @@ O controle resolve o polegar, mas para mover um personagem em quatro direções 
 ### Mensagens locais (antes «Multijogador»)
 
 - O nome antigo **mentia**: a categoria se chamava «Multijogador» e os blocos falavam de «outros jogadores pela rede local». Agora se chama **Mensagens** e diz o que faz.
-- `Enviar mensagem` escreve uma marca no `localStorage`; `Ao receber mensagem` escuta o evento `storage`. **Não há rede, nem servidor, nem outros dispositivos**: chega aos scripts do mesmo projeto e a outras abas do mesmo navegador e da mesma origem. O botão *Mensagens* das ferramentas liga ou desliga só a recepção de outras abas; o aviso dentro do projeto sempre chega (o evento `storage` não dispara na aba que escreve).
+- **Cada mensagem tem nome**: `Ao receber {v}` e `Enviar {v}` compartilham um menu com os nomes que o projeto já usa, mais **Nova mensagem…** para criar outro (até 24 caracteres). Só acordam os scripts que escutam **esse** nome: um `nivel2` não toca `perdiste`. O corte de rebotes vai **por nome**, então um aviso não silencia os outros. Os projetos antigos, que não guardavam nome, continuam escutando e enviando **«mensaje»**: nada reescreve o projeto salvo, e um aviso vindo de uma aba com a versão anterior também cai nesse nome. No `.sb3`, cada nome é declarado como um *broadcast* com o seu próprio id.
+- `Enviar {v}` escreve no `localStorage` uma marca **com o nome**; `Ao receber {v}` escuta o evento `storage`. **Não há rede, nem servidor, nem outros dispositivos**: chega aos scripts do mesmo projeto e a outras abas do mesmo navegador e da mesma origem. O botão *Mensagens* das ferramentas liga ou desliga só a recepção de outras abas; o aviso dentro do projeto sempre chega (o evento `storage` não dispara na aba que escreve).
 - Para jogar entre dois celulares seria preciso um backend com WebSockets ou um serviço de tempo real. O ScrachMo não tem backend por projeto: é o que permite abrir com duplo clique e ser publicado como site estático na Vercel.
 
 ### Sensores e colisões
@@ -140,7 +141,7 @@ O controle resolve o polegar, mas para mover um personagem em quatro direções 
 
 - **Para o Scratch (.sb3)** está no cartão de ferramentas e baixa um arquivo que **o Scratch 3 abre como está** (`Arquivo → Carregar do seu computador`). Não é um «salvar como»: o ScrachMo monta o ZIP à mão —`project.json` mais um arquivo por traje e por som, cada um nomeado com o seu **MD5**— com o seu próprio escritor de ZIP, o seu MD5 e o seu CRC32, sem bibliotecas e sem conexão.
 - **Personagens**: cada um viaja como sprite com o seu traje (o emoji é desenhado num PNG de 128 px; as imagens próprias são reescaladas para 480 px), a sua posição, direção, tamanho, estilo de rotação e visibilidade. O fundo do palco —o gradiente ou a imagem que você enviou— vai como traje do *Stage*.
-- **Scripts**: o grafo de blocos completo é reconstruído (`next`, `parent`, `SUBSTACK`, `SUBSTACK2`, chapéus e menus). As variáveis do projeto ficam declaradas no *Stage* e a mensagem é declarada para que os blocos de enviar/receber a encontrem.
+- **Scripts**: o grafo de blocos completo é reconstruído (`next`, `parent`, `SUBSTACK`, `SUBSTACK2`, chapéus e menus). As variáveis do projeto ficam declaradas no *Stage* e **cada nome de mensagem** é declarado como um *broadcast* com o seu próprio id, para que enviar e receber se encontrem sem misturar nomes.
 - **Sons e melodias**: não se copiam arquivos, são **sintetizados para WAV** (22050 Hz, mono, 16 bits) com a mesma receita de passos que o motor usa, então soam igual que aqui. O ruído usa um gerador pseudoaleatório com semente fixa: duas exportações do mesmo projeto dão arquivos idênticos.
 - **O que é traduzido e o que não é**:
 
@@ -149,12 +150,13 @@ O controle resolve o polegar, mas para mover um personagem em quatro direções 
 | `Mover`, `Girar`, `Ir para x: y:`, `Apontar em direção`, `Rebater se tocar a borda` | `motion_*` (o rebote usa o bloco próprio do Scratch) |
 | `Dizer`, `Pensar`, `Mostrar`, `Esconder`, `Tamanho`, `Próximo traje`, `Mudar traje para` | `looks_*` com os nomes dos seus trajes |
 | `Tocar som`, `Parar os sons`, `volume` | `sound_*` com os sons gerados |
-| `Ao iniciar`, `Ao tocar`, `Ao pressionar tecla`, `Ao receber` | `event_*` |
+| `Ao iniciar`, `Ao tocar`, `Ao pressionar tecla`, `Ao receber {v}`, `Enviar {v}` | `event_*`, com um *broadcast* por nome |
 | `Esperar`, `Repetir`, `Para sempre`, `se`, `se/senão`, `Se toca a borda`, `Se toca` | `control_*` e `sensing_touchingobject` |
 | `Criar clone de`, `Ao começar como clone`, `Apagar este clone` | `control_create_clone_of`, `control_start_as_clone`, `control_delete_this_clone` |
 | `pontos` e as variáveis | variáveis globais do *Stage* |
-| Mensagens locais, agitar, inclinação, vibrar, criar/mostrar variáveis, amigos, `senão` solto, `apagar o clone que toco` | **sem equivalente** |
+| Agitar, inclinação, vibrar, criar/mostrar variáveis, amigos, `senão` solto, `apagar o clone que toco` e o aviso a outras abas | **sem equivalente** |
 
+- **As mensagens viajam**: cada nome é exportado como um *broadcast* distinto, com o seu id declarado no *Stage*. O que não tem equivalente é o aviso entre abas do mesmo navegador, exclusivo do ScrachMo.
 - **O que fica de fora é avisado, não se perde em silêncio**: ao terminar, o app diz quantos blocos não conseguiu traduzir, e cada personagem afetado leva um **comentário colado ao seu primeiro bloco** dentro do Scratch com a lista. Assim o projeto abre, roda e se vê onde precisa ser completado à mão.
 - **Duas diferenças a ter em conta**: uma melodia toca **uma vez** no Scratch (não em loop, porque um laço dentro do script o travaria) e o rebote fica com o bloco nativo do Scratch, que usa a caixa do traje e não o círculo que o ScrachMo usa. O caminho inverso (abrir um `.sb3` no ScrachMo) não está implementado.
 
@@ -250,7 +252,7 @@ Quer adicionar um bloco novo? É uma entrada em `data.js` e a sua lógica em `en
 
 ## Verificação
 
-O projeto tem **1187 verificações por idioma, 4748 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, a landing e o controle na tela com a inclinação.
+O projeto tem **1244 verificações por idioma, 4976 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), a landing e o controle na tela com a inclinação.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -258,7 +260,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # paridade de textos + verificações estáticas
 node tests/pwa-check.js          # manifest, ícones e rotas servidas
 node tests/pwa-sw.js             # lógica do service worker
-node tests/run.js minha-corrida  # 25 cenários × 4 idiomas no Chrome headless
+node tests/run.js minha-corrida  # 26 cenários × 4 idiomas no Chrome headless
 ```
 
 `tests/build.js` monta as páginas de teste e o link compartilhado; `tests/run.js` abre o Chrome com um perfil isolado por suíte e por idioma, e conta `PASS` / `FAIL` / `ERROR`. No GitHub Actions, `.github/workflows/test.yml` repete o mesmo em cada push e pull request.
@@ -294,7 +296,7 @@ Se algo falhar, anote **modelo, versão do iOS e se aconteceu no Safari ou no ap
 
 Melhor honesto do que vendedor:
 
-- **A exportação para `.sb3` é de ida, e não é completa**: o ScrachMo abre os seus próprios formatos (`.scmo` e `?p=`, que são JSON dele) mas **não pode importar um `.sb3`**. E do lado da exportação há blocos sem equivalente no Scratch (mensagens locais, agitar, inclinação, vibrar, criar/mostrar variáveis, amigos e o `senão` solto): não são inventados, ficam de fora e são avisados num comentário dentro do projeto. E se você aumentou o palco, o aviso também diz: o do Scratch mede sempre 480 × 360, então o que ficar fora do retângulo original não vai aparecer. Além disso uma melodia toca **uma vez** no Scratch em vez de ficar em loop, e o rebote usa a caixa do traje do Scratch e não o círculo do ScrachMo, então um personagem muito comprido pode rebater um pouco antes ou depois.
+- **A exportação para `.sb3` é de ida, e não é completa**: o ScrachMo abre os seus próprios formatos (`.scmo` e `?p=`, que são JSON dele) mas **não pode importar um `.sb3`**. E do lado da exportação há blocos sem equivalente no Scratch (agitar, inclinação, vibrar, criar/mostrar variáveis, amigos e o `senão` solto): não são inventados, ficam de fora e são avisados num comentário dentro do projeto. As **mensagens com nome** sim são exportadas, cada uma como um *broadcast* com o seu id; o que não viaja é o aviso a outras abas do navegador, que não existe no Scratch. E se você aumentou o palco, o aviso também diz: o do Scratch mede sempre 480 × 360, então o que ficar fora do retângulo original não vai aparecer. Além disso uma melodia toca **uma vez** no Scratch em vez de ficar em loop, e o rebote usa a caixa do traje do Scratch e não o círculo do ScrachMo, então um personagem muito comprido pode rebater um pouco antes ou depois.
 - **As colisões não são pixel a pixel**: cada personagem é um círculo de raio 26 a 100 % de tamanho, escalado pelo seu tamanho. É rápido e estável, mas um personagem muito comprido colide antes ou depois do que o desenho sugere, e não há detecção de cor nem de «tocando o ponteiro».
 - **O cronômetro vive na sessão**: conta desde que você abriu o projeto (ou desde o último `Reiniciar cronômetro`), não é salvo no `.scmo`, não reinicia com *Executar* e não para com *Parar*. Se o jogo precisa de um tempo, reinicie no começo do script.
 - **Não é possível importar sons nem gravar com o microfone**: o catálogo é fechado (8 sons e 3 melodias sintetizadas) e não há editor de áudio. Adicionar sons próprios implicaria arquivos ou gravação, com o seu custo no peso do projeto e no cache do PWA.
@@ -308,7 +310,7 @@ Melhor honesto do que vendedor:
 - **O cache do PWA é invalidado a cada versão, e agora o CI exige isso**: o nome do cache em `sw.js` é `scrachmo-<APP_VERSION>-<impressão>`, onde a impressão são os primeiros 8 caracteres do SHA-256 de `index.html + app.html + landing.js + boot.js + data.js + engine.js` (com finais de linha normalizados para dar igual no Windows e no Linux). `tests/check-parity.js` recalcula essa impressão e **falha se algum desses seis arquivos mudou sem atualizar o `sw.js`**; também falha se `APP_VERSION` do `data.js`, a versão do `landing.js` e a do `sw.js` não coincidirem. Para publicar roda-se `node tests/bump-sw.js` (ou `node tests/bump-sw.js v12`), que sobe as três versões e recalcula a impressão. Sem isso, o service worker serve esses arquivos do cache sem revalidar e o app instalado fica velho indefinidamente. `tests/pwa-sw.js` lê a versão do próprio `sw.js`, assim ela não fica presa a um número. Na Vercel, além disso, o `vercel.json` impede que a CDN guarde o `sw.js`.
 - Um projeto aberto a partir de um link `?p=` ou de um `.scmo` é carregado **no projeto atual**, então substitui o que estava lá. Se quiser conservá-lo, crie um novo antes de abrir.
 - O nome do projeto vive na biblioteca do dispositivo: não viaja dentro do `.scmo` nem do link `?p=`. Também não há pastas nem ordem manual: a lista é ordenada pela última alteração.
-- **As mensagens não são multijogador**: usam `localStorage` e chegam aos personagens do mesmo navegador (e a outras abas da mesma origem), nunca a outros dispositivos. Ver *Mensagens locais* acima.
+- **As mensagens não são multijogador**: usam `localStorage` e chegam aos personagens do mesmo navegador (e a outras abas da mesma origem), nunca a outros dispositivos. Os nomes só escolhem quais scripts acordam dentro desse navegador; não são um canal de rede. Ver *Mensagens locais* acima.
 - Há zoom da área de blocos e do palco, e layout de duas colunas a partir de 900 px, mas a disposição larga não pode ser forçada à mão num celular: sai sozinha conforme a largura da tela.
 
 ## Licença

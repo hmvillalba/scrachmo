@@ -305,7 +305,18 @@ node tests/check-parity.js       # paridad de textos + comprobaciones estáticas
 node tests/pwa-check.js          # manifest, íconos y rutas servidas
 node tests/pwa-sw.js             # lógica del service worker
 node tests/run.js mi-corrida     # 28 escenarios × 4 idiomas en Chrome headless
+node tests/run-webkit.js mi-corrida  # 10 escenarios × 1 idioma en WebKit
 ```
+
+**La otra mitad del navegador (P2.10 B)**: `tests/run-webkit.js` corre **10 escenarios sensibles una sola vez, en español, sobre WebKit** —el motor de Safari y de *todos* los navegadores de iOS—. Son **503 comprobaciones** que vigilan justo lo que Chrome no puede: `CompressionStream` / `DecompressionStream`, `createImageBitmap` y su respaldo a `<img>`, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, el exportador `.sb3` y los desplegables de las tres fases de P2.12. No se repiten los 28 escenarios ni los cuatro idiomas: lo que se busca acá es **otro motor**, no otra traducción. WebKit no tiene `--dump-dom` ni tiempo virtual, así que las páginas se sirven por HTTP local y se espera el mismo `<pre id="TESTRESULT">` en el DOM vivo con `state: 'attached'` (un arnés que termina en modo juego deja el `<pre>` tapado y parecería colgado). Se instala sólo para las pruebas, confinado en `tests/`:
+
+```bash
+cd tests && npm ci && npx playwright install --with-deps webkit
+cd ..
+node tests/run-webkit.js mi-corrida
+```
+
+La raíz sigue **sin `package.json`**: la app no tiene build y Vercel sirve los archivos tal cual. `check-parity.js` exige que el runner, los diez escenarios, la versión fijada de Playwright, el job de CI y los cuatro README sigan juntos. **Esto no reemplaza la lista manual de más abajo**: el permiso real de movimiento, el desbloqueo de WebAudio, el notch, la instalación de la PWA y las fuentes de emoji en un iPhone físico sólo se juzgan con el aparato en la mano.
 
 `tests/build.js` arma las páginas de prueba y el link compartido; `tests/run.js` lanza Chrome con un perfil aislado por suite y por idioma, y cuenta `PASS` / `FAIL` / `ERROR`. En GitHub Actions, `.github/workflows/test.yml` repite lo mismo en cada push y pull request.
 
@@ -333,7 +344,7 @@ Nota de entorno: Microsoft Edge no sirvió para esto (su binario GUI no devuelve
 
 ## Verificación manual en iPhone (WebKit)
 
-La suite automática corre en **Chrome headless**. WebKit —el motor de Safari y de *todos* los navegadores de iOS, porque Apple no deja usar otro— no está cubierto: montarlo en CI exige Playwright con WebKit o un runner de macOS, y hay cosas que de todos modos sólo se pueden juzgar con el dedo (el sensor, el audio, el notch). Mientras eso no exista, esta es la lista que se corre **a mano antes de cada release**, con un iPhone real y Safari. Son unos diez minutos.
+La suite automática corre en **Chrome headless** (28 escenarios × 4 idiomas) y, desde esta versión, también en **WebKit**: una pasada corta de 10 escenarios en español que vigila las APIs donde Safari se diferencia. WebKit —el motor de Safari y de *todos* los navegadores de iOS, porque Apple no deja usar otro— ya no es un punto ciego en CI. Pero sigue habiendo cosas que sólo se pueden juzgar con el dedo (el permiso real de movimiento, el desbloqueo de audio, el notch y la instalación de la PWA). Esta es la lista que se corre **a mano antes de cada release**, con un iPhone real y Safari. Son unos diez minutos.
 
 | # | Qué probar | Cómo | Qué tiene que pasar |
 |---|---|---|---|
@@ -347,7 +358,7 @@ La suite automática corre en **Chrome headless**. WebKit —el motor de Safari 
 | 8 | Notch y barra inferior | Modo juego en vertical y en apaisado | El mando y **Salir** no quedan debajo del notch ni de la barra de gestos (`env(safe-area-inset-*)`) |
 | 9 | Aviso de girar | **Jugar** con el teléfono en vertical | Aparece; la ✕ lo cierra y no vuelve hasta la próxima partida |
 | 10 | Imágenes | Subir un PNG grande y un SVG | Se reducen a 256 px; el SVG entra **convertido a mapa de bits**, no se guarda como vector |
-| 11 | `createImageBitmap` | El mismo disfraz grande | Safari no tiene esa API: `loadBitmap()` cae a `<img>` y la imagen igual aparece |
+| 11 | `createImageBitmap` | El mismo disfraz grande | La API puede faltar o colgarse: `loadBitmap()` cae a `<img>` y la imagen igual aparece |
 | 12 | Idioma compartido | Cambiar a francés en la landing → abrir el editor | El editor abre en **francés** (las dos claves de `localStorage`) |
 | 13 | Exportar a Scratch | Exportar `.sb3` → subirlo a `scratch.mit.edu` | Los disfraces cargan: el nombre de cada archivo es su MD5 |
 | 14 | Navegación privada | Abrir en una pestaña privada | Funciona; si iOS bloquea el guardado, avisa y no rompe la app |

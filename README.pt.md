@@ -264,9 +264,12 @@ node tests/check-parity.js       # paridade de textos + verificações estática
 node tests/pwa-check.js          # manifest, ícones e rotas servidas
 node tests/pwa-sw.js             # lógica do service worker
 node tests/run.js minha-corrida  # 28 cenários × 4 idiomas no Chrome headless
+node tests/run-webkit.js minha-corrida  # 10 cenários × 1 idioma no WebKit
 ```
 
 `tests/build.js` monta as páginas de teste e o link compartilhado; `tests/run.js` abre o Chrome com um perfil isolado por suíte e por idioma, e conta `PASS` / `FAIL` / `ERROR`. No GitHub Actions, `.github/workflows/test.yml` repete o mesmo em cada push e pull request.
+
+Uma segunda corrida, mais curta, cobre o **WebKit** —o motor do Safari e de todos os navegadores do iOS. `tests/run-webkit.js` roda **10 cenários sensíveis uma vez, em espanhol**, vigiando as APIs onde o WebKit muda: fluxos de compressão, `createImageBitmap` e o seu respaldo para `<img>`, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, o exportador `.sb3` e os menus das três fases de P2.12. O Playwright é dependência só das provas, confinada em `tests/`; a raiz segue sem `package.json` porque o app não tem build. Instale com `cd tests && npm ci && npx playwright install --with-deps webkit` e rode `node tests/run-webkit.js minha-corrida`. **Não substitui a lista manual** abaixo: a permissão de movimento, o desbloqueio do WebAudio, o notch e a instalação da PWA ainda exigem um aparelho real.
 
 O registro completo —o que cada suíte verifica, por que quatro idiomas e `--lang`, as armadilhas encontradas pelo caminho, as notas de ambiente do CI e as regras de versão e cache— fica no README em espanhol, que é a fonte de verdade para tudo o que muda a cada versão:
 
@@ -274,7 +277,7 @@ O registro completo —o que cada suíte verifica, por que quatro idiomas e `--l
 
 ## Verificação manual no iPhone (WebKit)
 
-A suíte automática roda no **Chrome headless**. O WebKit —o motor do Safari e de *todos* os navegadores do iOS, porque a Apple não deixa usar outro— não está coberto: montá-lo no CI exige Playwright com WebKit ou um runner de macOS, e há coisas que de qualquer forma só se podem julgar com o dedo (o sensor, o áudio, o notch). Enquanto isso não existir, esta é a lista que se roda **à mão antes de cada versão**, com um iPhone real e Safari. São uns dez minutos.
+A suíte automática roda no **Chrome headless** (28 cenários × 4 idiomas) e, desde esta versão, também no **WebKit**: uma passada curta de 10 cenários em espanhol que vigia as APIs onde o Safari se diferencia. O WebKit —o motor do Safari e de *todos* os navegadores do iOS, porque a Apple não deixa usar outro— já não é um ponto cego no CI. Mas ainda há coisas que só se podem julgar com o dedo (a permissão real de movimento, o desbloqueio do áudio, o notch e a instalação da PWA). Esta é a lista que se roda **à mão antes de cada versão**, com um iPhone real e Safari. São uns dez minutos.
 
 | # | O que testar | Como | O que tem que acontecer |
 |---|---|---|---|
@@ -288,7 +291,7 @@ A suíte automática roda no **Chrome headless**. O WebKit —o motor do Safari 
 | 8 | Notch e barra inferior | Modo jogo na vertical e na horizontal | O controle e **Sair** não ficam embaixo do notch nem da barra de gestos (`env(safe-area-inset-*)`) |
 | 9 | Aviso de girar | **Executar** com o celular na vertical | Aparece; o ✕ fecha e não volta até a próxima partida |
 | 10 | Imagens | Enviar um PNG grande e um SVG | São reduzidos a 256 px; o SVG entra **convertido em bitmap**, não é guardado como vetor |
-| 11 | `createImageBitmap` | O mesmo traje grande | O Safari não tem essa API: `loadBitmap()` cai para `<img>` e a imagem aparece igual |
+| 11 | `createImageBitmap` | O mesmo traje grande | A API pode faltar ou travar: `loadBitmap()` cai para `<img>` e a imagem aparece igual |
 | 12 | Idioma compartilhado | Mudar para francês na landing → abrir o editor | O editor abre em **francês** (as duas chaves do `localStorage`) |
 | 13 | Exportar para o Scratch | Exportar `.sb3` → enviar para `scratch.mit.edu` | Os trajes carregam: o nome de cada arquivo é o seu MD5 |
 | 14 | Navegação privada | Abrir numa aba privada | Funciona; se o iOS bloquear o salvamento, avisa e não quebra o app |

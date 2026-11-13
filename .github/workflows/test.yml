@@ -83,3 +83,64 @@ jobs:
             run.txt
             tests-out/err-*.log
           if-no-files-found: ignore
+
+  # P2.10 parte B: la suite de Chrome no dice nada del motor de un iPhone.
+  # No se repiten los 28 escenarios ni los 4 idiomas: alcanza con una pasada
+  # corta por las APIs donde WebKit se diferencia (compresión, imágenes,
+  # 100dvh, devicemotion, almacenamiento y los desplegables del editor).
+  webkit:
+    name: WebKit acotado
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      SCRACHMO_TMP: ${{ github.workspace }}/tests-out/webkit
+      SCRACHMO_WEBKIT_LANG: es
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Instalar Playwright (dependencia sólo de las pruebas)
+        working-directory: tests
+        run: npm ci
+
+      - name: Instalar WebKit y sus librerías del sistema
+        working-directory: tests
+        run: npx playwright install --with-deps webkit
+
+      - name: Fuentes para que el texto y los emojis midan como en un equipo real
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-color-emoji fonts-dejavu-core > /dev/null
+          fc-list | grep -ci emoji || true
+
+      - name: Pruebas de humo en WebKit
+        shell: bash
+        run: |
+          set +e
+          node tests/run-webkit.js ci 2>&1 | tee run-webkit.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            grep -E '^FALLO |SIN RESULTADO|^TOTAL' run-webkit.txt | head -20 | while IFS= read -r line; do
+              echo "::error::$(printf '%s' "$line" | sed 's/%/%25/g')"
+            done
+            for f in tests-out/webkit/err-webkit-*.log; do
+              [ -e "$f" ] || continue
+              echo "::error::$(basename "$f"): $(tr '\n' ' ' < "$f" | tail -c 300 | sed 's/%/%25/g')"
+            done
+          fi
+          exit "$code"
+
+      - name: Guardar artefactos de WebKit
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: resultados-webkit
+          path: |
+            run-webkit.txt
+            tests-out/webkit/err-webkit-*.log
+          if-no-files-found: ignore

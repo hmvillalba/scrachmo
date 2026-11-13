@@ -1157,6 +1157,80 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- P2.10 B: WebKit se corre de verdad ----------------
+   Los 5652 checks de Chrome no dicen nada del motor de un iPhone. La parte
+   manual ya está documentada en los cuatro README; lo que falta es que en
+   cada push se ejecute una corrida corta en WebKit. Acá se exige que el
+   runner, su dependencia fijada, el job de CI y la documentación sigan
+   juntos: si alguien saca un escenario conflictivo para que todo dé verde,
+   la guarda salta. */
+{
+  const wkPath = path.join(SRC, 'tests', 'run-webkit.js');
+  const pkgPath = path.join(SRC, 'tests', 'package.json');
+  const lockPath = path.join(SRC, 'tests', 'package-lock.json');
+  const ci = fs.readFileSync(path.join(SRC, '.github/workflows', 'test.yml'), 'utf8');
+  const ignore = fs.readFileSync(path.join(SRC, '.gitignore'), 'utf8');
+
+  /* La app no tiene build: un package.json en la raíz cambiaría cómo la
+     sirve Vercel. Playwright tiene que vivir confinado en tests/. */
+  if (fs.existsSync(path.join(SRC, 'package.json'))) {
+    ok = false; console.log('FAIL apareció un package.json en la raíz: la app no tiene build');
+  }
+  if (!fs.existsSync(pkgPath) || !fs.existsSync(lockPath)) {
+    ok = false; console.log('FAIL falta tests/package.json o su lock para npm ci');
+  } else {
+    let pkg = {};
+    try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')); } catch (e) { /* abajo */ }
+    const ver = (pkg.devDependencies || {}).playwright || '';
+    if (pkg.private !== true || !/^\d+\.\d+\.\d+$/.test(ver)) {
+      ok = false; console.log('FAIL tests/package.json no fija una versión exacta de Playwright');
+    }
+  }
+  if (!/tests\/node_modules\//.test(ignore)) {
+    ok = false; console.log('FAIL .gitignore no ignora tests/node_modules/');
+  }
+
+  /* Los diez escenarios sensibles. No se exige que sean los únicos: se exige
+     que ninguno desaparezca. El runner además comprueba en ejecución que
+     build() los genere a todos. */
+  const minimo = ['harness4', 'link', 'harness14', 'harness15', 'harness16',
+    'harness23', 'harness24', 'harness25', 'harness26', 'landing'];
+  if (!fs.existsSync(wkPath)) {
+    ok = false; console.log('FAIL falta tests/run-webkit.js');
+  } else {
+    const wk = fs.readFileSync(wkPath, 'utf8');
+    const set = (/const WEBKIT_SET = \[([\s\S]*?)\];/.exec(wk) || [])[1] || '';
+    const nombres = (set.match(/'([A-Za-z0-9]+)'/g) || []).map(s => s.slice(1, -1));
+    const fuera = minimo.filter(n => nombres.indexOf(n) < 0);
+    if (fuera.length) {
+      ok = false; console.log('FAIL la corrida WebKit perdió escenarios: ' + fuera.join(', '));
+    }
+    if (!/require\('\.\/build'\)/.test(wk) || !/require\('playwright'\)\.webkit/.test(wk) ||
+        !/SCRACHMO_WEBKIT_LANG \|\| 'es'/.test(wk) ||
+        !/const faltan = WEBKIT_SET\.filter/.test(wk) ||
+        !/waitForSelector\('#TESTRESULT',\s*\{\s*state: 'attached'/.test(wk) ||
+        !/const WATCHDOG_MS = 180000/.test(wk) ||
+        !/context\.addInitScript/.test(wk) ||
+        !/serviceWorkers: 'block'/.test(wk) || !/locale: L\.locale/.test(wk) ||
+        !/viewport: \{ width: 800, height: 600 \}/.test(wk)) {
+      ok = false; console.log('FAIL tests/run-webkit.js perdió el aislamiento, la espera del DOM o el idioma único');
+    }
+  }
+
+  if (!/npx playwright install --with-deps webkit/.test(ci) ||
+      !/node tests\/run-webkit\.js ci/.test(ci) ||
+      !/SCRACHMO_WEBKIT_LANG: es/.test(ci) ||
+      !/working-directory: tests/.test(ci) || !/npm ci/.test(ci)) {
+    ok = false; console.log('FAIL CI no instala ni corre la pasada de WebKit');
+  }
+  ['README.md', 'README.en.md', 'README.pt.md', 'README.fr.md'].forEach(f => {
+    const t = fs.readFileSync(path.join(SRC, f), 'utf8');
+    if (!/run-webkit\.js/.test(t)) {
+      ok = false; console.log('FAIL ' + f + ' no documenta la corrida WebKit');
+    }
+  });
+}
+
 /* ---------------- la tabla de Verificación cuadra con la suite ----------------
    Cada arnés nuevo suma una fila. Si se actualiza el total de arriba pero se
    olvida la fila —o al revés—, el README miente y nadie lo nota hasta que

@@ -9,6 +9,9 @@ preview-*
 # Artefactos de la suite en CI (DOM y logs de cada corrida)
 tests-out/
 
+# Playwright es dependencia SÓLO de las pruebas: la raíz sigue sin package.json
+tests/node_modules/
+
 # Sitio preparado para publicar en GitHub Pages
 _site/
 

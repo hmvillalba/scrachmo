@@ -1,0 +1,8 @@
+{
+  "name": "scrachmo-tests",
+  "private": true,
+  "description": "Dependencias sólo de las pruebas. La app sigue sin build: no hay package.json en la raíz.",
+  "devDependencies": {
+    "playwright": "1.65.0"
+  }
+}

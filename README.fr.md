@@ -264,9 +264,12 @@ node tests/check-parity.js       # parité des textes + vérifications statiques
 node tests/pwa-check.js          # manifest, icônes et routes servies
 node tests/pwa-sw.js             # logique du service worker
 node tests/run.js ma-course      # 28 scénarios × 4 langues dans Chrome headless
+node tests/run-webkit.js ma-course  # 10 scénarios × 1 langue dans WebKit
 ```
 
 `tests/build.js` construit les pages de test et le lien partagé ; `tests/run.js` lance Chrome avec un profil isolé par suite et par langue, et compte `PASS` / `FAIL` / `ERROR`. Sur GitHub Actions, `.github/workflows/test.yml` répète la même chose à chaque push et pull request.
+
+Une seconde passe, plus courte, couvre **WebKit** —le moteur de Safari et de tous les navigateurs d'iOS. `tests/run-webkit.js` exécute **10 scénarios sensibles une fois, en espagnol**, sur les APIs où WebKit diffère : flux de compression, `createImageBitmap` et son repli vers `<img>`, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, l'export `.sb3` et les menus des trois phases de P2.12. Playwright est une dépendance réservée aux tests, confinée dans `tests/` ; la racine reste sans `package.json` car l'app n'a pas de build. Installez-la avec `cd tests && npm ci && npx playwright install --with-deps webkit`, puis lancez `node tests/run-webkit.js ma-course`. **Cela ne remplace pas la liste manuelle** ci-dessous : l'autorisation de mouvement, le déverrouillage de WebAudio, l'encoche et l'installation de la PWA demandent un vrai appareil.
 
 Le journal complet —ce que chaque suite vérifie, pourquoi quatre langues et `--lang`, les pièges trouvés en chemin, les notes d'environnement de la CI et les règles de version et de cache— reste dans le README en espagnol, qui est la source de vérité pour tout ce qui change à chaque version :
 
@@ -274,7 +277,7 @@ Le journal complet —ce que chaque suite vérifie, pourquoi quatre langues et `
 
 ## Vérification manuelle sur iPhone (WebKit)
 
-La suite automatique tourne dans **Chrome headless**. WebKit —le moteur de Safari et de *tous* les navigateurs d'iOS, parce qu'Apple n'en autorise pas d'autre— n'est pas couvert : le mettre en place dans la CI demande Playwright avec WebKit ou un runner macOS, et il y a des choses qui ne peuvent de toute façon se juger qu'avec le doigt (le capteur, l'audio, l'encoche). Tant que ça n'existe pas, voici la liste qu'on passe **à la main avant chaque version**, avec un iPhone réel et Safari. Cela prend une dizaine de minutes.
+La suite automatique tourne dans **Chrome headless** (28 scénarios × 4 langues) et, depuis cette version, aussi dans **WebKit** : une passe courte de 10 scénarios en espagnol qui surveille les APIs où Safari se distingue. WebKit —le moteur de Safari et de *tous* les navigateurs d'iOS, parce qu'Apple n'en autorise pas d'autre— n'est plus un angle mort dans la CI. Mais il reste des choses qui ne se jugent qu'avec le doigt (l'autorisation réelle de mouvement, le déverrouillage de l'audio, l'encoche et l'installation de la PWA). Voici la liste qu'on passe **à la main avant chaque version**, avec un iPhone réel et Safari. Cela prend une dizaine de minutes.
 
 | # | Quoi tester | Comment | Ce qui doit se passer |
 |---|---|---|---|
@@ -288,7 +291,7 @@ La suite automatique tourne dans **Chrome headless**. WebKit —le moteur de Saf
 | 8 | Encoche et barre du bas | Mode jeu à la verticale et à l'horizontale | La manette et **Sortir** ne passent pas sous l'encoche ni sous la barre de gestes (`env(safe-area-inset-*)`) |
 | 9 | Avis de rotation | **Lancer** avec le téléphone à la verticale | Il apparaît ; le ✕ le ferme et il ne revient pas avant la partie suivante |
 | 10 | Images | Importer un gros PNG et un SVG | Ils sont réduits à 256 px ; le SVG entre **converti en bitmap**, pas enregistré en vecteur |
-| 11 | `createImageBitmap` | Le même gros costume | Safari n'a pas cette API : `loadBitmap()` retombe sur `<img>` et l'image apparaît quand même |
+| 11 | `createImageBitmap` | Le même gros costume | L'API peut manquer ou se bloquer : `loadBitmap()` retombe sur `<img>` et l'image apparaît quand même |
 | 12 | Langue partagée | Passer au français sur la landing → ouvrir l'éditeur | L'éditeur s'ouvre en **français** (les deux clés du `localStorage`) |
 | 13 | Export vers Scratch | Exporter le `.sb3` → l'importer sur `scratch.mit.edu` | Les costumes se chargent : chaque fichier est nommé d'après son MD5 |
 | 14 | Navigation privée | Ouvrir dans un onglet privé | Ça fonctionne ; si iOS bloque l'enregistrement, l'app le dit et ne casse pas |

@@ -264,9 +264,12 @@ node tests/check-parity.js       # text parity + static checks
 node tests/pwa-check.js          # manifest, icons and served routes
 node tests/pwa-sw.js             # service worker logic
 node tests/run.js my-run         # 28 scenarios × 4 languages in headless Chrome
+node tests/run-webkit.js my-run  # 10 scenarios × 1 language in WebKit
 ```
 
 `tests/build.js` builds the test pages and the shared link; `tests/run.js` launches Chrome with an isolated profile per suite and per language, and counts `PASS` / `FAIL` / `ERROR`. On GitHub Actions, `.github/workflows/test.yml` repeats the same thing on every push and pull request.
+
+A second, shorter run covers **WebKit** —the engine of Safari and of every browser on iOS. `tests/run-webkit.js` runs **10 sensitive scenarios once, in Spanish**, watching the APIs where WebKit differs: compression streams, `createImageBitmap` and its `<img>` fallback, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, the `.sb3` exporter and the P2.12 dropdowns. Playwright is a test-only dependency confined to `tests/`; the root still has no `package.json` because the app has no build. Install it with `cd tests && npm ci && npx playwright install --with-deps webkit`, then run `node tests/run-webkit.js my-run`. It does **not** replace the manual iPhone list below: motion permission, WebAudio unlock, the notch and PWA install still need a real device.
 
 The full log —what each suite checks, why four languages and `--lang`, the traps found along the way, the CI environment notes and the version/cache rules— is kept in the Spanish README, which is the source of truth for anything that changes with every release:
 
@@ -274,7 +277,7 @@ The full log —what each suite checks, why four languages and `--lang`, the tra
 
 ## Manual verification on iPhone (WebKit)
 
-The automated suite runs in **headless Chrome**. WebKit —the engine of Safari and of *every* browser on iOS, because Apple does not allow another one— is not covered: setting it up in CI requires Playwright with WebKit or a macOS runner, and there are things that can only be judged with a finger anyway (the sensor, the audio, the notch). Until that exists, this is the list that is run **by hand before every release**, with a real iPhone and Safari. It takes about ten minutes.
+The main suite runs in **headless Chrome** (28 scenarios × 4 languages) and, since this release, a short pass also runs in **WebKit** (10 scenarios in Spanish), the engine of Safari and of *every* browser on iOS because Apple allows no other. The blind spot in CI is gone; what remains can only be judged with a finger —the real motion permission, audio unlock, the notch and installing the PWA. This is the list run **by hand before every release**, with a real iPhone and Safari. It takes about ten minutes.
 
 | # | What to test | How | What has to happen |
 |---|---|---|---|
@@ -288,7 +291,7 @@ The automated suite runs in **headless Chrome**. WebKit —the engine of Safari 
 | 8 | Notch and home bar | Game mode upright and in landscape | The gamepad and **Exit** do not sit under the notch or the gesture bar (`env(safe-area-inset-*)`) |
 | 9 | Rotate notice | **Run** with the phone upright | It appears; the ✕ closes it and it does not come back until the next game |
 | 10 | Images | Upload a large PNG and an SVG | They are reduced to 256 px; the SVG comes in **converted to a bitmap**, not stored as a vector |
-| 11 | `createImageBitmap` | The same large costume | Safari lacks that API: `loadBitmap()` falls back to `<img>` and the image appears anyway |
+| 11 | `createImageBitmap` | The same large costume | The API may be missing or hang: `loadBitmap()` falls back to `<img>` and the image appears anyway |
 | 12 | Shared language | Switch to French on the landing → open the editor | The editor opens in **French** (both `localStorage` keys) |
 | 13 | Export to Scratch | Export `.sb3` → upload it to `scratch.mit.edu` | The costumes load: each file is named after its MD5 |
 | 14 | Private browsing | Open in a private tab | It works; if iOS blocks saving, it says so and does not break the app |

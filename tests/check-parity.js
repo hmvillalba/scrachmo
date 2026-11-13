@@ -172,7 +172,7 @@ if (!/function\s+pickMatch\s*\(/.test(engine)) { ok = false; console.log('FAIL f
   const condMatch = /const COND_TYPES = \{([\s\S]*?)\};/.exec(engine);
   const condIds = condMatch ? [...condMatch[1].matchAll(/([a-z0-9_]+)\s*:\s*1/g)].map(m => m[1]) : [];
   /* repeat/forever no llevan condición; «sino» es la rama negativa. */
-  const propios = ['repeat', 'forever', 'sino'];
+  const propios = ['repeat', 'forever', 'sino', 'def_proc'];
   const faltan = cBlocks.filter(id => propios.indexOf(id) < 0 && condIds.indexOf(id) < 0);
   if (!condIds.length) { ok = false; console.log('FAIL falta COND_TYPES en engine.js'); }
   if (faltan.length) {
@@ -1070,6 +1070,119 @@ if (fs.existsSync(wfDir)) {
   if (!/'harness25\.js'/.test(buildSrc2)) {
     ok = false; console.log('FAIL tests/build.js no registra harness25.js');
   }
+}
+
+/* ---------------- procedimientos con nombre (P2.12, fase 3) ----------------
+   Un sombrero CON cuerpo que NO arranca solo, y una llamada que ejecuta ese
+   cuerpo en el mismo hilo. Esto avisa antes de abrir Chrome si el catálogo,
+   la pila anti-recursión, el centinela o el .sb3 se desarman. */
+{
+  const dataRaw4 = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const buildSrc3 = fs.readFileSync(path.join(__dirname, 'build.js'), 'utf8');
+  const LANGS4 = ['es', 'en', 'pt', 'fr'];
+  ['procNew', 'procNameTitle', 'procNameHint', 'procBadName'].forEach(k => {
+    LANGS4.forEach(l => {
+      if (typeof ctx.EX[l][k] !== 'string' || !ctx.EX[l][k].length) {
+        ok = false; console.log('FAIL falta UI_EXTRA.' + k + ' en ' + l + ' (procedimientos)');
+      }
+    });
+  });
+  if (new Set(LANGS4.map(l => ctx.EX[l].procNew)).size !== 4) {
+    ok = false; console.log('FAIL «Nuevo procedimiento…» no está traducido');
+  }
+  if (!/const\s+PROC_DEFAULT\s*=\s*'hacer'/.test(dataRaw4) ||
+      !/const\s+PROC_NEW\s*=\s*'__newproc__'/.test(dataRaw4) ||
+      !/const\s+MSG_NEW\s*=\s*'__new__'/.test(dataRaw4) ||
+      !/const\s+LIST_NEW\s*=\s*'__newlist__'/.test(dataRaw4)) {
+    ok = false; console.log('FAIL faltan las constantes de procedimientos o el centinela se mezcló');
+  }
+  const defP = ctx.BY.def_proc, callP = ctx.BY.call_proc;
+  if (!defP || defP.hat !== 1 || defP.c !== 1 || defP.pick !== 'procs' ||
+      !callP || callP.pick !== 'procs' || callP.hat || callP.c) {
+    ok = false; console.log('FAIL «Definir» no es sombrero con cuerpo o «Llamar» está mal declarado');
+  }
+  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 59) {
+    ok = false; console.log('FAIL la paleta no tiene 59 bloques con los dos de procedimientos');
+  }
+  ['isProcNode', 'procName', 'cleanProcName', 'procDefNode', 'runProcedure',
+    'newProcFor', 'procMutation'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() de los procedimientos');
+    }
+  });
+  /* Sin pila por hilo, «Llamar a» dentro de «Definir a» cuelga la pestaña. */
+  if (!/const MAX_CALL_DEPTH = 20/.test(engine) ||
+      !/c\.calls\.indexOf\(nm\) >= 0/.test(engine) ||
+      !/calls: \[\]/.test(engine)) {
+    ok = false; console.log('FAIL la llamada no tiene tope de profundidad ni pila por hilo');
+  }
+  if (!/if \(node\.type === 'def_proc'\) \{\s*if \(cur && cur\.nodes\.length\) out\.push\(cur\);\s*cur = null;/.test(engine) ||
+      !/await runProcedure\(node, sprite, ctx\)/.test(engine) ||
+      !/case 'call_proc': await runProcedure\(node, sprite\)/.test(engine)) {
+    ok = false; console.log('FAIL la definición arranca sola o la llamada no corre en el mismo hilo');
+  }
+  /* El nombre se elige, no se traduce; el centinela jamás se guarda. */
+  if (!/kind === 'procs'/.test(engine) ||
+      !/nueva\.name\[l\] = UI\[l\]\.procNew/.test(engine) ||
+      !/kind === 'procs'\) return id === procName\(cur\)/.test(engine) ||
+      !/kind === 'messages' \|\| kind === 'lists' \|\| kind === 'procs'/.test(engine)) {
+    ok = false; console.log('FAIL el desplegable de procedimientos no es dinámico');
+  }
+  const limpio = /function cleanProcName\(v\) \{([\s\S]*?)\n\}/.exec(engine);
+  if (!limpio || limpio[1].indexOf("s.indexOf(',') >= 0") < 0 ||
+      limpio[1].indexOf('PROC_NEW') < 0) {
+    ok = false; console.log('FAIL cleanProcName() ya no rechaza comas ni el centinela');
+  }
+  if (!/input\.value === PROC_NEW && isProcNode/.test(engine) ||
+      !/sel\.value === PROC_NEW && isProcNode/.test(engine) ||
+      !/newProcFor\(sel\.dataset\.input\)/.test(engine) ||
+      !/procNameHint, 24\)/.test(engine)) {
+    ok = false; console.log('FAIL «Nuevo procedimiento…» no está protegido contra guardarse');
+  }
+  /* Scratch: PROCCODE identifica al procedimiento; el cuerpo cuelga de la
+     definición con next y el prototipo sombra debe existir en el grafo. */
+  if (['procedures_definition', 'procedures_prototype', 'procedures_call']
+        .some(op => engine.indexOf("'" + op + "'") < 0) ||
+      !/PROCCODE: \[nm\]/.test(engine) ||
+      !/inputs\.custom_block = \[1, proto\]/.test(engine) ||
+      !/buildStack\(node\.body, did\)/.test(engine) ||
+      !/argumentnames: '\[\]'/.test(engine)) {
+    ok = false; console.log('FAIL el .sb3 no exporta la definición, el prototipo y la llamada');
+  }
+  if (!/id="blocksCount">59</.test(html)) {
+    ok = false; console.log('FAIL el badge de bloques no está en 59');
+  }
+  if (!/'harness26\.js'/.test(buildSrc3)) {
+    ok = false; console.log('FAIL tests/build.js no registra harness26.js');
+  }
+}
+
+/* ---------------- la tabla de Verificación cuadra con la suite ----------------
+   Cada arnés nuevo suma una fila. Si se actualiza el total de arriba pero se
+   olvida la fila —o al revés—, el README miente y nadie lo nota hasta que
+   alguien compara a mano. Acá se suma la tabla y se la cruza con el total
+   declarado y con la cantidad de escenarios del comando. */
+{
+  const rm = fs.readFileSync(path.join(SRC, 'README.md'), 'utf8');
+  const sec = (rm.split('## Verificación')[1] || '').split('Aparte de la suite')[0];
+  const filas = (sec.match(/^\|[^|]+\|\s*(\d+)\s*\|/gm) || [])
+    .map(l => Number(/^\|[^|]+\|\s*(\d+)\s*\|/.exec(l)[1]));
+  const suma = filas.reduce((a, b) => a + b, 0);
+  const decl = /Son \*\*(\d+) comprobaciones por idioma, (\d+) en total\*\*/.exec(sec);
+  const esc = /# (\d+) escenarios/.exec(rm);
+  if (!decl || !esc || filas.length !== Number(esc[1]) ||
+      suma !== Number(decl[1]) || Number(decl[2]) !== suma * 4) {
+    ok = false;
+    console.log('FAIL la tabla de Verificación no cuadra: filas=' + filas.length +
+      ' suma=' + suma + ' declarado=' + (decl ? decl[1] : '?') +
+      ' escenarios=' + (esc ? esc[1] : '?'));
+  }
+  ['README.md', 'README.en.md', 'README.pt.md', 'README.fr.md'].forEach(f => {
+    const t = fs.readFileSync(path.join(SRC, f), 'utf8');
+    if (/1332|5328/.test(t) || !/1413[\s\S]{0,80}5652/.test(t)) {
+      ok = false; console.log('FAIL ' + f + ' no declara el total nuevo de la suite');
+    }
+  });
 }
 
 console.log((ok ? 'OK' : 'FALLO') + ' | claves UI=' + base.length +

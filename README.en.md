@@ -14,8 +14,9 @@ No frameworks, no dependencies, no build step: static files that work in any mod
 
 ### Blocks like Scratch
 
-- 57 blocks in 9 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables, **named lists** and **named local messages**.
+- 59 blocks in 9 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables, **named lists**, **named local messages** and **named procedures**.
 - **Named lists**: create several lists (for instance "inventory"), pick the name from a dropdown and use **add**, **delete by position**, **replace at position** and **clear**, plus the **length of** and **item of** reporters. Values are shown and edited in their own card, are saved with the project and travel to `.sb3` with one id per name.
+- **Named procedures**: define a routine with the "Define {v}" hat and call it with "Call {v}" from any script on the same sprite. The name is picked from a shared dropdown, the call runs on the same thread and recursion stops itself. They do not take parameters yet.
 - Hat blocks (green flag, tap, key, shake the phone, receive message, score) and C blocks: `Repeat {v} times`, `Forever` and conditionals with `if... else`.
 - Real nesting: drop a block **on top of** a `Repeat`, `Forever` or `if` and it goes inside —also onto the "else" bar—, or aim at the slot if you prefer. With guards that stop you nesting a block inside itself or putting a hat block inside.
 - **Several scripts per sprite**: each hat starts an independent script and only the ones that match the event that happened run. A single sprite can react to the flag, a key and a tap at the same time.
@@ -238,7 +239,7 @@ Careful: installing and offline mode need `https` (or `localhost`); that is why 
 | `app.html` | **The editor**: the whole interface, layout, styles, SVG icons and panels. It is the direct URL and the PWA's `start_url`. |
 | `boot.js` | Service worker registration outside the HTML (the CSP requires it), guarded for `file://`. |
 | `engine.js` | The engine: block rendering, touch drag & drop, execution, sprites, variables, events, accessible modals and project. |
-| `data.js` | Block catalog (57 statements + 13 reporters), categories, visible version and interface texts (4 languages). |
+| `data.js` | Block catalog (59 statements + 13 reporters), categories, visible version and interface texts (4 languages). |
 | `manifest.webmanifest` | Install sheet: name, colours, `display: standalone`, `start_url: ./app.html` and icons. |
 | `sw.js` | Service worker: saves the landing and the app so they open without internet, and serves `app.html` to `?p=` links. The cache name carries the version and a fingerprint of the six runtime files. |
 | `vercel.json` | Deployment headers: strict CSP, `nosniff`, `Referrer-Policy` and the files without CDN cache. |
@@ -254,7 +255,7 @@ Want to add a new block? It is an entry in `data.js` and its logic in `engine.js
 
 ## Verification
 
-The project has **1332 automated checks per language, 5328 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), **named lists** (4 blocks, 2 reporters, one dropdown per block, per-name execution and one declaration per list in `.sb3`), the landing page and the on-screen gamepad with tilt.
+The project has **1413 automated checks per language, 5652 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), **named lists** (4 blocks, 2 reporters, one dropdown per block, per-name execution and one declaration per list in `.sb3`), **named procedures** (definition hat, call on the same thread, recursion guard and Scratch's `PROCCODE`), the landing page and the on-screen gamepad with tilt.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -262,7 +263,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # text parity + static checks
 node tests/pwa-check.js          # manifest, icons and served routes
 node tests/pwa-sw.js             # service worker logic
-node tests/run.js my-run         # 27 scenarios × 4 languages in headless Chrome
+node tests/run.js my-run         # 28 scenarios × 4 languages in headless Chrome
 ```
 
 `tests/build.js` builds the test pages and the shared link; `tests/run.js` launches Chrome with an isolated profile per suite and per language, and counts `PASS` / `FAIL` / `ERROR`. On GitHub Actions, `.github/workflows/test.yml` repeats the same thing on every push and pull request.

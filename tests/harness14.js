@@ -385,6 +385,68 @@ window.addEventListener('load', function () {
       check('grafo_de_listas_sano',
         conListas.project.targets.every(t => graphProblems(t).length === 0));
 
+      /* ============ 10. procedimientos con nombre ============
+         Scratch identifica un procedimiento por PROCCODE: no hay nada que
+         declarar en el Stage. La definición lleva un prototipo sombra y el
+         cuerpo le cuelga con next; cada «Llamar» apunta al mismo nombre y
+         a la misma mutación. Si el cuerpo se exportara como guion suelto,
+         en Scratch correría solo al abrir el proyecto. */
+      lists = {};
+      const defSaludar = { id: 'pr1', type: 'def_proc', val: 'saludar' };
+      defSaludar.body = [
+        { id: 'pr2', type: 'score_add', val: '1' },
+        { id: 'pr3', type: 'call_proc', val: 'otro' }
+      ];
+      const defOtro = { id: 'pr4', type: 'def_proc', val: 'otro' };
+      defOtro.body = [{ id: 'pr5', type: 'score_set', val: '9' }];
+      sprites = [make('P1', [
+        defSaludar, defOtro,
+        { id: 'pr6', type: 'when_flag' },
+        { id: 'pr7', type: 'call_proc', val: 'saludar' }
+      ])];
+      selectedSpriteId = sprites[0].id;
+      const conProcs = await sb3Build();
+      const bloquesP = {};
+      conProcs.project.targets.forEach(t => {
+        Object.keys(t.blocks || {}).forEach(id => { bloquesP[id] = t.blocks[id]; });
+      });
+      const idsPorOpP = op => Object.keys(bloquesP)
+        .filter(id => bloquesP[id].opcode === op);
+      const definicionesP = idsPorOpP('procedures_definition');
+      const prototiposP = idsPorOpP('procedures_prototype');
+      const llamadasP = idsPorOpP('procedures_call');
+      check('dos_definiciones_con_su_prototipo',
+        definicionesP.length === 2 && prototiposP.length === 2);
+      check('proccode_y_mutacion_del_prototipo', prototiposP.length === 2 &&
+        ['saludar', 'otro'].every(nm => prototiposP.some(id =>
+          bloquesP[id].mutation && bloquesP[id].mutation.proccode === nm &&
+          bloquesP[id].mutation.argumentnames === '[]' &&
+          bloquesP[id].mutation.argumentdefaults === '[]' &&
+          bloquesP[id].mutation.warp === 'true')));
+      check('llamadas_llevan_el_nombre', llamadasP.length === 2 &&
+        ['saludar', 'otro'].every(nm => llamadasP.some(id =>
+          bloquesP[id].fields.PROCCODE[0] === nm)));
+      check('mutacion_tambien_en_las_llamadas', llamadasP.every(id =>
+        bloquesP[id].mutation &&
+        bloquesP[id].mutation.proccode === bloquesP[id].fields.PROCCODE[0]));
+      check('custom_block_apunta_al_prototipo', definicionesP.length === 2 &&
+        definicionesP.every(id => {
+          const inp = bloquesP[id].inputs.custom_block;
+          return inp && inp[0] === 1 && !!bloquesP[inp[1]] &&
+            bloquesP[inp[1]].opcode === 'procedures_prototype' &&
+            bloquesP[inp[1]].parent === id;
+        }));
+      check('definiciones_de_nivel_superior', definicionesP.every(id =>
+        bloquesP[id].topLevel && !bloquesP[id].parent));
+      check('el_cuerpo_cuelga_de_la_definicion', definicionesP.every(id =>
+        !!bloquesP[id].next && !!bloquesP[bloquesP[id].next] &&
+        bloquesP[bloquesP[id].next].parent === id));
+      check('sin_broadcasts_de_procedimientos',
+        ['saludar', 'otro'].every(nm =>
+          Object.values(conProcs.project.targets[0].broadcasts || {}).indexOf(nm) < 0));
+      check('grafo_de_procedimientos_sano',
+        conProcs.project.targets.every(t => graphProblems(t).length === 0));
+
       /* El botón existe y está enganchado. */
       check('boton_sb3', !!document.getElementById('sb3Btn') &&
         typeof exportSb3 === 'function');

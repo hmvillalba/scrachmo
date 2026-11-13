@@ -14,8 +14,9 @@ Sem frameworks, sem dependências, sem build: arquivos estáticos que funcionam 
 
 ### Blocos como no Scratch
 
-- 57 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis, **listas com nome** e **mensagens locais com nome**.
+- 59 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis, **listas com nome**, **mensagens locais com nome** e **procedimentos com nome**.
 - **Listas com nome**: crie várias listas (por exemplo «inventário»), escolha o nome num menu e use **adicionar**, **apagar por posição**, **pôr na posição** e **esvaziar**, além dos repórteres **tamanho de** e **item de**. Os valores aparecem e são editados no seu próprio cartão, são guardados com o projeto e viajam no `.sb3` com um id por nome.
+- **Procedimentos com nome**: defina uma rotina com o chapéu «Definir {v}» e chame-a com «Chamar {v}» em qualquer script do mesmo personagem. O nome escolhe-se num menu partilhado, a chamada corre no mesmo fio e a recursão corta-se sozinha. Por enquanto não têm parâmetros.
 - Blocos chapéu (bandeira verde, toque, tecla, agitar o celular, receber mensagem, pontuação) e blocos C: `Repetir {v} vezes`, `Para sempre` e condicionais com `se... senão`.
 - Aninhamento de verdade: solte um bloco **em cima** de um `Repetir`, `Para sempre` ou `se` e ele fica dentro —também na barra «senão»—, ou mire no encaixe se preferir. Com travas que impedem aninhar um bloco dentro de si mesmo ou colocar um chapéu dentro.
 - **Vários scripts por personagem**: cada chapéu inicia um script independente e só rodam os que correspondem ao evento ocorrido. Um mesmo personagem pode reagir à bandeira, a uma tecla e a um toque ao mesmo tempo.
@@ -238,7 +239,7 @@ Atenção: para instalar e para o modo offline é preciso `https` (ou `localhost
 | `app.html` | **O editor**: toda a interface, layout, estilos, ícones SVG e painéis. É a URL direta e o `start_url` do PWA. |
 | `boot.js` | Registro do service worker fora do HTML (a CSP exige), protegido para `file://`. |
 | `engine.js` | O motor: render dos blocos, drag & drop por toque, execução, personagens, variáveis, eventos, modais acessíveis e projeto. |
-| `data.js` | Catálogo de blocos (57 enunciados + 13 repórteres), categorias, versão visível e textos da interface (4 idiomas). |
+| `data.js` | Catálogo de blocos (59 enunciados + 13 repórteres), categorias, versão visível e textos da interface (4 idiomas). |
 | `manifest.webmanifest` | Ficha de instalação: nome, cores, `display: standalone`, `start_url: ./app.html` e ícones. |
 | `sw.js` | Service worker: guarda a landing e o app para abrirem sem internet, e serve `app.html` aos links `?p=`. O nome do cache leva a versão e uma impressão digital dos seis arquivos do runtime. |
 | `vercel.json` | Cabeçalhos da publicação: CSP estrita, `nosniff`, `Referrer-Policy` e os arquivos sem cache de CDN. |
@@ -254,7 +255,7 @@ Quer adicionar um bloco novo? É uma entrada em `data.js` e a sua lógica em `en
 
 ## Verificação
 
-O projeto tem **1332 verificações por idioma, 5328 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), as **listas com nome** (4 blocos, 2 repórteres, um menu por bloco, execução por nome e uma declaração por lista no `.sb3`), a landing e o controle na tela com a inclinação.
+O projeto tem **1413 verificações por idioma, 5652 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), as **listas com nome** (4 blocos, 2 repórteres, um menu por bloco, execução por nome e uma declaração por lista no `.sb3`), os **procedimentos com nome** (chapéu de definição, chamada no mesmo fio, corte de recursão e o `PROCCODE` do Scratch), a landing e o controle na tela com a inclinação.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -262,7 +263,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # paridade de textos + verificações estáticas
 node tests/pwa-check.js          # manifest, ícones e rotas servidas
 node tests/pwa-sw.js             # lógica do service worker
-node tests/run.js minha-corrida  # 27 cenários × 4 idiomas no Chrome headless
+node tests/run.js minha-corrida  # 28 cenários × 4 idiomas no Chrome headless
 ```
 
 `tests/build.js` monta as páginas de teste e o link compartilhado; `tests/run.js` abre o Chrome com um perfil isolado por suíte e por idioma, e conta `PASS` / `FAIL` / `ERROR`. No GitHub Actions, `.github/workflows/test.yml` repete o mesmo em cada push e pull request.

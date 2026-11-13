@@ -14,7 +14,7 @@ window.addEventListener('load', function () {
     check('catalogo_con_claves', catItems.every(it => (String(it).split('|')[1] || '').trim().split(/\s+/).length >= 2));
     check('catalogo_grupos_con_nombre', SPRITE_GROUPS.every(g => g.name && g.name.es && g.name.en && g.name.pt && g.name.fr));
     check('catalogo_grupos_no_vacios', SPRITE_GROUPS.every(g => g.items.length > 0));
-    check('paleta_57', PALETTE_BLOCKS.length === 57);
+    check('paleta_59', PALETTE_BLOCKS.length === 59);
     check('badge_al_dia', document.getElementById('blocksCount').textContent === String(PALETTE_BLOCKS.length));
     check('modal_grupos', document.querySelectorAll('#spriteChoices .sprite-group').length === SPRITE_GROUPS.length);
     check('modal_items', document.querySelectorAll('#spriteChoices .sprite-choice').length === SPRITE_CHOICES.length);

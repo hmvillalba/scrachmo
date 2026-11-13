@@ -36,6 +36,13 @@ const MSG_NEW = '__new__';
 const LIST_DEFAULT = 'lista';
 const LIST_NEW = '__newlist__';
 
+/* Procedimientos con nombre. El sombrero «Definir» guarda su cuerpo en
+   node.body; «Llamar» lo ejecuta en el MISMO hilo. PROC_DEFAULT mantiene
+   vivo un proyecto que no guardara nombre y PROC_NEW es el centinela del
+   desplegable: DISTINTO de los otros dos y jamás se guarda en un bloque. */
+const PROC_DEFAULT = 'hacer';
+const PROC_NEW = '__newproc__';
+
 /* ---------------- texts ---------------- */
 const UI = {
   es: {
@@ -650,6 +657,22 @@ const BLOCKS = [
     n: L('Enviar {v}', 'Broadcast {v}', 'Enviar {v}', 'Envoyer {v}'),
     d: L('Avisa a los guiones que escuchan ese nombre y a otras pestañas del mismo navegador. No usa la red.', 'Notifies the scripts listening to that name and other tabs of the same browser. No network involved.', 'Avisa os scripts que escutam esse nome e outras abas do mesmo navegador. Sem rede.', 'Prévient les scripts qui écoutent ce nom et les autres onglets du même navigateur. Sans réseau.')
   },
+  /* ---------------- procedimientos con nombre ----------------
+     Un sombrero CON cuerpo: los bloques viven en node.body, no en los que
+     siguen en sprite.code. No arranca solo (collectScripts lo saltea) y la
+     llamada ejecuta ese cuerpo en el mismo hilo, sin eventos ni red. */
+  {
+    id: 'def_proc', cat: 'multi', icon: 'box', hat: 1, c: 1,
+    def: PROC_DEFAULT, w: 112, pick: 'procs',
+    n: L('Definir {v}', 'Define {v}', 'Definir {v}', 'Définir {v}'),
+    d: L('Agrupa bloques bajo un nombre. No arranca solo: se ejecuta cuando lo llama un bloque «Llamar».', 'Groups blocks under a name. It never starts on its own: a Call block runs it.', 'Agrupa blocos sob um nome. Não começa sozinho: um bloco «Chamar» o executa.', 'Regroupe des blocs sous un nom. Ne démarre pas seul : un bloc « Appeler » l’exécute.')
+  },
+  {
+    id: 'call_proc', cat: 'multi', icon: 'arrow-right',
+    def: PROC_DEFAULT, w: 112, pick: 'procs',
+    n: L('Llamar {v}', 'Call {v}', 'Chamar {v}', 'Appeler {v}'),
+    d: L('Ejecuta los bloques de la definición con ese nombre, en este mismo personaje.', 'Runs the blocks of the definition with that name, on this same sprite.', 'Executa os blocos da definição com esse nome, neste mesmo personagem.', 'Exécute les blocs de la définition de ce nom, sur ce même lutin.')
+  },
   /* ---------------- reporteros ----------------
      Un reportero NO es un enunciado: devuelve un valor y vive dentro de la
      casilla de otro bloque (node.reps[i]). No aparecen en la paleta normal,
@@ -765,6 +788,9 @@ const UI_EXTRA = {
     listNew: 'Nueva lista…', listNameTitle: 'Nombre de la lista',
     listNameHint: 'Hasta 24 caracteres, sin comas. Se comparte entre todos los bloques de lista.',
     listBadName: 'Ese nombre no sirve',
+    procNew: 'Nuevo procedimiento…', procNameTitle: 'Nombre del procedimiento',
+    procNameHint: 'Hasta 24 caracteres, sin comas. Compartido por «Definir» y «Llamar».',
+    procBadName: 'Ese nombre no sirve',
     listsTitle: 'Listas', listsHint: 'Muchos valores bajo un mismo nombre',
     newList: 'Nueva lista', listsEmpty: 'Todavía no hay listas',
     listsEmptyDesc: 'Creá una para guardar puntajes, nombres o pasos.',
@@ -913,6 +939,9 @@ const UI_EXTRA = {
     listNew: 'New list…', listNameTitle: 'List name',
     listNameHint: 'Up to 24 characters, no commas. Shared by every list block.',
     listBadName: 'That name is not valid',
+    procNew: 'New procedure…', procNameTitle: 'Procedure name',
+    procNameHint: 'Up to 24 characters, no commas. Shared by the Define and Call blocks.',
+    procBadName: 'That name is not valid',
     listsTitle: 'Lists', listsHint: 'Many values under one name',
     newList: 'New list', listsEmpty: 'No lists yet',
     listsEmptyDesc: 'Create one to keep scores, names or steps.',
@@ -1061,6 +1090,9 @@ const UI_EXTRA = {
     listNew: 'Nova lista…', listNameTitle: 'Nome da lista',
     listNameHint: 'Até 24 caracteres, sem vírgulas. Compartilhada por todos os blocos de lista.',
     listBadName: 'Esse nome não serve',
+    procNew: 'Novo procedimento…', procNameTitle: 'Nome do procedimento',
+    procNameHint: 'Até 24 caracteres, sem vírgulas. Compartilhado por «Definir» e «Chamar».',
+    procBadName: 'Esse nome não serve',
     listsTitle: 'Listas', listsHint: 'Muitos valores sob um mesmo nome',
     newList: 'Nova lista', listsEmpty: 'Ainda não há listas',
     listsEmptyDesc: 'Crie uma para guardar pontuações, nomes ou passos.',
@@ -1209,6 +1241,9 @@ const UI_EXTRA = {
     listNew: 'Nouvelle liste…', listNameTitle: 'Nom de la liste',
     listNameHint: 'Jusqu’à 24 caractères, sans virgules. Partagée par tous les blocs de liste.',
     listBadName: 'Ce nom n’est pas valide',
+    procNew: 'Nouvelle procédure…', procNameTitle: 'Nom de la procédure',
+    procNameHint: 'Jusqu’à 24 caractères, sans virgules. Partagé par « Définir » et « Appeler ».',
+    procBadName: 'Ce nom n’est pas valide',
     listsTitle: 'Listes', listsHint: 'Plusieurs valeurs sous un même nom',
     newList: 'Nouvelle liste', listsEmpty: 'Pas encore de listes',
     listsEmptyDesc: 'Créez-en une pour garder scores, noms ou étapes.',

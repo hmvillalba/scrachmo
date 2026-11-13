@@ -12,7 +12,7 @@ window.addEventListener('load', function () {
   (async () => {
     try {
       check('sin_errores_arranque', errs.length === 0);
-      check('paleta_57', PALETTE_BLOCKS.length === 57);
+      check('paleta_59', PALETTE_BLOCKS.length === 59);
       check('badge_al_dia', document.getElementById('blocksCount').textContent === String(PALETTE_BLOCKS.length));
       check('bloques_nuevos', !!BYID.next_costume && !!BYID.switch_costume && BYID.switch_costume.costume === 1);
       check('textos_4_idiomas', ['es', 'en', 'pt', 'fr'].every(k =>

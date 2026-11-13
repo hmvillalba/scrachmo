@@ -2410,6 +2410,24 @@ async function newListFor(id) {
   if (!limpio && typeof crudo === 'string' && crudo.trim()) toast(UI[lang].listBadName);
 }
 
+/* «Nuevo procedimiento…» no es un nombre: abre el modal y el elegido
+   queda en el bloque. La definición se arrastra aparte desde la paleta;
+   acá sólo se comparte el nombre entre «Definir» y «Llamar». */
+async function newProcFor(id) {
+  const antes = findNode(id);
+  if (!antes || !isProcNode(antes.node)) return;
+  const anterior = procName(antes.node.val);
+  const crudo = await askText(UI[lang].procNameTitle, '', UI[lang].procNameHint, 24);
+  /* El bloque pudo borrarse mientras el modal estaba abierto. */
+  const info = findNode(id);
+  if (!info || !isProcNode(info.node)) return;
+  const limpio = cleanProcName(crudo);
+  info.node.val = limpio || anterior;
+  renderCode();
+  saveProject();
+  if (!limpio && typeof crudo === 'string' && crudo.trim()) toast(UI[lang].procBadName);
+}
+
 /* ---------------- selector de reporteros ----------------
    El reportero vive en node.reps[slot] del bloque anfitrión. Se elige desde
    ƒ porque no es un enunciado: nunca se agrega suelto a la pila. */
@@ -3547,6 +3565,23 @@ function pickList(kind) {
     ['es', 'en', 'pt', 'fr'].forEach(l => { nueva.name[l] = UI[l].listNew; });
     return out.concat([nueva]);
   }
+  /* Los procedimientos son dinámicos: los nombres que el proyecto ya usa,
+     más el de fábrica y la opción para crear otro. El nombre elegido NO se
+     traduce; sí se traduce «Nuevo procedimiento…». */
+  if (kind === 'procs') {
+    const nombres = new Set([PROC_DEFAULT]);
+    const walk = nodes => (nodes || []).forEach(n => {
+      if (isProcNode(n)) nombres.add(procName(n.val));
+      if (n.reps) n.reps.forEach(r => { if (r) walk([r]); });
+      walk(n.body); walk(n.elseBody);
+    });
+    sprites.forEach(s => walk(s.code));
+    const lista = Array.from(nombres).sort((a, b) => a < b ? -1 : (a > b ? 1 : 0));
+    const out = lista.map(nm => ({ id: nm, name: { es: nm, en: nm, pt: nm, fr: nm } }));
+    const nueva = { id: PROC_NEW, name: {} };
+    ['es', 'en', 'pt', 'fr'].forEach(l => { nueva.name[l] = UI[l].procNew; });
+    return out.concat([nueva]);
+  }
   /* Los personajes son dinámicos: la lista sale del proyecto, no del catálogo.
      El nombre de cada uno se repite en los 4 idiomas porque lo que se traduce
      es «mí mismo», no el nombre que eligió el usuario. */
@@ -3569,6 +3604,7 @@ function pickMatch(kind, id, cur) {
   if (kind === 'keys') return normKeyName(id) === normKeyName(cur);
   if (kind === 'messages') return id === msgName(cur);
   if (kind === 'lists') return id === listName(cur);
+  if (kind === 'procs') return id === procName(cur);
   return id === cur;
 }
 
@@ -3578,7 +3614,7 @@ function pickLabel(kind, id) {
   /* Un nombre de mensaje huérfano se muestra tal cual: es texto del usuario,
      no una clave que falte traducir. */
   /* Un nombre de mensaje o de lista huérfano se muestra tal cual. */
-  if (kind === 'messages' || kind === 'lists') return String(id);
+  if (kind === 'messages' || kind === 'lists' || kind === 'procs') return String(id);
   if (kind === 'keys') return UI[lang].keyMissing || String(id);
   return (kind === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing) || String(id);
 }
@@ -4889,8 +4925,10 @@ async function execBlock(node, sprite) {
   const v = nodeVal(node, sprite);
   switch (node.type) {
     case 'when_flag': case 'when_tap': case 'when_key': case 'when_score':
-    case 'when_shake': case 'when_msg': case 'when_clone':
+    case 'when_shake': case 'when_msg': case 'when_clone': case 'def_proc':
       return;
+    /* «Llamar» suelto (arnés, sin execNode) se ejecuta con un ctx propio. */
+    case 'call_proc': await runProcedure(node, sprite); return;
     case 'create_clone': {
       /* `self` clona al que ejecuta (que puede ser otro clon); si apunta a un
          personaje, se clona ese. Un id que ya no existe no hace nada, igual
@@ -5106,6 +5144,14 @@ function collectScripts() {
     let cur = null;
     (sprite.code || []).forEach(node => {
       const def = BYID[node.type];
+      if (node.type === 'def_proc') {
+        /* La definición NO es un guion que arranca: su cuerpo vive en
+           node.body y se ejecuta sólo desde «Llamar». Cerramos el guion
+           anterior para que lo que siga no cuelgue de ella. */
+        if (cur && cur.nodes.length) out.push(cur);
+        cur = null;
+        return;
+      }
       if (def && def.hat) {
         if (cur && cur.nodes.length) out.push(cur);
         cur = { sprite: sprite, hat: node, event: node.type, nodes: [] };
@@ -5166,6 +5212,56 @@ function broadcastMsg(raw) {
     setTimeout(() => fireEvent('when_msg', sc => msgName(sc.hat.val) === name), 0);
   }
   toast(UI[lang].msgSent);
+}
+
+/* ---------------- procedimientos con nombre ----------------
+   La definición es un sombrero CON cuerpo: los bloques viven en node.body,
+   no en los que siguen en sprite.code. collectScripts() la saltea y «Llamar»
+   ejecuta ese cuerpo en el MISMO hilo, con el mismo ctx, sin eventos ni red. */
+const MAX_CALL_DEPTH = 20;
+
+function isProcNode(node) {
+  return !!node && (node.type === 'def_proc' || node.type === 'call_proc');
+}
+
+function procName(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  return s || PROC_DEFAULT;
+}
+
+/* Los nombres no llevan comas: un bloque de varias casillas guarda sus
+   valores como "a,b" y partiría el dato al abrir el proyecto. */
+function cleanProcName(v) {
+  if (typeof v !== 'string') return '';
+  const s = v.replace(/\s+/g, ' ').trim().slice(0, 24);
+  if (!s || s === PROC_NEW || s.indexOf(',') >= 0 ||
+    s === '__proto__' || s === 'constructor' || s === 'prototype') return '';
+  return s;
+}
+
+/* Los procedimientos son de CADA personaje, igual que en Scratch: la llamada
+   busca la definición en el código de quien la ejecuta, no en el Stage. */
+function procDefNode(sprite, name) {
+  const buscado = procName(name);
+  return ((sprite && sprite.code) || []).find(n =>
+    n && n.type === 'def_proc' && procName(n.val) === buscado) || null;
+}
+
+async function runProcedure(node, sprite, ctx) {
+  /* execBlock() se llama suelto desde los arneses, sin ctx: se fabrica uno
+     propio para que el cuerpo se ejecute exactamente igual. */
+  const c = ctx || { id: 0, cancelled: false, lastCond: false, calls: [] };
+  if (!c.calls) c.calls = [];
+  const nm = procName(node.val);
+  /* Sin tope, un «Llamar a» dentro de «Definir a» colgaría la pestaña.
+     El mismo nombre no puede reaparecer en la pila: corta también los
+     ciclos indirectos (a -> b -> a). */
+  if (c.calls.length >= MAX_CALL_DEPTH || c.calls.indexOf(nm) >= 0) return;
+  const defNode = procDefNode(sprite, nm);
+  if (!defNode) return;
+  c.calls.push(nm);
+  try { await execStack(defNode.body || [], sprite, c); }
+  finally { c.calls.pop(); }
 }
 
 function projectUsesMotion() {
@@ -5291,7 +5387,7 @@ function fireEvent(event, test) {
 }
 
 async function startThread(sc) {
-  const ctx = { id: ++threadSeq, cancelled: false, lastCond: false };
+  const ctx = { id: ++threadSeq, cancelled: false, lastCond: false, calls: [] };
   runThreads.add(ctx);
   isRunning = true;
   updateStatus();
@@ -5357,6 +5453,10 @@ async function execNode(node, sprite, ctx) {
     }
     if (node.type === 'sino') {
       if (ctx && !ctx.lastCond) await execStack(node.body || [], sprite, ctx);
+      return;
+    }
+    if (node.type === 'call_proc') {
+      await runProcedure(node, sprite, ctx);
       return;
     }
     await execBlock(node, sprite);
@@ -5860,6 +5960,14 @@ function sb3SpriteBlocks(sprite, index) {
     return [nm, sb3ListId(nm)];
   }
 
+  /* Un procedimiento se identifica por su PROCCODE, no por un id: no hay
+     nada que declarar en el Stage. warp=true equivale a nuestro hilo
+     síncrono («ejecutar sin refrescar la pantalla»). */
+  function procMutation(nm) {
+    return { tagName: 'mutation', children: [], proccode: nm,
+      argumentnames: '[]', argumentdefaults: '[]', warp: 'true' };
+  }
+
   function slotIn(node, i, shadowType, hostId) {
     const def = BYID[node.type] || { n: { es: '' }, def: '' };
     const count = Math.max(sb3SlotCount(def), i + 1);
@@ -6186,6 +6294,12 @@ function sb3SpriteBlocks(sprite, index) {
         blocks[bid].fields.LIST = listField(node);
         return bid;
       }
+      case 'call_proc': {
+        const nm = procName(node.val);
+        const bid = mk('procedures_call', parentId, { fields: { PROCCODE: [nm] } });
+        blocks[bid].mutation = procMutation(nm);
+        return bid;
+      }
       case 'send_msg': {
         const nm = msgName(node.val);
         usedMsgs.add(nm);
@@ -6224,6 +6338,14 @@ function sb3SpriteBlocks(sprite, index) {
       blocks[bid].fields.BROADCAST_OPTION = [nm, sb3MsgId(nm)];
       return bid;
     }
+    if (node.type === 'def_proc') {
+      const nm = procName(node.val);
+      const did = mk('procedures_definition', null);
+      const proto = mk('procedures_prototype', did, { shadow: true });
+      blocks[proto].mutation = procMutation(nm);
+      blocks[did].inputs.custom_block = [1, proto];
+      return did;
+    }
     return null;
   }
 
@@ -6250,6 +6372,17 @@ function sb3SpriteBlocks(sprite, index) {
   let seenHat = false;
   (sprite.code || []).forEach(node => {
     const def = BYID[node.type];
+    if (node.type === 'def_proc') {
+      seenHat = true;
+      const did = hatBlock(node);
+      if (did) {
+        topLevel(did);
+        const first = buildStack(node.body, did);
+        if (first) { blocks[did].next = first; blocks[first].parent = did; }
+      } else note(node);
+      prev = null;
+      return;
+    }
     if (def && def.hat) {
       seenHat = true;
       prev = hatBlock(node);
@@ -7092,6 +7225,7 @@ function bindEvents() {
     /* El centinela del desplegable nunca se guarda: lo atiende el change. */
     if (input.value === MSG_NEW && isMsgNode(info.node)) return;
     if (input.value === LIST_NEW && isListNode(info.node)) return;
+    if (input.value === PROC_NEW && isProcNode(info.node)) return;
     if (input.dataset.xy !== undefined) {
       /* Bloque de varios campos: node.val es "a,b". Se actualiza sólo el
          índice editado para no pisar la otra casilla ni los reporteros. */
@@ -7109,10 +7243,11 @@ function bindEvents() {
   $('#codeList').addEventListener('change', e => {
     const sel = e.target;
     if (sel && sel.dataset && sel.dataset.input &&
-        (sel.value === MSG_NEW || sel.value === LIST_NEW)) {
+        (sel.value === MSG_NEW || sel.value === LIST_NEW || sel.value === PROC_NEW)) {
       const info = findNode(sel.dataset.input);
       if (info && sel.value === MSG_NEW && isMsgNode(info.node)) { newMessageFor(sel.dataset.input); return; }
       if (info && sel.value === LIST_NEW && isListNode(info.node)) { newListFor(sel.dataset.input); return; }
+      if (info && sel.value === PROC_NEW && isProcNode(info.node)) { newProcFor(sel.dataset.input); return; }
     }
     applyBlockValue(e);
     saveProject();

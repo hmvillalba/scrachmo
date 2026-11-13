@@ -14,8 +14,9 @@ Pas de framework, pas de dépendance, pas de build : des fichiers statiques qui 
 
 ### Des blocs comme dans Scratch
 
-- 57 blocs en 9 catégories avec les couleurs classiques de Scratch : mouvement, apparence, son, événements, contrôle, capteurs, opérateurs, variables, **listes nommées** et **messages locaux nommés**.
+- 59 blocs en 9 catégories avec les couleurs classiques de Scratch : mouvement, apparence, son, événements, contrôle, capteurs, opérateurs, variables, **listes nommées**, **messages locaux nommés** et **procédures nommées**.
 - **Listes nommées** : crée plusieurs listes (par exemple « inventaire »), choisis le nom dans un menu et utilise **ajouter**, **supprimer par position**, **mettre à la position** et **vider**, plus les reporters **longueur de** et **élément de**. Les valeurs se voient et s'éditent dans leur propre carte, sont enregistrées avec le projet et voyagent dans le `.sb3` avec un id par nom.
+- **Procédures nommées** : définis une routine avec le chapeau « Définir {v} » et appelle-la avec « Appeler {v} » depuis n'importe quel script du même personnage. Le nom se choisit dans un menu partagé, l'appel tourne dans le même fil et la récursion s'arrête toute seule. Elles ne prennent pas encore de paramètres.
 - Blocs chapeau (drapeau vert, toucher, touche, secouer le téléphone, recevoir un message, score) et blocs C : `Répéter {v} fois`, `Toujours` et conditionnelles avec `si... sinon`.
 - Imbrication réelle : lâche un bloc **au-dessus** d'un `Répéter`, `Toujours` ou `si` et il reste dedans — y compris sur la barre « sinon » —, ou vise l'emplacement si tu préfères. Avec des garde-fous qui empêchent d'imbriquer un bloc dans lui-même ou de mettre un chapeau à l'intérieur.
 - **Plusieurs scripts par personnage** : chaque chapeau démarre un script indépendant et seuls ceux qui correspondent à l'événement survenu s'exécutent. Un même personnage peut réagir au drapeau, à une touche et à un toucher en même temps.
@@ -238,7 +239,7 @@ Attention : pour l'installation et le mode hors ligne il faut `https` (ou `local
 | `app.html` | **L'éditeur** : toute l'interface, la mise en page, les styles, les icônes SVG et les panneaux. C'est l'URL directe et le `start_url` de la PWA. |
 | `boot.js` | Enregistrement du service worker hors du HTML (la CSP l'exige), protégé pour `file://`. |
 | `engine.js` | Le moteur : rendu des blocs, glisser-déposer tactile, exécution, personnages, variables, événements, modales accessibles et projet. |
-| `data.js` | Catalogue de blocs (57 instructions + 13 reporters), catégories, version visible et textes de l'interface (4 langues). |
+| `data.js` | Catalogue de blocs (59 instructions + 13 reporters), catégories, version visible et textes de l'interface (4 langues). |
 | `manifest.webmanifest` | Fiche d'installation : nom, couleurs, `display: standalone`, `start_url: ./app.html` et icônes. |
 | `sw.js` | Service worker : enregistre la landing et l'app pour qu'elles s'ouvrent sans internet, et sert `app.html` aux liens `?p=`. Le nom du cache porte la version et une empreinte des six fichiers du runtime. |
 | `vercel.json` | En-têtes du déploiement : CSP stricte, `nosniff`, `Referrer-Policy` et les fichiers sans cache CDN. |
@@ -254,7 +255,7 @@ Tu veux ajouter un nouveau bloc ? C'est une entrée dans `data.js` et sa logique
 
 ## Vérification
 
-Le projet compte **1332 vérifications par langue, 5328 au total** : chaque scénario tourne **quatre fois —espagnol, anglais, portugais et français— dans Chrome headless**, et les quatre doivent donner 0 échec. En plus, il y a **143 vérifications de PWA** qui n'ont pas besoin de navigateur. Ensemble, elles couvrent le catalogue de blocs et les quatre langues, le moteur et ses événements, les costumes et l'import d'images, l'éditeur et ses outils, la scène et sa taille —y compris la marge visuelle qui garde le dessin entier dans la scène—, les clones, les capteurs et les collisions, les sons et leur vraie synthèse, l'export `.sb3`, les **messages nommés** (catalogue, menu, déclenchement par nom et un *broadcast* par nom), les **listes nommées** (4 blocs, 2 reporters, un menu par bloc, exécution par nom et une déclaration par liste dans le `.sb3`), la landing et la manette à l'écran avec l'inclinaison.
+Le projet compte **1413 vérifications par langue, 5652 au total** : chaque scénario tourne **quatre fois —espagnol, anglais, portugais et français— dans Chrome headless**, et les quatre doivent donner 0 échec. En plus, il y a **143 vérifications de PWA** qui n'ont pas besoin de navigateur. Ensemble, elles couvrent le catalogue de blocs et les quatre langues, le moteur et ses événements, les costumes et l'import d'images, l'éditeur et ses outils, la scène et sa taille —y compris la marge visuelle qui garde le dessin entier dans la scène—, les clones, les capteurs et les collisions, les sons et leur vraie synthèse, l'export `.sb3`, les **messages nommés** (catalogue, menu, déclenchement par nom et un *broadcast* par nom), les **listes nommées** (4 blocs, 2 reporters, un menu par bloc, exécution par nom et une déclaration par liste dans le `.sb3`), les **procédures nommées** (chapeau de définition, appel dans le même fil, coupe de récursion et le `PROCCODE` de Scratch), la landing et la manette à l'écran avec l'inclinaison.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -262,7 +263,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # parité des textes + vérifications statiques
 node tests/pwa-check.js          # manifest, icônes et routes servies
 node tests/pwa-sw.js             # logique du service worker
-node tests/run.js ma-course      # 27 scénarios × 4 langues dans Chrome headless
+node tests/run.js ma-course      # 28 scénarios × 4 langues dans Chrome headless
 ```
 
 `tests/build.js` construit les pages de test et le lien partagé ; `tests/run.js` lance Chrome avec un profil isolé par suite et par langue, et compte `PASS` / `FAIL` / `ERROR`. Sur GitHub Actions, `.github/workflows/test.yml` répète la même chose à chaque push et pull request.

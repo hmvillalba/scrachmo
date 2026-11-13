@@ -36,6 +36,11 @@ const MAX_CLONES = 300;
 let selectedSpriteId = null;
 let variables = {};
 let hiddenVars = {};
+/* Listas con nombre: cada nombre guarda un arreglo de valores. Igual que las
+   variables, son estado de DISENO: lo que haga una corrida queda guardado. */
+let lists = {};
+let listsSig = '';
+let listFormOpen = false;
 let stageBg = 0;
 let stageBgImg = '';
 let showScore = false;
@@ -739,6 +744,7 @@ function applyPayloadInner(payload) {
        x/y pueden usar SU tamaño real, no el del proyecto anterior. */
     applyWorldSize();
     variables = (payload.variables && typeof payload.variables === 'object' && !Array.isArray(payload.variables)) ? payload.variables : {};
+    lists = normalizeLists(payload.lists);
     loadHidden(payload.hidden);
     stageBg = clamp(Math.floor(num(payload.stageBg, 0)), 0, BG.length - 1);
     stageBgImg = validBackdrop(payload.stageBgImg);
@@ -767,6 +773,7 @@ function applyPayloadInner(payload) {
   selectedSpriteId = sprites[0].id;
   applyWorldSize();
   variables = (oldVars && typeof oldVars === 'object' && !Array.isArray(oldVars)) ? oldVars : {};
+  lists = {};
   loadHidden(oldHidden);
   Object.keys(hiddenVars).forEach(k => { if (!(k in variables)) delete hiddenVars[k]; });
   stageBg = 0;
@@ -784,6 +791,8 @@ function resetProjectData(withCode) {
   applyWorldSize();
   variables = {};
   hiddenVars = {};
+  lists = {};
+  listFormOpen = false;
   stageBg = 0;
   stageBgImg = '';
   showScore = false;
@@ -874,6 +883,7 @@ function serializeProject() {
       code: s.code
     })),
     variables: variables,
+    lists: lists,
     hidden: hiddenList(),
     worldW: worldW,
     worldH: worldH,
@@ -1756,6 +1766,7 @@ function updateHUD() {
   const scoreEl = $('#scoreVal');
   if (scoreEl) scoreEl.textContent = String(score);
   ensureVarsRendered();
+  ensureListsRendered();
   const entries = Object.entries(variables).filter(([k]) => !hiddenVars[k]);
   const scoreHud = $('#scoreHud');
   if (scoreHud) scoreHud.hidden = !showScore;
@@ -1934,6 +1945,211 @@ function stepVariable(name, step) {
   const current = Number(variables[name]);
   variables[name] = (Number.isFinite(current) ? current : 0) + step;
   updateHUD();
+  saveProject();
+}
+
+/* ---------------- listas con nombre (P2.12, fase 2) ----------------
+   Una lista es un nombre -> arreglo de valores. Igual que las variables, es
+   estado de DISEÑO: lo que una corrida agregue o borre queda guardado.
+   El nombre vive en el hueco `pickAt` del bloque; los demás huecos son el
+   valor y/o la posición. Un proyecto viejo no tiene `lists` en el guardado:
+   normalizeLists() devuelve {} y el desplegable ofrece el nombre de fábrica. */
+const LIST_MAX = 24;
+const LIST_MAX_ITEMS = 200;
+
+function isListNode(node) {
+  return !!node && (node.type === 'list_add' || node.type === 'list_del' ||
+    node.type === 'list_replace' || node.type === 'list_clear' ||
+    node.type === 'rep_list_len' || node.type === 'rep_list_item');
+}
+
+function listName(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim().split(',')[0].trim();
+  return (s && s !== LIST_NEW) ? s : LIST_DEFAULT;
+}
+
+/* Los nombres NO pueden tener comas: los bloques de varios huecos guardan sus
+   valores como "a,b" y una coma partiría el nombre en dos casillas. */
+function cleanListName(v) {
+  if (typeof v !== 'string') return '';
+  const s = v.replace(/\s+/g, ' ').trim().slice(0, 24);
+  if (!s || s === LIST_NEW || s.indexOf(',') >= 0 ||
+    s === '__proto__' || s === 'constructor' || s === 'prototype') return '';
+  return s;
+}
+
+function normalizeLists(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  Object.keys(raw).slice(0, LIST_MAX).forEach(k => {
+    const nm = cleanListName(k);
+    if (!nm || !Array.isArray(raw[k])) return;
+    out[nm] = raw[k].slice(0, LIST_MAX_ITEMS).map(x =>
+      (typeof x === 'number' && Number.isFinite(x)) ? x : String(x === null || x === undefined ? '' : x).slice(0, 120));
+  });
+  return out;
+}
+
+/* Leer NO crea la lista: un reportero de sólo lectura no debe ensuciar el
+   proyecto con nombres que el usuario nunca creó. */
+function listRead(name) {
+  const nm = listName(name);
+  return Array.isArray(lists[nm]) ? lists[nm] : [];
+}
+
+function listData(name) {
+  const nm = listName(name);
+  if (!Array.isArray(lists[nm])) {
+    if (Object.keys(lists).length >= LIST_MAX) return [];
+    lists[nm] = [];
+  }
+  return lists[nm];
+}
+
+/* Las posiciones son 1-based, como en Scratch: 0 o un número fuera de la
+   lista simplemente no hace nada, en vez de borrar el último elemento. */
+function listIndexOf(raw, len) {
+  const n = Math.floor(num(raw, 0));
+  return (n >= 1 && n <= len) ? n - 1 : -1;
+}
+
+function applyListBlock(node, sprite) {
+  const def = BYID[node.type];
+  const partes = String(nodeVal(node, sprite)).split(',');
+  const at = def.pickAt || 0;
+  const name = listName(partes[at]);
+  const arr = listData(name);
+  if (node.type === 'list_clear') { arr.length = 0; return; }
+  const valor = parseVarValue(String(partes[0] === undefined ? '' : partes[0]).trim());
+  if (node.type === 'list_add') {
+    if (arr.length >= LIST_MAX_ITEMS) { toast(UI[lang].listFull); return; }
+    arr.push(valor);
+    return;
+  }
+  const pos = listIndexOf(node.type === 'list_replace' ? partes[1] : partes[0], arr.length);
+  if (pos < 0) return;
+  if (node.type === 'list_del') arr.splice(pos, 1);
+  else arr[pos] = valor;
+}
+
+function listsSignature() {
+  return Object.keys(lists).map(n =>
+    n + '\u0002' + lists[n].length + '\u0002' + lists[n].join('\u0003')).join('\u0001');
+}
+
+function ensureListsRendered() {
+  if (listsSignature() !== listsSig) renderLists();
+}
+
+function renderLists() {
+  const box = $('#listsList');
+  if (!box) return;
+  const t = UI[lang];
+  const names = Object.keys(lists);
+  listsSig = listsSignature();
+  const count = $('#listsCount');
+  if (count) count.textContent = String(names.length);
+  if (!names.length) {
+    box.innerHTML = '<div class="empty">' + icon('list') +
+      '<b>' + esc(t.listsEmpty) + '</b><p>' + esc(t.listsEmptyDesc) + '</p></div>';
+  } else {
+    box.innerHTML = names.map((name, i) => {
+      const c = VAR_COLORS[i % VAR_COLORS.length];
+      const safe = esc(name);
+      const arr = lists[name];
+      const items = arr.length ? arr.map((v, j) =>
+        '<span class="list-item"><b>' + (j + 1) + '</b><span class="list-item-v">' + esc(v) + '</span>' +
+        '<button type="button" class="list-x" data-list-del-item="' + safe + '" data-idx="' + j + '"' +
+        ' aria-label="' + esc(t.listDelItem) + '" title="' + esc(t.listDelItem) + '">' + icon('close') + '</button></span>'
+      ).join('') : '<span class="list-vacia">—</span>';
+      return '<div class="var-card list-card" style="--v:' + c.v + ';--vt:' + c.t + '">' +
+        '<div class="var-head"><span class="var-dot"></span>' +
+          '<span class="var-name" title="' + safe + '">' + safe + '</span>' +
+          '<span class="list-count">' + arr.length + ' ' + esc(t.listItems) + '</span>' +
+          '<button type="button" class="var-mini" data-del-list="' + safe + '"' +
+            ' aria-label="' + esc(t.deleteList) + '" title="' + esc(t.deleteList) + '">' + icon('close') + '</button>' +
+        '</div><div class="list-items">' + items + '</div>' +
+        '<div class="list-add-row">' +
+          '<input class="list-add-input" data-list-add="' + safe + '" placeholder="' + esc(t.listAddPlaceholder) + '"' +
+            ' aria-label="' + esc(t.listAddPlaceholder) + '" autocomplete="off" spellcheck="false">' +
+          '<button type="button" class="var-mini on" data-list-add-btn="' + safe + '"' +
+            ' aria-label="' + esc(t.listAddItem) + '" title="' + esc(t.listAddItem) + '">' + icon('plus') + '</button>' +
+        '</div></div>';
+    }).join('');
+  }
+  const newBtn = $('#newListBtn');
+  if (listFormOpen) {
+    box.insertAdjacentHTML('beforeend', listFormHTML(t));
+    if (newBtn) newBtn.hidden = true;
+  } else if (newBtn) newBtn.hidden = false;
+}
+
+function listFormHTML(t) {
+  return '<form class="var-form" id="listForm" autocomplete="off">' +
+    '<input id="newListName" class="var-form-input" maxlength="24" placeholder="' + esc(t.listNameTitle) + '"' +
+      ' aria-label="' + esc(t.listNameTitle) + '" autocomplete="off" spellcheck="false">' +
+    '<button type="submit" class="var-form-ok">' + esc(t.create) + '</button>' +
+    '<button type="button" class="var-form-cancel" id="cancelList" aria-label="' + esc(t.cancel) + '" title="' + esc(t.cancel) + '">' +
+      icon('close') + '</button>' +
+    '<span class="var-form-hint" id="listFormHint">' + esc(t.listNameHint) + '</span>' +
+  '</form>';
+}
+
+function openListForm() {
+  if (listFormOpen) return;
+  listFormOpen = true;
+  renderLists();
+  const inp = $('#newListName');
+  if (inp) setTimeout(() => { try { inp.focus(); } catch (e) { } }, 60);
+}
+
+function closeListForm() {
+  listFormOpen = false;
+  renderLists();
+}
+
+function createList() {
+  const inp = $('#newListName');
+  if (!inp) return;
+  const nm = cleanListName(inp.value);
+  const hint = $('#listFormHint');
+  if (!nm || nm in lists || Object.keys(lists).length >= LIST_MAX) {
+    if (hint) { hint.textContent = UI[lang].listBadName; hint.classList.add('error'); }
+    return;
+  }
+  lists[nm] = [];
+  listFormOpen = false;
+  renderLists();
+  renderCode();
+  saveProject();
+  toast(UI[lang].listCreated);
+}
+
+function deleteList(name) {
+  if (!(name in lists)) return;
+  delete lists[name];
+  renderLists();
+  renderCode();
+  saveProject();
+  toast(UI[lang].listDeleted);
+}
+
+function addListItem(name, raw) {
+  const txt = String(raw === undefined ? '' : raw).trim();
+  if (!txt) return;
+  const arr = listData(name);
+  if (arr.length >= LIST_MAX_ITEMS) { toast(UI[lang].listFull); return; }
+  arr.push(parseVarValue(txt));
+  renderLists();
+  saveProject();
+}
+
+function deleteListItem(name, idx) {
+  const arr = listRead(name);
+  const i = Number(idx);
+  if (!(i >= 0 && i < arr.length)) return;
+  arr.splice(i, 1);
+  renderLists();
   saveProject();
 }
 
@@ -2167,6 +2383,31 @@ async function newMessageFor(id) {
   renderCode();
   saveProject();
   if (!limpio && typeof crudo === 'string' && crudo.trim()) toast(UI[lang].msgBadName);
+}
+
+/* «Nueva lista…» no es un nombre: abre el modal, crea la lista y escribe el
+   nombre en el hueco pickAt del bloque (sin pisar el valor ni la posición).
+   Si se cancela, el bloque conserva el nombre que tenía. */
+async function newListFor(id) {
+  const antes = findNode(id);
+  if (!antes || !isListNode(antes.node)) return;
+  const def = BYID[antes.node.type];
+  const at = (def && def.pickAt !== undefined) ? def.pickAt : 0;
+  const partir = n => String(n.val !== undefined ? n.val : (def ? def.def : '')).split(',');
+  const anterior = listName(partir(antes.node)[at]);
+  const crudo = await askText(UI[lang].listNameTitle, '', UI[lang].listNameHint, 24);
+  const info = findNode(id);
+  if (!info || !isListNode(info.node)) return;
+  const limpio = cleanListName(crudo);
+  const nombre = limpio || anterior;
+  const partes = partir(info.node);
+  partes[at] = nombre;
+  info.node.val = partes.join(',');
+  if (!(nombre in lists)) lists[nombre] = [];
+  renderLists();
+  renderCode();
+  saveProject();
+  if (!limpio && typeof crudo === 'string' && crudo.trim()) toast(UI[lang].listBadName);
 }
 
 /* ---------------- selector de reporteros ----------------
@@ -2869,6 +3110,9 @@ function blockContent(node, def, t) {
      ahí no tiene sentido anidar un valor. */
   const canRep = !!(def.repOk || def.rep) && !def.repName && !opts.preview && (opts.depth || 0) < 10;
   slots.forEach((slot, i) => {
+    /* pickAt: UN solo hueco es desplegable; el resto sigue siendo texto.
+       Sin esto un bloque "valor + nombre" mostraría dos <select> iguales. */
+    const isPick = !!def.pick && (def.pickAt === undefined ? i === 0 : def.pickAt === i);
     if (parts[i]) content.appendChild(document.createTextNode(parts[i]));
     const cur = vals[i];
     const slotName = slot === '{x}' ? 'x' : (slot === '{y}' ? 'y' : (parts[i].replace(/\s+$/, '') || def.id));
@@ -2884,13 +3128,14 @@ function blockContent(node, def, t) {
         const c = list[findCostumeIndex(s, cur)];
         shown = c ? c.name : (UI[lang].costumeDefault + ' 1');
       }
-      if (def.pick) shown = pickLabel(def.pick, cur);
+      if (def.pick && isPick) shown = pickLabel(def.pick, cur);
       val.textContent = shown;
       field = val;
-    } else if (def.pick) {
+    } else if (def.pick && isPick) {
       const sel = document.createElement('select');
       sel.className = 'sb-input sb-select';
       sel.dataset.input = node.id;
+      if (slots.length > 1) sel.dataset.xy = String(i);
       sel.style.maxWidth = (def.w || 104) + 'px';
       sel.setAttribute('aria-label', aria);
       let found = false;
@@ -2908,7 +3153,8 @@ function blockContent(node, def, t) {
         opt.value = cur;
         opt.textContent = def.pick === 'sprites' ? UI[lang].spriteMissing
           : (def.pick === 'keys' ? UI[lang].keyMissing
-            : (def.pick === 'messages' ? msgName(cur) : UI[lang].soundMissing));
+            : (def.pick === 'messages' ? msgName(cur)
+              : (def.pick === 'lists' ? listName(cur) : UI[lang].soundMissing)));
         opt.selected = true;
         sel.appendChild(opt);
       }
@@ -2953,7 +3199,7 @@ function blockContent(node, def, t) {
       input.spellcheck = false;
       field = input;
     }
-    if (!canRep) { content.appendChild(field); return; }
+    if (!canRep || isPick) { content.appendChild(field); return; }
     /* Casilla con reportero: ƒ abre el selector y, si ya hay uno, el chip
        reemplaza al input. El texto escrito se conserva en node.val por si
        después se quita el reportero. */
@@ -3278,6 +3524,29 @@ function pickList(kind) {
     ['es', 'en', 'pt', 'fr'].forEach(l => { nueva.name[l] = UI[l].msgNew; });
     return out.concat([nueva]);
   }
+  /* Las listas son dinámicas: las que ya existen, los nombres que usan los
+     bloques (incluidos los reporteros anidados), el de fábrica y la opción
+     para crear otra. El nombre del usuario NO se traduce. */
+  if (kind === 'lists') {
+    const nombres = new Set([LIST_DEFAULT]);
+    Object.keys(lists).forEach(nm => nombres.add(nm));
+    const walk = nodes => (nodes || []).forEach(n => {
+      if (isListNode(n)) {
+        const def = BYID[n.type];
+        const at = (def && def.pickAt !== undefined) ? def.pickAt : 0;
+        const partes = String(n.val !== undefined ? n.val : (def ? def.def : '')).split(',');
+        nombres.add(listName(partes[at]));
+      }
+      if (n.reps) n.reps.forEach(r => { if (r) walk([r]); });
+      walk(n.body); walk(n.elseBody);
+    });
+    sprites.forEach(s => walk(s.code));
+    const lista = Array.from(nombres).sort((a, b) => a < b ? -1 : (a > b ? 1 : 0));
+    const out = lista.map(nm => ({ id: nm, name: { es: nm, en: nm, pt: nm, fr: nm } }));
+    const nueva = { id: LIST_NEW, name: {} };
+    ['es', 'en', 'pt', 'fr'].forEach(l => { nueva.name[l] = UI[l].listNew; });
+    return out.concat([nueva]);
+  }
   /* Los personajes son dinámicos: la lista sale del proyecto, no del catálogo.
      El nombre de cada uno se repite en los 4 idiomas porque lo que se traduce
      es «mí mismo», no el nombre que eligió el usuario. */
@@ -3299,6 +3568,7 @@ function pickList(kind) {
 function pickMatch(kind, id, cur) {
   if (kind === 'keys') return normKeyName(id) === normKeyName(cur);
   if (kind === 'messages') return id === msgName(cur);
+  if (kind === 'lists') return id === listName(cur);
   return id === cur;
 }
 
@@ -3307,7 +3577,8 @@ function pickLabel(kind, id) {
   if (item) return item.name[lang] || item.name.es;
   /* Un nombre de mensaje huérfano se muestra tal cual: es texto del usuario,
      no una clave que falte traducir. */
-  if (kind === 'messages') return String(id);
+  /* Un nombre de mensaje o de lista huérfano se muestra tal cual. */
+  if (kind === 'messages' || kind === 'lists') return String(id);
   if (kind === 'keys') return UI[lang].keyMissing || String(id);
   return (kind === 'sprites' ? UI[lang].spriteMissing : UI[lang].soundMissing) || String(id);
 }
@@ -3432,6 +3703,7 @@ function render() {
   renderProps();
   renderCode();
   renderVars();
+  renderLists();
   renderCats(t);
   renderPalette(t);
   renderRepChoices();
@@ -4313,6 +4585,12 @@ function evalReporter(node, sprite, depth) {
       if (key === 'score') return score;
       return (key in variables) ? variables[key] : 0;
     }
+    case 'rep_list_len': return listRead(listName(v)).length;
+    case 'rep_list_item': {
+      const arr = listRead(listName(parts[1]));
+      const idx = listIndexOf(parts[0], arr.length);
+      return idx < 0 ? 0 : arr[idx];
+    }
     case 'rep_random': {
       const lo = Math.floor(Math.min(a, b));
       const hi = Math.floor(Math.max(a, b));
@@ -4786,6 +5064,11 @@ async function execBlock(node, sprite) {
         ? Object.entries(variables).map(([k, x]) => k + ': ' + x).join(' · ')
         : UI[lang].noVars);
       await sleep(130);
+      return;
+    case 'list_add': case 'list_del': case 'list_replace': case 'list_clear':
+      applyListBlock(node, sprite);
+      updateHUD();
+      await sleep(120);
       return;
     case 'op_random': {
       const parts = String(v == null ? '1,10' : v).split(',');
@@ -5524,6 +5807,7 @@ function sb3SpriteBlocks(sprite, index) {
   const usedSounds = new Set();
   const usedVars = new Set();
   const usedMsgs = new Set();
+  const usedLists = new Set();
   let seq = 0;
   let scriptY = 0;
 
@@ -5563,6 +5847,19 @@ function sb3SpriteBlocks(sprite, index) {
     return mk('data_variable', parentId, { fields: { VARIABLE: [name, sb3VarId(name)] } });
   }
 
+  /* El nombre de la lista vive en el hueco pickAt del bloque. */
+  function listNameOf(node) {
+    const def = BYID[node.type];
+    const at = (def && def.pickAt !== undefined) ? def.pickAt : 0;
+    const partes = String(node.val !== undefined ? node.val : (def ? def.def : '')).split(',');
+    return listName(partes[at]);
+  }
+  function listField(node) {
+    const nm = listNameOf(node);
+    usedLists.add(nm);
+    return [nm, sb3ListId(nm)];
+  }
+
   function slotIn(node, i, shadowType, hostId) {
     const def = BYID[node.type] || { n: { es: '' }, def: '' };
     const count = Math.max(sb3SlotCount(def), i + 1);
@@ -5591,6 +5888,17 @@ function sb3SpriteBlocks(sprite, index) {
       case 'rep_var': {
         const name = String(rep.val === undefined ? '' : rep.val).trim();
         return varBlock(name || 'variable', hostId);
+      }
+      case 'rep_list_len': {
+        const id = mk('data_lengthoflist', hostId);
+        blocks[id].fields.LIST = listField(rep);
+        return id;
+      }
+      case 'rep_list_item': {
+        const id = mk('data_itemoflist', hostId);
+        blocks[id].fields.LIST = listField(rep);
+        blocks[id].inputs.INDEX = slotIn(rep, 0, 4, id);
+        return id;
       }
       case 'rep_random': {
         const id = mk('operator_random', hostId);
@@ -5854,6 +6162,30 @@ function sb3SpriteBlocks(sprite, index) {
         blocks[bid].inputs.VALUE = [3, r, [4, '0']];
         return bid;
       }
+      case 'list_add': {
+        const bid = mk('data_addtolist', parentId);
+        blocks[bid].fields.LIST = listField(node);
+        blocks[bid].inputs.ITEM = slotIn(node, 0, 10, bid);
+        return bid;
+      }
+      case 'list_del': {
+        const bid = mk('data_deleteoflist', parentId);
+        blocks[bid].fields.LIST = listField(node);
+        blocks[bid].inputs.INDEX = slotIn(node, 0, 4, bid);
+        return bid;
+      }
+      case 'list_replace': {
+        const bid = mk('data_replaceitemoflist', parentId);
+        blocks[bid].fields.LIST = listField(node);
+        blocks[bid].inputs.INDEX = slotIn(node, 1, 4, bid);
+        blocks[bid].inputs.ITEM = slotIn(node, 0, 10, bid);
+        return bid;
+      }
+      case 'list_clear': {
+        const bid = mk('data_clearlist', parentId);
+        blocks[bid].fields.LIST = listField(node);
+        return bid;
+      }
       case 'send_msg': {
         const nm = msgName(node.val);
         usedMsgs.add(nm);
@@ -5944,7 +6276,7 @@ function sb3SpriteBlocks(sprite, index) {
   });
 
   return { blocks: blocks, dropped: dropped, usedSounds: usedSounds,
-    usedVars: usedVars, usedMsgs: usedMsgs };
+    usedVars: usedVars, usedMsgs: usedMsgs, usedLists: usedLists };
 }
 
 /* Ids de variables y de mensajes: estables dentro de un mismo export. Antes
@@ -5952,6 +6284,7 @@ function sb3SpriteBlocks(sprite, index) {
    en Scratch un «nivel2» despertaba también al sombrero de «perdiste». */
 let sb3VarIds = null;
 let sb3MsgIds = null;
+let sb3ListIds = null;
 function sb3VarId(name) {
   if (!sb3VarIds) sb3VarIds = new Map();
   if (!sb3VarIds.has(name)) sb3VarIds.set(name, 'var_' + (sb3VarIds.size + 1));
@@ -5962,17 +6295,25 @@ function sb3MsgId(name) {
   if (!sb3MsgIds.has(name)) sb3MsgIds.set(name, 'bc_' + (sb3MsgIds.size + 1));
   return sb3MsgIds.get(name);
 }
+/* Un id estable por nombre de lista dentro de cada export. */
+function sb3ListId(name) {
+  if (!sb3ListIds) sb3ListIds = new Map();
+  if (!sb3ListIds.has(name)) sb3ListIds.set(name, 'lst_' + (sb3ListIds.size + 1));
+  return sb3ListIds.get(name);
+}
 
 /* Arma project.json + los archivos del ZIP. Devuelve también la lista de lo
    que quedó afuera, para poder avisarlo. */
 async function sb3Build() {
   sb3VarIds = null;
   sb3MsgIds = null;
+  sb3ListIds = null;
   const files = [];
   const seen = new Set();
   const dropped = [];
   const allVars = new Map();
   const allMsgs = new Set();
+  const allLists = new Set();
   const soundsNeeded = new Set();
   let assets = 0;
 
@@ -6009,6 +6350,7 @@ async function sb3Build() {
     built.usedVars.forEach(v => allVars.set(v, true));
     built.usedSounds.forEach(k => soundsNeeded.add(k));
     built.usedMsgs.forEach(m => allMsgs.add(m));
+    built.usedLists.forEach(n => allLists.add(n));
 
     const costumes = [];
     const list = (s.costumes && s.costumes.length) ? s.costumes : [{ kind: 'emoji', src: '🐱', name: 'disfraz1' }];
@@ -6071,6 +6413,8 @@ async function sb3Build() {
 
   /* Variables del proyecto (las que ya existen) más las que usan los bloques. */
   Object.keys(variables || {}).forEach(k => allVars.set(k, true));
+  /* Las listas del proyecto también viajan aunque ningún bloque las nombre. */
+  Object.keys(lists || {}).forEach(k => allLists.add(k));
   allVars.forEach((_, name) => {
     stageVars[sb3VarId(name)] = [name, Number(variables && variables[name]) || 0];
   });
@@ -6097,11 +6441,18 @@ async function sb3Build() {
   const stageBroadcasts = {};
   allMsgs.forEach(nm => { stageBroadcasts[sb3MsgId(nm)] = nm; });
 
+  /* Una lista por nombre, con su contenido actual. Scratch espera [nombre,
+     arreglo de valores] en el stage; los bloques apuntan al id declarado. */
+  const stageLists = {};
+  allLists.forEach(nm => {
+    stageLists[sb3ListId(nm)] = [nm, listRead(nm).map(v => String(v))];
+  });
+
   const stage = {
     isStage: true,
     name: 'Stage',
     variables: stageVars,
-    lists: {},
+    lists: stageLists,
     broadcasts: stageBroadcasts,
     blocks: {},
     comments: {},
@@ -6740,6 +7091,7 @@ function bindEvents() {
     if (!info) return;
     /* El centinela del desplegable nunca se guarda: lo atiende el change. */
     if (input.value === MSG_NEW && isMsgNode(info.node)) return;
+    if (input.value === LIST_NEW && isListNode(info.node)) return;
     if (input.dataset.xy !== undefined) {
       /* Bloque de varios campos: node.val es "a,b". Se actualiza sólo el
          índice editado para no pisar la otra casilla ni los reporteros. */
@@ -6756,9 +7108,11 @@ function bindEvents() {
      Elegir «Nuevo mensaje…» abre el modal en vez de guardar el centinela. */
   $('#codeList').addEventListener('change', e => {
     const sel = e.target;
-    if (sel && sel.value === MSG_NEW && sel.dataset && sel.dataset.input) {
+    if (sel && sel.dataset && sel.dataset.input &&
+        (sel.value === MSG_NEW || sel.value === LIST_NEW)) {
       const info = findNode(sel.dataset.input);
-      if (info && isMsgNode(info.node)) { newMessageFor(sel.dataset.input); return; }
+      if (info && sel.value === MSG_NEW && isMsgNode(info.node)) { newMessageFor(sel.dataset.input); return; }
+      if (info && sel.value === LIST_NEW && isListNode(info.node)) { newListFor(sel.dataset.input); return; }
     }
     applyBlockValue(e);
     saveProject();
@@ -6934,6 +7288,40 @@ function bindEvents() {
     if (!inp) return;
     const name = inp.dataset.var;
     if (name in variables) inp.value = String(variables[name]);
+  });
+
+  $('#newListBtn').addEventListener('click', openListForm);
+  $('#listsList').addEventListener('click', e => {
+    const del = e.target.closest('[data-del-list]');
+    if (del) { deleteList(del.dataset.delList); return; }
+    const item = e.target.closest('[data-list-del-item]');
+    if (item) { deleteListItem(item.dataset.listDelItem, item.dataset.idx); return; }
+    const add = e.target.closest('[data-list-add-btn]');
+    if (add) {
+      const card = add.closest('.list-card');
+      const inp = card && card.querySelector('[data-list-add]');
+      addListItem(add.dataset.listAddBtn, inp ? inp.value : '');
+      if (inp) inp.value = '';
+      return;
+    }
+    if (e.target.closest('#cancelList')) closeListForm();
+  });
+  $('#listsList').addEventListener('submit', e => {
+    if (e.target && e.target.id === 'listForm') { e.preventDefault(); createList(); }
+  });
+  $('#listsList').addEventListener('input', e => {
+    if (e.target.id === 'newListName') {
+      const hint = $('#listFormHint');
+      if (hint) { hint.textContent = UI[lang].listNameHint; hint.classList.remove('error'); }
+    }
+  });
+  $('#listsList').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const inp = e.target.closest('[data-list-add]');
+    if (!inp) return;
+    e.preventDefault();
+    addListItem(inp.dataset.listAdd, inp.value);
+    inp.value = '';
   });
 
   $('#saveBtn').addEventListener('click', () => { saveProject(); toast(UI[lang].saved); });

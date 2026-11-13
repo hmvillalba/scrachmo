@@ -339,6 +339,19 @@ body.is-dragging{user-select:none;cursor:grabbing}
 .var-form-hint{grid-column:1/-1;font-size:10.5px;font-weight:600;color:var(--muted)}
 .var-form-hint.error{color:#e11d48}
 #newVarBtn[hidden]{display:none}
+#newListBtn[hidden]{display:none}
+.list-card{gap:6px}
+.list-count{font-size:10px;font-weight:800;color:var(--muted);white-space:nowrap;flex:none}
+.list-items{display:flex;flex-wrap:wrap;gap:4px;max-height:104px;overflow:auto}
+.list-item{display:inline-flex;align-items:center;gap:3px;max-width:100%;padding:2px 3px 2px 6px;border:1px solid var(--line);border-radius:8px;background:var(--vt);font-size:11px;font-weight:700;color:var(--v)}
+.list-item>b{font-size:9px;opacity:.7;flex:none}
+.list-item-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:96px}
+.list-x{width:17px;height:17px;border:0;border-radius:5px;background:transparent;color:var(--v);display:grid;place-items:center;cursor:pointer;flex:none;padding:0}
+.list-x .ic{width:10px;height:10px}
+.list-vacia{font-size:11px;color:var(--muted)}
+.list-add-row{display:flex;align-items:center;gap:5px}
+.list-add-input{flex:1;min-width:0;height:30px;border:1.5px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font-family:inherit;font-size:12px;font-weight:700;padding:0 8px;outline:none}
+.list-add-input:focus{border-color:var(--v);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
 
 /* ---------- score card (labels only when requested) ---------- */
 .stage-hud.is-empty{display:none}
@@ -602,6 +615,7 @@ body.game-mode{background:#0b1220;overflow:hidden}
 body.game-mode .topbar,
 body.game-mode #codeCard,
 body.game-mode #varsCard,
+body.game-mode #listsCard,
 body.game-mode #blocksCard,
 body.game-mode #toolsCard,
 body.game-mode footer,
@@ -1181,8 +1195,9 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
 #spritesCard{order:2}
 #codeCard{order:3}
 #varsCard{order:4}
-#toolsCard{order:5}
-#blocksCard{order:6}
+#listsCard{order:5}
+#toolsCard{order:6}
+#blocksCard{order:7}
 
 @media(min-width:900px){
   body:not(.game-mode) .app{max-width:1320px;margin:0 auto}
@@ -1199,7 +1214,8 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
   body:not(.game-mode) #codeCard{order:1}
   body:not(.game-mode) #blocksCard{order:2}
   body:not(.game-mode) #varsCard{order:3}
-  body:not(.game-mode) #toolsCard{order:4}
+  body:not(.game-mode) #listsCard{order:4}
+  body:not(.game-mode) #toolsCard{order:5}
   /* Con más ancho el escenario puede ser más alto sin comerse la pantalla. */
   body:not(.game-mode) .stage{--stage-h-budget:clamp(240px,32vh,340px)}
   body:not(.game-mode) .sprite-choices{grid-template-columns:repeat(5,1fr)}
@@ -1496,6 +1512,26 @@ body.game-mode .sprite-bubble{font-size:calc(14px * var(--bz,1));bottom:46px}
         <button type="button" class="more-blocks" id="newVarBtn">
           <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>
           <span data-t="newVar">Nueva variable</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- LISTAS -->
+    <section class="card" id="listsCard">
+      <button type="button" class="section-head" data-collapse="listsCard" aria-expanded="true" aria-controls="listsBody">
+        <span class="section-icon"><svg class="ic" aria-hidden="true"><use href="#i-list"></use></svg></span>
+        <span class="section-titles">
+          <span class="s-title" data-t="listsTitle">Listas</span>
+          <span class="s-sub" data-t="listsHint">Muchos valores bajo un mismo nombre</span>
+        </span>
+        <span class="badge" id="listsCount">0</span>
+        <svg class="ic chev" aria-hidden="true"><use href="#i-chevron"></use></svg>
+      </button>
+      <div class="section-body" id="listsBody">
+        <div class="vars-list" id="listsList"></div>
+        <button type="button" class="more-blocks" id="newListBtn">
+          <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>
+          <span data-t="newList">Nueva lista</span>
         </button>
       </div>
     </section>

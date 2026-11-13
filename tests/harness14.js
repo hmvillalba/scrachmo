@@ -327,6 +327,64 @@ window.addEventListener('load', function () {
       check('grafo_de_mensajes_sano',
         conNombres.project.targets.every(t => graphProblems(t).length === 0));
 
+      /* ============ 9. listas con nombre ============
+         Cada nombre se declara UNA vez en el Stage con su contenido y un id
+         estable. Los seis opcodes apuntan al id de LA lista elegida, y el
+         nombre nunca se cuela en ITEM/INDEX: si eso pasa, en Scratch el valor
+         que se agrega es «inventario» en vez de «escudo». */
+      lists = { inventario: ['espada', 4], equipo: [] };
+      const addConLargo = { id: 'li1', type: 'list_add', val: '0,inventario' };
+      addConLargo.reps = [{ id: 'li1r', type: 'rep_list_len', val: 'inventario' }];
+      const addConItem = { id: 'li2', type: 'list_add', val: '0,inventario' };
+      addConItem.reps = [{ id: 'li2r', type: 'rep_list_item', val: '1,inventario' }];
+      sprites = [make('L1', [
+        { id: 'li0', type: 'when_flag' },
+        { id: 'li3', type: 'list_add', val: 'escudo,inventario' },
+        { id: 'li4', type: 'list_del', val: '1,inventario' },
+        { id: 'li5', type: 'list_replace', val: 'hacha,2,equipo' },
+        { id: 'li6', type: 'list_clear', val: 'equipo' },
+        addConLargo, addConItem
+      ])];
+      selectedSpriteId = sprites[0].id;
+      const conListas = await sb3Build();
+      const stageL = conListas.project.targets[0].lists || {};
+      const bloquesL = {};
+      conListas.project.targets.forEach(t => {
+        Object.keys(t.blocks || {}).forEach(id => { bloquesL[id] = t.blocks[id]; });
+      });
+      const porOpcode = op => Object.keys(bloquesL)
+        .map(id => bloquesL[id]).filter(b => b.opcode === op);
+      const camposLista = Object.keys(bloquesL).map(id => bloquesL[id])
+        .filter(b => b.fields && b.fields.LIST).map(b => b.fields.LIST);
+      check('listas_declaradas_con_su_contenido',
+        Object.keys(stageL).some(k => stageL[k][0] === 'inventario' &&
+          stageL[k][1].length === 2 && stageL[k][1][0] === 'espada' && stageL[k][1][1] === '4') &&
+        Object.keys(stageL).some(k => stageL[k][0] === 'equipo' && stageL[k][1].length === 0));
+      check('un_id_por_nombre_de_lista', Object.keys(stageL).length === 2 &&
+        new Set(Object.keys(stageL).map(k => stageL[k][0])).size === 2);
+      check('ids_de_lista_declarados', camposLista.length > 0 &&
+        camposLista.every(f => Object.prototype.hasOwnProperty.call(stageL, f[1])));
+      check('nombre_y_id_de_lista_coherentes', camposLista.every(f => stageL[f[1]][0] === f[0]));
+      check('seis_opcodes_de_lista',
+        ['data_addtolist', 'data_deleteoflist', 'data_replaceitemoflist',
+          'data_clearlist', 'data_lengthoflist', 'data_itemoflist']
+          .every(op => porOpcode(op).length > 0));
+      check('anadir_lleva_el_valor_no_el_nombre', porOpcode('data_addtolist')
+        .some(b => b.inputs.ITEM && b.inputs.ITEM[1] && b.inputs.ITEM[1][1] === 'escudo'));
+      check('borrar_lleva_la_posicion_no_el_nombre', porOpcode('data_deleteoflist')
+        .every(b => b.inputs.INDEX && b.inputs.INDEX[1] && b.inputs.INDEX[1][1] === '1'));
+      check('reemplazar_lleva_valor_y_posicion', porOpcode('data_replaceitemoflist')
+        .every(b => b.inputs.ITEM[1][1] === 'hacha' && b.inputs.INDEX[1][1] === '2'));
+      check('vaciar_no_tiene_casillas', porOpcode('data_clearlist')
+        .every(b => !b.inputs.ITEM && !b.inputs.INDEX));
+      check('reportero_de_largo_anidado', porOpcode('data_lengthoflist')
+        .some(b => b.fields.LIST[0] === 'inventario' && !!b.parent));
+      check('reportero_de_elemento_anidado', porOpcode('data_itemoflist')
+        .some(b => b.fields.LIST[0] === 'inventario' &&
+          b.inputs.INDEX && b.inputs.INDEX[1][1] === '1' && !!b.parent));
+      check('grafo_de_listas_sano',
+        conListas.project.targets.every(t => graphProblems(t).length === 0));
+
       /* El botón existe y está enganchado. */
       check('boton_sb3', !!document.getElementById('sb3Btn') &&
         typeof exportSb3 === 'function');

@@ -28,6 +28,14 @@ const store = {
 const MSG_DEFAULT = 'mensaje';
 const MSG_NEW = '__new__';
 
+/* Listas con nombre. LIST_DEFAULT mantiene vivos los bloques viejos que no
+   guardaban nombre. LIST_NEW es el centinela del desplegable «Nueva lista…»:
+   es DISTINTO del de mensajes para que un cambio en un <select> nunca pueda
+   confundirse, y jamás se guarda en un bloque. Los nombres no llevan comas
+   porque los bloques de varios huecos guardan sus valores como "a,b". */
+const LIST_DEFAULT = 'lista';
+const LIST_NEW = '__newlist__';
+
 /* ---------------- texts ---------------- */
 const UI = {
   es: {
@@ -607,6 +615,29 @@ const BLOCKS = [
     n: L('Mostrar variables', 'Show variables', 'Mostrar variáveis', 'Montrer les variables'),
     d: L('Muestra todas las variables y sus valores.', 'Lists all variables and their values.', 'Mostra todas as variáveis e valores.', 'Affiche toutes les variables.')
   },
+  /* Listas con nombre. pickAt dice CUÁL hueco es el desplegable: el resto
+     sigue siendo texto. El orden de los huecos es IDÉNTICO en los 4 idiomas
+     porque node.val guarda "valor,nombre" y cambiarlo traduciría los datos. */
+  {
+    id: 'list_add', cat: 'vars', icon: 'plus', def: '1,' + LIST_DEFAULT, w: 62, pick: 'lists', pickAt: 1,
+    n: L('Añadir {v} a {x}', 'Add {v} to {x}', 'Adicionar {v} a {x}', 'Ajouter {v} à {x}'),
+    d: L('Agrega un valor al final de la lista elegida.', 'Adds a value at the end of the chosen list.', 'Adiciona um valor no fim da lista escolhida.', 'Ajoute une valeur à la fin de la liste choisie.')
+  },
+  {
+    id: 'list_del', cat: 'vars', icon: 'trash', def: '1,' + LIST_DEFAULT, w: 62, pick: 'lists', pickAt: 1,
+    n: L('Borrar {v} de {x}', 'Delete {v} from {x}', 'Apagar {v} de {x}', 'Supprimer {v} de {x}'),
+    d: L('Borra el elemento de esa posición (la primera es 1).', 'Deletes the item at that position (the first one is 1).', 'Apaga o item dessa posição (a primeira é 1).', 'Supprime l’élément à cette position (la première est 1).')
+  },
+  {
+    id: 'list_replace', cat: 'vars', icon: 'edit', def: '1,1,' + LIST_DEFAULT, w: 62, pick: 'lists', pickAt: 2,
+    n: L('Poner {v} en {x} de {y}', 'Put {v} at {x} of {y}', 'Pôr {v} em {x} de {y}', 'Mettre {v} en {x} de {y}'),
+    d: L('Cambia el elemento de esa posición por el valor.', 'Replaces the item at that position with the value.', 'Troca o item dessa posição pelo valor.', 'Remplace l’élément à cette position par la valeur.')
+  },
+  {
+    id: 'list_clear', cat: 'vars', icon: 'list', def: LIST_DEFAULT, w: 104, pick: 'lists',
+    n: L('Vaciar {v}', 'Clear {v}', 'Esvaziar {v}', 'Vider {v}'),
+    d: L('Deja la lista elegida sin ningún valor.', 'Removes every value from the chosen list.', 'Deixa a lista escolhida sem nenhum valor.', 'Vide la liste choisie.')
+  },
   {
     id: 'when_msg', cat: 'multi', icon: 'message', hat: 1,
     def: MSG_DEFAULT, w: 112, pick: 'messages',
@@ -648,6 +679,16 @@ const BLOCKS = [
     id: 'rep_var', cat: 'ops', icon: 'box', rep: 1, repName: 1, def: 'vidas', w: 76,
     n: L('Variable {v}', 'Variable {v}', 'Variável {v}', 'Variable {v}'),
     d: L('Devuelve el valor de la variable que escribas.', 'Returns the value of the variable you type.', 'Devolve o valor da variável que você escrever.', 'Renvoie la valeur de la variable indiquée.')
+  },
+  {
+    id: 'rep_list_len', cat: 'ops', icon: 'list', rep: 1, def: LIST_DEFAULT, w: 104, pick: 'lists',
+    n: L('Largo de {v}', 'Length of {v}', 'Tamanho de {v}', 'Longueur de {v}'),
+    d: L('Devuelve cuántos valores tiene la lista.', 'Returns how many values the list holds.', 'Devolve quantos valores a lista tem.', 'Renvoie le nombre de valeurs de la liste.')
+  },
+  {
+    id: 'rep_list_item', cat: 'ops', icon: 'list', rep: 1, def: '1,' + LIST_DEFAULT, w: 62, pick: 'lists', pickAt: 1,
+    n: L('Elemento {v} de {x}', 'Item {v} of {x}', 'Item {v} de {x}', 'Élément {v} de {x}'),
+    d: L('Devuelve el valor de esa posición (la primera es 1); fuera de la lista da 0.', 'Returns the value at that position (the first one is 1); 0 when out of range.', 'Devolve o valor dessa posição (a primeira é 1); fora da lista dá 0.', 'Renvoie la valeur à cette position (la première est 1) ; 0 hors de la liste.')
   },
   {
     id: 'rep_random', cat: 'ops', icon: 'dice', rep: 1, def: '1,10', w: 52,
@@ -721,6 +762,16 @@ const UI_EXTRA = {
     msgNew: 'Nuevo mensaje…', msgNameTitle: 'Nombre del mensaje',
     msgNameHint: 'Hasta 24 caracteres. Los guiones con el mismo nombre se despiertan juntos.',
     msgBadName: 'Ese nombre no sirve',
+    listNew: 'Nueva lista…', listNameTitle: 'Nombre de la lista',
+    listNameHint: 'Hasta 24 caracteres, sin comas. Se comparte entre todos los bloques de lista.',
+    listBadName: 'Ese nombre no sirve',
+    listsTitle: 'Listas', listsHint: 'Muchos valores bajo un mismo nombre',
+    newList: 'Nueva lista', listsEmpty: 'Todavía no hay listas',
+    listsEmptyDesc: 'Creá una para guardar puntajes, nombres o pasos.',
+    listCreated: 'Lista creada', listDeleted: 'Lista borrada', deleteList: 'Borrar lista',
+    listAddPlaceholder: 'Nuevo valor', listAddItem: 'Añadir valor',
+    listDelItem: 'Borrar valor', listFull: 'La lista está llena (200 valores)',
+    listItems: 'valores',
     noFlagScripts: 'Ningún personaje tiene «al presionar bandera»: agregá ese sombrero para que Ejecutar arranque',
     padTitle: 'Controles',
     padUp: 'Arriba',
@@ -859,6 +910,16 @@ const UI_EXTRA = {
     msgNew: 'New message…', msgNameTitle: 'Message name',
     msgNameHint: 'Up to 24 characters. Scripts with the same name wake up together.',
     msgBadName: 'That name is not valid',
+    listNew: 'New list…', listNameTitle: 'List name',
+    listNameHint: 'Up to 24 characters, no commas. Shared by every list block.',
+    listBadName: 'That name is not valid',
+    listsTitle: 'Lists', listsHint: 'Many values under one name',
+    newList: 'New list', listsEmpty: 'No lists yet',
+    listsEmptyDesc: 'Create one to keep scores, names or steps.',
+    listCreated: 'List created', listDeleted: 'List deleted', deleteList: 'Delete list',
+    listAddPlaceholder: 'New value', listAddItem: 'Add value',
+    listDelItem: 'Delete value', listFull: 'The list is full (200 values)',
+    listItems: 'items',
     noFlagScripts: 'No character has “when green flag clicked”: add that hat so Run starts',
     padTitle: 'Controls',
     padUp: 'Up',
@@ -997,6 +1058,16 @@ const UI_EXTRA = {
     msgNew: 'Nova mensagem…', msgNameTitle: 'Nome da mensagem',
     msgNameHint: 'Até 24 caracteres. Os scripts com o mesmo nome acordam juntos.',
     msgBadName: 'Esse nome não serve',
+    listNew: 'Nova lista…', listNameTitle: 'Nome da lista',
+    listNameHint: 'Até 24 caracteres, sem vírgulas. Compartilhada por todos os blocos de lista.',
+    listBadName: 'Esse nome não serve',
+    listsTitle: 'Listas', listsHint: 'Muitos valores sob um mesmo nome',
+    newList: 'Nova lista', listsEmpty: 'Ainda não há listas',
+    listsEmptyDesc: 'Crie uma para guardar pontuações, nomes ou passos.',
+    listCreated: 'Lista criada', listDeleted: 'Lista apagada', deleteList: 'Apagar lista',
+    listAddPlaceholder: 'Novo valor', listAddItem: 'Adicionar valor',
+    listDelItem: 'Apagar valor', listFull: 'A lista está cheia (200 valores)',
+    listItems: 'valores',
     noFlagScripts: 'Nenhum personagem tem “ao clicar na bandeira”: adicione esse chapéu para que Executar inicie',
     padTitle: 'Controles',
     padUp: 'Cima',
@@ -1135,6 +1206,16 @@ const UI_EXTRA = {
     msgNew: 'Nouveau message…', msgNameTitle: 'Nom du message',
     msgNameHint: 'Jusqu’à 24 caractères. Les scripts du même nom se réveillent ensemble.',
     msgBadName: 'Ce nom n’est pas valide',
+    listNew: 'Nouvelle liste…', listNameTitle: 'Nom de la liste',
+    listNameHint: 'Jusqu’à 24 caractères, sans virgules. Partagée par tous les blocs de liste.',
+    listBadName: 'Ce nom n’est pas valide',
+    listsTitle: 'Listes', listsHint: 'Plusieurs valeurs sous un même nom',
+    newList: 'Nouvelle liste', listsEmpty: 'Pas encore de listes',
+    listsEmptyDesc: 'Créez-en une pour garder scores, noms ou étapes.',
+    listCreated: 'Liste créée', listDeleted: 'Liste supprimée', deleteList: 'Supprimer la liste',
+    listAddPlaceholder: 'Nouvelle valeur', listAddItem: 'Ajouter la valeur',
+    listDelItem: 'Supprimer la valeur', listFull: 'La liste est pleine (200 valeurs)',
+    listItems: 'valeurs',
     noFlagScripts: 'Aucun personnage n’a « quand le drapeau est cliqué » : ajoutez ce chapeau pour que Exécuter démarre',
     padTitle: 'Commandes',
     padUp: 'Haut',

@@ -14,13 +14,14 @@ Sem frameworks, sem dependências, sem build: arquivos estáticos que funcionam 
 
 ### Blocos como no Scratch
 
-- 53 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis e **mensagens locais com nome**.
+- 57 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis, **listas com nome** e **mensagens locais com nome**.
+- **Listas com nome**: crie várias listas (por exemplo «inventário»), escolha o nome num menu e use **adicionar**, **apagar por posição**, **pôr na posição** e **esvaziar**, além dos repórteres **tamanho de** e **item de**. Os valores aparecem e são editados no seu próprio cartão, são guardados com o projeto e viajam no `.sb3` com um id por nome.
 - Blocos chapéu (bandeira verde, toque, tecla, agitar o celular, receber mensagem, pontuação) e blocos C: `Repetir {v} vezes`, `Para sempre` e condicionais com `se... senão`.
 - Aninhamento de verdade: solte um bloco **em cima** de um `Repetir`, `Para sempre` ou `se` e ele fica dentro —também na barra «senão»—, ou mire no encaixe se preferir. Com travas que impedem aninhar um bloco dentro de si mesmo ou colocar um chapéu dentro.
 - **Vários scripts por personagem**: cada chapéu inicia um script independente e só rodam os que correspondem ao evento ocorrido. Um mesmo personagem pode reagir à bandeira, a uma tecla e a um toque ao mesmo tempo.
 - Encaixes tipo quebra-cabeça na parte de cima dos blocos e destaque visível do bloco em execução.
 - **`Ir para x: {x} y: {y}`**: dois campos numéricos num mesmo bloco para teletransportar o personagem para uma coordenada exata. O mundo mede 480 × 360 unidades de fábrica, mas o centro fica a **85 unidades da borda** para que o desenho nunca seja cortado: com o tamanho e a rotação de fábrica, x vai de -155 a 155 e y de -95 a 95. Esses limites são recalculados com o tamanho do personagem e com o tamanho do palco, e os campos os mostram. É a forma de fixar a posição de partida de um script mesmo que o estado final da execução anterior tenha ficado salvo como estado de projeto.
-- **Repórteres: 11 blocos que devolvem um valor**. Os encaixes de movimento, aparência, controle, operadores, variáveis e pontuação têm um botão **ƒ** para colocar um valor calculado em vez de um número fixo: `pontos`, `posição x`, `posição y`, `variável {v}`, `cronômetro`, `aleatório {x} a {y}`, `{x} + {y}`, `{x} − {y}`, `{x} × {y}`, `{x} ÷ {y}` e `{x} > {y}`. Podem ser **aninhados** —`Mover ((posição x) + 10)`, `se (pontos > 10) então`, `Repetir (aleatório 2 a 5)`— e o **×** do chip volta ao texto livre sem perder o que você tinha escrito. Não são enunciados: não aparecem na paleta nem podem ser adicionados soltos, vivem dentro do encaixe de outro bloco.
+- **Repórteres: 13 blocos que devolvem um valor**. Os encaixes de movimento, aparência, controle, operadores, variáveis e pontuação têm um botão **ƒ** para colocar um valor calculado em vez de um número fixo: `pontos`, `posição x`, `posição y`, `variável {v}`, `cronômetro`, `aleatório {x} a {y}`, `{x} + {y}`, `{x} − {y}`, `{x} × {y}`, `{x} ÷ {y}`, `{x} > {y}`, `tamanho de {v}` e `item {v} de {x}`. Podem ser **aninhados** —`Mover ((posição x) + 10)`, `se (pontos > 10) então`, `Repetir (aleatório 2 a 5)`— e o **×** do chip volta ao texto livre sem perder o que você tinha escrito. Não são enunciados: não aparecem na paleta nem podem ser adicionados soltos, vivem dentro do encaixe de outro bloco.
 
 ### Editor confortável em tela pequena
 
@@ -29,7 +30,7 @@ Sem frameworks, sem dependências, sem build: arquivos estáticos que funcionam 
 - **Desfazer / Refazer**: botões e atalhos `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` e `Ctrl/Cmd+Y`. O histórico guarda até 60 instantâneos e não interfere no desfazer de texto dentro de um campo.
 - **Dois zooms independentes, e os dois aumentam o conteúdo e não a janela**: o da **área de código** (70 % a 160 % com `− / +`, tocando a porcentagem você volta a 100 %) escala os blocos dentro de um painel cuja altura você escolhe arrastando a alça de baixo (ou com as setas, com a alça em foco); o do **palco** (mesma escala, na linha de baixo) aproxima a câmera, então crescem os personagens, o fundo e os balões enquanto a janela do palco mede sempre o mesmo. Os dois são lembrados entre sessões, não viajam no projeto e a linha de inserção se corrige sozinha ao arrastar com zoom.
 - Layout mobile-first: painéis verticais empilháveis e recolhíveis, respeitando as *safe areas* em telas com notch.
-- **Em tela larga (a partir de 900 px) fica em duas colunas**: o palco e os personagens à esquerda, o código com a paleta de blocos à direita, e variáveis e projeto embaixo. No celular continua empilhando igual, na mesma ordem de sempre (Palco → Personagens → Código → Variáveis → Projeto → Blocos): as colunas se «dissolvem» com `display:contents` e a ordem é decidida pelo `order`. O modo jogo fica de fora: ali se vê só o campo, com a proporção do jogo e não a da tela. Num celular deitado, margens e palco diminuem para caber mais.
+- **Em tela larga (a partir de 900 px) fica em duas colunas**: o palco e os personagens à esquerda, o código com a paleta de blocos à direita, e variáveis e projeto embaixo. No celular continua empilhando igual, na mesma ordem de sempre (Palco → Personagens → Código → Variáveis → Listas → Projeto → Blocos): as colunas se «dissolvem» com `display:contents` e a ordem é decidida pelo `order`. O modo jogo fica de fora: ali se vê só o campo, com a proporção do jogo e não a da tela. Num celular deitado, margens e palco diminuem para caber mais.
 - Interação 100% por toque (pointer events): toque para adicionar, arraste pelo ícone para reordenar ou aninhar. Também há reordenação pelo teclado.
 
 ### Palco e personagens
@@ -154,9 +155,10 @@ O controle resolve o polegar, mas para mover um personagem em quatro direções 
 | `Esperar`, `Repetir`, `Para sempre`, `se`, `se/senão`, `Se toca a borda`, `Se toca` | `control_*` e `sensing_touchingobject` |
 | `Criar clone de`, `Ao começar como clone`, `Apagar este clone` | `control_create_clone_of`, `control_start_as_clone`, `control_delete_this_clone` |
 | `pontos` e as variáveis | variáveis globais do *Stage* |
+| `Adicionar a`, `Apagar de`, `Pôr em`, `Esvaziar`, `Tamanho de`, `Item de` (listas) | blocos `data_*` de lista, com uma lista declarada por nome |
 | Agitar, inclinação, vibrar, criar/mostrar variáveis, amigos, `senão` solto, `apagar o clone que toco` e o aviso a outras abas | **sem equivalente** |
 
-- **As mensagens viajam**: cada nome é exportado como um *broadcast* distinto, com o seu id declarado no *Stage*. O que não tem equivalente é o aviso entre abas do mesmo navegador, exclusivo do ScrachMo.
+- **As listas e as mensagens viajam**: cada lista é declarada uma vez no *Stage* com o seu conteúdo, e cada nome é exportado como um *broadcast* distinto com o seu id declarado. O que não tem equivalente é o aviso entre abas do mesmo navegador, exclusivo do ScrachMo.
 - **O que fica de fora é avisado, não se perde em silêncio**: ao terminar, o app diz quantos blocos não conseguiu traduzir, e cada personagem afetado leva um **comentário colado ao seu primeiro bloco** dentro do Scratch com a lista. Assim o projeto abre, roda e se vê onde precisa ser completado à mão.
 - **Duas diferenças a ter em conta**: uma melodia toca **uma vez** no Scratch (não em loop, porque um laço dentro do script o travaria) e o rebote fica com o bloco nativo do Scratch, que usa a caixa do traje e não o círculo que o ScrachMo usa. O caminho inverso (abrir um `.sb3` no ScrachMo) não está implementado.
 
@@ -236,7 +238,7 @@ Atenção: para instalar e para o modo offline é preciso `https` (ou `localhost
 | `app.html` | **O editor**: toda a interface, layout, estilos, ícones SVG e painéis. É a URL direta e o `start_url` do PWA. |
 | `boot.js` | Registro do service worker fora do HTML (a CSP exige), protegido para `file://`. |
 | `engine.js` | O motor: render dos blocos, drag & drop por toque, execução, personagens, variáveis, eventos, modais acessíveis e projeto. |
-| `data.js` | Catálogo de blocos (53 enunciados + 11 repórteres), categorias, versão visível e textos da interface (4 idiomas). |
+| `data.js` | Catálogo de blocos (57 enunciados + 13 repórteres), categorias, versão visível e textos da interface (4 idiomas). |
 | `manifest.webmanifest` | Ficha de instalação: nome, cores, `display: standalone`, `start_url: ./app.html` e ícones. |
 | `sw.js` | Service worker: guarda a landing e o app para abrirem sem internet, e serve `app.html` aos links `?p=`. O nome do cache leva a versão e uma impressão digital dos seis arquivos do runtime. |
 | `vercel.json` | Cabeçalhos da publicação: CSP estrita, `nosniff`, `Referrer-Policy` e os arquivos sem cache de CDN. |
@@ -252,7 +254,7 @@ Quer adicionar um bloco novo? É uma entrada em `data.js` e a sua lógica em `en
 
 ## Verificação
 
-O projeto tem **1244 verificações por idioma, 4976 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), a landing e o controle na tela com a inclinação.
+O projeto tem **1332 verificações por idioma, 5328 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), as **listas com nome** (4 blocos, 2 repórteres, um menu por bloco, execução por nome e uma declaração por lista no `.sb3`), a landing e o controle na tela com a inclinação.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -260,7 +262,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # paridade de textos + verificações estáticas
 node tests/pwa-check.js          # manifest, ícones e rotas servidas
 node tests/pwa-sw.js             # lógica do service worker
-node tests/run.js minha-corrida  # 26 cenários × 4 idiomas no Chrome headless
+node tests/run.js minha-corrida  # 27 cenários × 4 idiomas no Chrome headless
 ```
 
 `tests/build.js` monta as páginas de teste e o link compartilhado; `tests/run.js` abre o Chrome com um perfil isolado por suíte e por idioma, e conta `PASS` / `FAIL` / `ERROR`. No GitHub Actions, `.github/workflows/test.yml` repete o mesmo em cada push e pull request.
@@ -296,7 +298,7 @@ Se algo falhar, anote **modelo, versão do iOS e se aconteceu no Safari ou no ap
 
 Melhor honesto do que vendedor:
 
-- **A exportação para `.sb3` é de ida, e não é completa**: o ScrachMo abre os seus próprios formatos (`.scmo` e `?p=`, que são JSON dele) mas **não pode importar um `.sb3`**. E do lado da exportação há blocos sem equivalente no Scratch (agitar, inclinação, vibrar, criar/mostrar variáveis, amigos e o `senão` solto): não são inventados, ficam de fora e são avisados num comentário dentro do projeto. As **mensagens com nome** sim são exportadas, cada uma como um *broadcast* com o seu id; o que não viaja é o aviso a outras abas do navegador, que não existe no Scratch. E se você aumentou o palco, o aviso também diz: o do Scratch mede sempre 480 × 360, então o que ficar fora do retângulo original não vai aparecer. Além disso uma melodia toca **uma vez** no Scratch em vez de ficar em loop, e o rebote usa a caixa do traje do Scratch e não o círculo do ScrachMo, então um personagem muito comprido pode rebater um pouco antes ou depois.
+- **A exportação para `.sb3` é de ida, e não é completa**: o ScrachMo abre os seus próprios formatos (`.scmo` e `?p=`, que são JSON dele) mas **não pode importar um `.sb3`**. E do lado da exportação há blocos sem equivalente no Scratch (agitar, inclinação, vibrar, criar/mostrar variáveis, amigos e o `senão` solto): não são inventados, ficam de fora e são avisados num comentário dentro do projeto. As **listas com nome** e as **mensagens com nome** sim são exportadas: cada lista é declarada uma vez no *Stage* com o seu conteúdo, e cada mensagem vira um *broadcast* com o seu id; o que não viaja é o aviso a outras abas do navegador, que não existe no Scratch. E se você aumentou o palco, o aviso também diz: o do Scratch mede sempre 480 × 360, então o que ficar fora do retângulo original não vai aparecer. Além disso uma melodia toca **uma vez** no Scratch em vez de ficar em loop, e o rebote usa a caixa do traje do Scratch e não o círculo do ScrachMo, então um personagem muito comprido pode rebater um pouco antes ou depois.
 - **As colisões não são pixel a pixel**: cada personagem é um círculo de raio 26 a 100 % de tamanho, escalado pelo seu tamanho. É rápido e estável, mas um personagem muito comprido colide antes ou depois do que o desenho sugere, e não há detecção de cor nem de «tocando o ponteiro».
 - **O cronômetro vive na sessão**: conta desde que você abriu o projeto (ou desde o último `Reiniciar cronômetro`), não é salvo no `.scmo`, não reinicia com *Executar* e não para com *Parar*. Se o jogo precisa de um tempo, reinicie no começo do script.
 - **Não é possível importar sons nem gravar com o microfone**: o catálogo é fechado (8 sons e 3 melodias sintetizadas) e não há editor de áudio. Adicionar sons próprios implicaria arquivos ou gravação, com o seu custo no peso do projeto e no cache do PWA.

@@ -32,11 +32,11 @@ window.addEventListener('load', function () {
       check('sin_errores_arranque', errs.length === 0);
 
       /* ============ 1. catálogo ============ */
-      check('paleta_53', PALETTE_BLOCKS.length === 53);
+      check('paleta_57', PALETTE_BLOCKS.length === 57);
       check('bloques_nuevos', ['bounce', 'if_edge', 'if_touch', 'timer_reset']
         .every(id => !!BYID[id] && PALETTE_BLOCKS.some(b => b.id === id)));
       check('reportero_cronometro', !!BYID.rep_timer && BYID.rep_timer.rep === 1);
-      check('reporteros_11', REPORTER_BLOCKS.length === 11);
+      check('reporteros_13', REPORTER_BLOCKS.length === 13);
       check('condicionales_con_cuerpo',
         BYID.if_edge.c === 1 && BYID.if_touch.c === 1 && !BYID.bounce.c);
       check('categorias', BYID.bounce.cat === 'motion' &&

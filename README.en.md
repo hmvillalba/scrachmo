@@ -14,13 +14,14 @@ No frameworks, no dependencies, no build step: static files that work in any mod
 
 ### Blocks like Scratch
 
-- 53 blocks in 9 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables and **named local messages**.
+- 57 blocks in 9 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables, **named lists** and **named local messages**.
+- **Named lists**: create several lists (for instance "inventory"), pick the name from a dropdown and use **add**, **delete by position**, **replace at position** and **clear**, plus the **length of** and **item of** reporters. Values are shown and edited in their own card, are saved with the project and travel to `.sb3` with one id per name.
 - Hat blocks (green flag, tap, key, shake the phone, receive message, score) and C blocks: `Repeat {v} times`, `Forever` and conditionals with `if... else`.
 - Real nesting: drop a block **on top of** a `Repeat`, `Forever` or `if` and it goes inside —also onto the "else" bar—, or aim at the slot if you prefer. With guards that stop you nesting a block inside itself or putting a hat block inside.
 - **Several scripts per sprite**: each hat starts an independent script and only the ones that match the event that happened run. A single sprite can react to the flag, a key and a tap at the same time.
 - Puzzle notches on the top of the blocks and visible highlighting of the block that is running.
 - **`Go to x: {x} y: {y}`**: two numeric slots in one block to teleport the sprite to an exact coordinate. The world is 480 × 360 units out of the box, but the centre stays **85 units away from the edge** so the drawing is never cropped: with the factory size and rotation, x runs from -155 to 155 and y from -95 to 95. Those limits are recomputed from the sprite's size and the stage size, and the slots show them. It is the way to fix a script's starting position even when the final state of the previous run was saved as the design state.
-- **Reporters: 11 blocks that return a value**. The slots for motion, looks, control, operators, variables and score have a **ƒ** button to put a calculated value instead of a fixed number: `score`, `x position`, `y position`, `variable {v}`, `timer`, `pick random {x} to {y}`, `{x} + {y}`, `{x} − {y}`, `{x} × {y}`, `{x} ÷ {y}` and `{x} > {y}`. They can be **nested** —`Move ((x position) + 10)`, `if (score > 10) then`, `Repeat (pick random 2 to 5)`— and the chip's **×** takes you back to free text without losing what you had written. They are not statements: they do not appear in the palette and cannot be added on their own, they live inside another block's slot.
+- **Reporters: 13 blocks that return a value**. The slots for motion, looks, control, operators, variables and score have a **ƒ** button to put a calculated value instead of a fixed number: `score`, `x position`, `y position`, `variable {v}`, `timer`, `pick random {x} to {y}`, `{x} + {y}`, `{x} − {y}`, `{x} × {y}`, `{x} ÷ {y}`, `{x} > {y}`, `length of {v}` and `item {v} of {x}`. They can be **nested** —`Move ((x position) + 10)`, `if (score > 10) then`, `Repeat (pick random 2 to 5)`— and the chip's **×** takes you back to free text without losing what you had written. They are not statements: they do not appear in the palette and cannot be added on their own, they live inside another block's slot.
 
 ### A comfortable editor on a small screen
 
@@ -29,7 +30,7 @@ No frameworks, no dependencies, no build step: static files that work in any mod
 - **Undo / Redo**: buttons and the shortcuts `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` and `Ctrl/Cmd+Y`. The history keeps up to 60 snapshots and does not interfere with text undo inside an input.
 - **Two independent zooms, and both enlarge the content rather than the window**: the **code area** zoom (70 % to 160 % with `− / +`, tapping the percentage takes you back to 100 %) scales the blocks inside a panel whose height you choose by dragging the handle at the bottom (or with the arrow keys, with the handle focused); the **stage** zoom (same scale, in the bottom row) moves the camera closer, so sprites, background and speech bubbles grow while the stage window always measures the same. Both are remembered between sessions, neither travels inside the project, and the insertion line corrects itself when you drag with zoom applied.
 - Mobile-first layout: vertical panels that stack and collapse, respecting the *safe areas* on screens with a notch.
-- **On a wide screen (from 900 px) it switches to two columns**: the stage and the sprites on the left, the code with the block palette on the right, and variables and project below. On a phone it still stacks the same way, in the usual order (Stage → Sprites → Code → Variables → Project → Blocks): the columns "dissolve" with `display:contents` and `order` decides the sequence. Game mode stays out of it: there you see only the field, with the game's aspect ratio and not the screen's. On a phone lying down, margins and stage shrink so more fits.
+- **On a wide screen (from 900 px) it switches to two columns**: the stage and the sprites on the left, the code with the block palette on the right, and variables and project below. On a phone it still stacks the same way, in the usual order (Stage → Sprites → Code → Variables → Lists → Project → Blocks): the columns "dissolve" with `display:contents` and `order` decides the sequence. Game mode stays out of it: there you see only the field, with the game's aspect ratio and not the screen's. On a phone lying down, margins and stage shrink so more fits.
 - 100% touch interaction (pointer events): tap to add, drag by the icon to reorder or nest. There is also keyboard reordering.
 
 ### Stage and sprites
@@ -154,9 +155,10 @@ The gamepad solves the thumb, but to move a sprite in four directions **tilting 
 | `Wait`, `Repeat`, `Forever`, `if`, `if/else`, `If on the edge`, `If touching` | `control_*` and `sensing_touchingobject` |
 | `Create clone of`, `When I start as a clone`, `Delete this clone` | `control_create_clone_of`, `control_start_as_clone`, `control_delete_this_clone` |
 | `score` and the variables | global variables of the *Stage* |
+| `Add to`, `Delete from`, `Put at`, `Clear`, `Length of`, `Item of` (lists) | `data_*` list blocks, with one list declared per name |
 | Shake, tilt, vibrate, create/show variables, friends, loose `else`, `delete the clone I'm touching` and the notice to other tabs | **no equivalent** |
 
-- **Messages do travel**: each name is exported as a separate Scratch *broadcast*, with its id declared on the *Stage*. What has no equivalent is the notice to other tabs of the same browser, which is ScrachMo-only.
+- **Lists and messages do travel**: each list is declared once on the *Stage* with its contents, and each name is exported as a separate Scratch *broadcast* with its id declared on the *Stage*. What has no equivalent is the notice to other tabs of the same browser, which is ScrachMo-only.
 - **What is left out is reported, not lost silently**: at the end the app says how many blocks it could not translate, and each affected sprite carries a **comment attached to its first block** inside Scratch with the list. That way the project opens, runs and shows where it has to be completed by hand.
 - **Two differences to keep in mind**: a melody plays **once** in Scratch (not looped, because a loop inside the script would hang it) and the bounce is left with Scratch's native block, which uses the costume's box and not the circle ScrachMo uses. The reverse path (opening an `.sb3` in ScrachMo) is not implemented.
 
@@ -236,7 +238,7 @@ Careful: installing and offline mode need `https` (or `localhost`); that is why 
 | `app.html` | **The editor**: the whole interface, layout, styles, SVG icons and panels. It is the direct URL and the PWA's `start_url`. |
 | `boot.js` | Service worker registration outside the HTML (the CSP requires it), guarded for `file://`. |
 | `engine.js` | The engine: block rendering, touch drag & drop, execution, sprites, variables, events, accessible modals and project. |
-| `data.js` | Block catalog (53 statements + 11 reporters), categories, visible version and interface texts (4 languages). |
+| `data.js` | Block catalog (57 statements + 13 reporters), categories, visible version and interface texts (4 languages). |
 | `manifest.webmanifest` | Install sheet: name, colours, `display: standalone`, `start_url: ./app.html` and icons. |
 | `sw.js` | Service worker: saves the landing and the app so they open without internet, and serves `app.html` to `?p=` links. The cache name carries the version and a fingerprint of the six runtime files. |
 | `vercel.json` | Deployment headers: strict CSP, `nosniff`, `Referrer-Policy` and the files without CDN cache. |
@@ -252,7 +254,7 @@ Want to add a new block? It is an entry in `data.js` and its logic in `engine.js
 
 ## Verification
 
-The project has **1244 automated checks per language, 4976 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), the landing page and the on-screen gamepad with tilt.
+The project has **1332 automated checks per language, 5328 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), **named lists** (4 blocks, 2 reporters, one dropdown per block, per-name execution and one declaration per list in `.sb3`), the landing page and the on-screen gamepad with tilt.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -260,7 +262,7 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # text parity + static checks
 node tests/pwa-check.js          # manifest, icons and served routes
 node tests/pwa-sw.js             # service worker logic
-node tests/run.js my-run         # 26 scenarios × 4 languages in headless Chrome
+node tests/run.js my-run         # 27 scenarios × 4 languages in headless Chrome
 ```
 
 `tests/build.js` builds the test pages and the shared link; `tests/run.js` launches Chrome with an isolated profile per suite and per language, and counts `PASS` / `FAIL` / `ERROR`. On GitHub Actions, `.github/workflows/test.yml` repeats the same thing on every push and pull request.
@@ -296,7 +298,7 @@ If something fails, write down **model, iOS version and whether it happened in S
 
 Better honest than a sales pitch:
 
-- **The `.sb3` export is one-way, and not complete**: ScrachMo opens its own formats (`.scmo` and `?p=`, which are its own JSON) but **cannot import an `.sb3`**. And on the export side there are blocks with no equivalent in Scratch (shake, tilt, vibrate, create/show variables, friends and the loose `else`): they are not invented, they are left out and reported in a comment inside the project. **Named messages are exported**, each one as a broadcast with its own id; what does not travel is the notice to other browser tabs, which Scratch has no concept of. And if you enlarged the stage, the notice says so too: Scratch's always measures 480 × 360, so whatever falls outside the original frame will not be visible. A melody also plays **once** in Scratch instead of looping, and the bounce uses Scratch's costume box rather than ScrachMo's circle, so a very elongated sprite may bounce a little earlier or later.
+- **The `.sb3` export is one-way, and not complete**: ScrachMo opens its own formats (`.scmo` and `?p=`, which are its own JSON) but **cannot import an `.sb3`**. And on the export side there are blocks with no equivalent in Scratch (shake, tilt, vibrate, create/show variables, friends and the loose `else`): they are not invented, they are left out and reported in a comment inside the project. **Named lists and named messages are exported**: each list is declared once on the *Stage* with its contents, and each message becomes a *broadcast* with its own id; what does not travel is the notice to other browser tabs, which Scratch has no concept of. And if you enlarged the stage, the notice says so too: Scratch's always measures 480 × 360, so whatever falls outside the original frame will not be visible. A melody also plays **once** in Scratch instead of looping, and the bounce uses Scratch's costume box rather than ScrachMo's circle, so a very elongated sprite may bounce a little earlier or later.
 - **Collisions are not pixel-perfect**: each sprite is a circle of radius 26 at 100 % size, scaled by its size. It is fast and stable, but a very elongated sprite collides earlier or later than the drawing suggests, and there is no colour or "touching the pointer" detection.
 - **The timer lives in the session**: it counts from when you opened the project (or from the last `Reset timer`), it is not saved in the `.scmo`, it does not reset with *Run* and it does not stop with *Stop*. If the game needs a time, reset it at the start of the script.
 - **Sounds cannot be imported and there is no microphone recording**: the catalog is closed (8 sounds and 3 synthesised melodies) and there is no audio editor. Adding your own sounds would mean files or recording, with its cost in project weight and in the PWA cache.

@@ -232,7 +232,7 @@ if (palRepetidos.length) {
 /* Layout ancho: dos columnas por CSS sin tocar el orden del celular. Si
    alguien borra el `display:contents` o los `order`, en el celular las
    tarjetas se desordenan (Variables y Proyecto antes que el código). */
-const CARDS_ORDEN = ['stageCard', 'spritesCard', 'codeCard', 'varsCard', 'toolsCard', 'blocksCard'];
+const CARDS_ORDEN = ['stageCard', 'spritesCard', 'codeCard', 'varsCard', 'listsCard', 'toolsCard', 'blocksCard'];
 if (!/id="colLeft"/.test(html) || !/id="colRight"/.test(html)) {
   ok = false; console.log('FAIL faltan las dos columnas del layout ancho');
 }
@@ -983,6 +983,92 @@ if (fs.existsSync(wfDir)) {
   }
   if (!/'harness24\.js'/.test(buildSrc)) {
     ok = false; console.log('FAIL tests/build.js no registra harness24.js');
+  }
+}
+
+/* ---------------- listas con nombre (P2.12, fase 2) ----------------
+   Antes sólo había variables (un nombre -> UN valor). El arnés 25 comprueba
+   en el navegador que las listas existen, se ejecutan y se guardan; esto
+   avisa antes, sin Chrome, si el catálogo, el centinela, el panel o el .sb3
+   se desarman. */
+{
+  const dataRaw3 = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const buildSrc2 = fs.readFileSync(path.join(__dirname, 'build.js'), 'utf8');
+  ['listNew', 'listNameTitle', 'listNameHint', 'listBadName', 'listsTitle',
+    'listsHint', 'newList', 'listsEmpty', 'listsEmptyDesc', 'listCreated',
+    'listDeleted', 'deleteList', 'listAddPlaceholder', 'listAddItem',
+    'listDelItem', 'listFull', 'listItems'].forEach(k => {
+    if (typeof ctx.EX.es[k] !== 'string' || !ctx.EX.es[k].length) {
+      ok = false; console.log('FAIL falta la clave UI_EXTRA.' + k + ' (listas con nombre)');
+    }
+  });
+  if (!/const\s+LIST_DEFAULT\s*=\s*'lista'/.test(dataRaw3) ||
+      !/const\s+LIST_NEW\s*=\s*'__newlist__'/.test(dataRaw3) ||
+      !/const\s+MSG_NEW\s*=\s*'__new__'/.test(dataRaw3)) {
+    ok = false; console.log('FAIL faltan LIST_DEFAULT / LIST_NEW o el centinela se mezcló con el de mensajes');
+  }
+  const pickAt = { list_add: 1, list_del: 1, list_replace: 2, list_clear: undefined,
+    rep_list_item: 1, rep_list_len: undefined };
+  Object.keys(pickAt).forEach(id => {
+    const def = ctx.BY[id];
+    if (!def || def.pick !== 'lists' || def.pickAt !== pickAt[id]) {
+      ok = false; console.log('FAIL ' + id + ' no tiene el pickAt correcto');
+    }
+  });
+  if (ctx.PB.filter(b => b.pick === 'lists').length !== 4 ||
+      ctx.ALLB.filter(b => b.rep && b.pick === 'lists').length !== 2) {
+    ok = false; console.log('FAIL el catálogo de listas no tiene 4 bloques y 2 reporteros');
+  }
+  ['normalizeLists', 'listRead', 'listData', 'listIndexOf', 'applyListBlock',
+    'renderLists', 'createList', 'deleteList', 'newListFor', 'listNameOf',
+    'sb3ListId'].forEach(fn => {
+    if (!new RegExp('function\\s+' + fn + '\\s*\\(').test(engine)) {
+      ok = false; console.log('FAIL falta ' + fn + '() de las listas con nombre');
+    }
+  });
+  /* Sin pickAt habría un <select> por casilla y «valor,nombre» se rompería. */
+  if (!/const isPick = !!def\.pick && \(def\.pickAt === undefined \? i === 0 : def\.pickAt === i\)/.test(engine) ||
+      !/if \(slots\.length > 1\) sel\.dataset\.xy = String\(i\)/.test(engine)) {
+    ok = false; console.log('FAIL blockContent() no respeta pickAt en un solo hueco');
+  }
+  /* Los nombres con coma partirían node.val en dos casillas. */
+  if (!/s\.indexOf\(','\) >= 0/.test(engine)) {
+    ok = false; console.log('FAIL cleanListName() ya no rechaza las comas');
+  }
+  if (!/kind === 'lists'/.test(engine) ||
+      !/nueva\.name\[l\] = UI\[l\]\.listNew/.test(engine) ||
+      !/kind === 'lists'\) return id === listName\(cur\)/.test(engine)) {
+    ok = false; console.log('FAIL la lista de nombres no es dinámica o «Nueva lista…» no está traducida');
+  }
+  /* El centinela abre el modal: jamás puede quedar guardado en un bloque. */
+  if (!/input\.value === LIST_NEW && isListNode/.test(engine) ||
+      !/sel\.value === LIST_NEW && isListNode/.test(engine) ||
+      !/newListFor\(sel\.dataset\.input\)/.test(engine) ||
+      !/listNameHint, 24\)/.test(engine)) {
+    ok = false; console.log('FAIL «Nueva lista…» no está protegido contra guardarse');
+  }
+  /* Estado de diseño: se guarda, se restaura y un proyecto viejo no rompe. */
+  if (!/lists: lists,/.test(engine) ||
+      !/lists = normalizeLists\(payload\.lists\)/.test(engine) ||
+      !/lists = \{\};/.test(engine)) {
+    ok = false; console.log('FAIL las listas no viajan en el guardado o no se limpian al borrar todo');
+  }
+  if (!/id="listsCard"/.test(html) || !/id="listsList"/.test(html) ||
+      !/id="newListBtn"/.test(html) || !/id="listsCount"/.test(html) ||
+      !/id="listForm"/.test(engine)) {
+    ok = false; console.log('FAIL falta la tarjeta de listas o su formulario');
+  }
+  /* Un .sb3 con un solo id para todas las listas las mezclaría en Scratch. */
+  if (!/stageLists/.test(engine) || !/usedLists/.test(engine) ||
+      !/allLists\.forEach\(nm =>/.test(engine) ||
+      !/stageLists\[sb3ListId\(nm\)\] = \[nm, listRead\(nm\)/.test(engine) ||
+      ['data_addtolist', 'data_deleteoflist', 'data_replaceitemoflist',
+        'data_clearlist', 'data_lengthoflist', 'data_itemoflist']
+        .some(op => engine.indexOf("'" + op + "'") < 0)) {
+    ok = false; console.log('FAIL el .sb3 no declara una lista por nombre o faltan opcodes');
+  }
+  if (!/'harness25\.js'/.test(buildSrc2)) {
+    ok = false; console.log('FAIL tests/build.js no registra harness25.js');
   }
 }
 

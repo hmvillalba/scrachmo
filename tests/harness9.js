@@ -30,8 +30,8 @@ window.addEventListener('load', function () {
       check('sin_errores_arranque', errs.length === 0);
 
       /* ============ 1. catálogo ============ */
-      check('reporteros_11', REPORTER_BLOCKS.length === 11);
-      check('paleta_53', PALETTE_BLOCKS.length === 53);
+      check('reporteros_13', REPORTER_BLOCKS.length === 13);
+      check('paleta_57', PALETTE_BLOCKS.length === 57);
       check('paleta_sin_reporteros', PALETTE_BLOCKS.every(b => !b.rep));
       check('byid_reportero', !!BYID.rep_add && BYID.rep_add.rep === 1);
       check('anfitriones', ['move', 'go_xy', 'say', 'repeat', 'if_cond', 'if_score', 'op_calc', 'score_add']

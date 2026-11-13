@@ -23,7 +23,7 @@ window.addEventListener('load', function () {
     done();
   }, 30000);
 
-  const IDS = ['stageCard', 'spritesCard', 'codeCard', 'varsCard', 'toolsCard', 'blocksCard'];
+  const IDS = ['stageCard', 'spritesCard', 'codeCard', 'varsCard', 'listsCard', 'toolsCard', 'blocksCard'];
   const box = id => document.getElementById(id).getBoundingClientRect();
   const css = (el, prop) => getComputedStyle(el).getPropertyValue(prop);
 
@@ -48,7 +48,7 @@ window.addEventListener('load', function () {
 
       /* `order` devuelve el orden de siempre, no el de las columnas. */
       const orders = IDS.map(id => css(document.getElementById(id), 'order'));
-      check('order_de_movil', orders.join(',') === '1,2,3,4,5,6');
+      check('order_de_movil', orders.join(',') === '1,2,3,4,5,6,7');
 
       /* ============ 3. sin desborde horizontal ============ */
       const doc = document.documentElement;

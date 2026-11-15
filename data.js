@@ -43,6 +43,13 @@ const LIST_NEW = '__newlist__';
 const PROC_DEFAULT = 'hacer';
 const PROC_NEW = '__newproc__';
 
+/* Parámetros de los procedimientos: hasta 3 nombres por definición y un
+   valor por nombre en cada llamada. Los nombres son identificadores (el
+   cuerpo los lee con el mismo evaluador de variables) y viajan en
+   node.params / node.args, NO en node.val: un proyecto viejo abre igual. */
+const PROC_MAX_PARAMS = 3;
+const PROC_ARG_DEFAULT = '1';
+
 /* ---------------- texts ---------------- */
 const UI = {
   es: {
@@ -831,6 +838,9 @@ const UI_EXTRA = {
     procNew: 'Nuevo procedimiento…', procNameTitle: 'Nombre del procedimiento',
     procNameHint: 'Hasta 24 caracteres, sin comas. Compartido por «Definir» y «Llamar».',
     procBadName: 'Ese nombre no sirve',
+    procParams: 'Parámetros', procParamsTitle: 'Parámetros del procedimiento',
+    procParamsHint: 'Hasta 3 nombres de variable separados por comas. Ej.: pasos, veces',
+    procParamsBad: 'Esos nombres no sirven',
     listsTitle: 'Listas', listsHint: 'Muchos valores bajo un mismo nombre',
     newList: 'Nueva lista', listsEmpty: 'Todavía no hay listas',
     listsEmptyDesc: 'Creá una para guardar puntajes, nombres o pasos.',
@@ -982,6 +992,9 @@ const UI_EXTRA = {
     procNew: 'New procedure…', procNameTitle: 'Procedure name',
     procNameHint: 'Up to 24 characters, no commas. Shared by the Define and Call blocks.',
     procBadName: 'That name is not valid',
+    procParams: 'Parameters', procParamsTitle: 'Procedure parameters',
+    procParamsHint: 'Up to 3 variable names separated by commas. E.g. steps, times',
+    procParamsBad: 'Those names are not valid',
     listsTitle: 'Lists', listsHint: 'Many values under one name',
     newList: 'New list', listsEmpty: 'No lists yet',
     listsEmptyDesc: 'Create one to keep scores, names or steps.',
@@ -1133,6 +1146,9 @@ const UI_EXTRA = {
     procNew: 'Novo procedimento…', procNameTitle: 'Nome do procedimento',
     procNameHint: 'Até 24 caracteres, sem vírgulas. Compartilhado por «Definir» e «Chamar».',
     procBadName: 'Esse nome não serve',
+    procParams: 'Parâmetros', procParamsTitle: 'Parâmetros do procedimento',
+    procParamsHint: 'Até 3 nomes de variável separados por vírgulas. Ex.: passos, vezes',
+    procParamsBad: 'Esses nomes não servem',
     listsTitle: 'Listas', listsHint: 'Muitos valores sob um mesmo nome',
     newList: 'Nova lista', listsEmpty: 'Ainda não há listas',
     listsEmptyDesc: 'Crie uma para guardar pontuações, nomes ou passos.',
@@ -1284,6 +1300,9 @@ const UI_EXTRA = {
     procNew: 'Nouvelle procédure…', procNameTitle: 'Nom de la procédure',
     procNameHint: 'Jusqu’à 24 caractères, sans virgules. Partagé par « Définir » et « Appeler ».',
     procBadName: 'Ce nom n’est pas valide',
+    procParams: 'Paramètres', procParamsTitle: 'Paramètres de la procédure',
+    procParamsHint: 'Jusqu’à 3 noms de variable séparés par des virgules. Ex. : pas, fois',
+    procParamsBad: 'Ces noms ne sont pas valides',
     listsTitle: 'Listes', listsHint: 'Plusieurs valeurs sous un même nom',
     newList: 'Nouvelle liste', listsEmpty: 'Pas encore de listes',
     listsEmptyDesc: 'Créez-en une pour garder scores, noms ou étapes.',

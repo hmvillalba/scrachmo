@@ -14,7 +14,7 @@ No frameworks, no dependencies, no build step: static files that work in any mod
 
 ### Blocks like Scratch
 
-- 65 blocks in 10 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables, **named lists**, **named local messages**, **named procedures**, **pen** and **sprite-local variables**.
+- 65 blocks in 10 categories with Scratch's classic colours: motion, looks, sound, events, control, sensing, operators, variables, **named lists**, **named local messages**, **named procedures with parameters**, **pen** and **sprite-local variables**.
 - **Named lists**: create several lists (for instance "inventory"), pick the name from a dropdown and use **add**, **delete by position**, **replace at position** and **clear**, plus the **length of** and **item of** reporters. Values are shown and edited in their own card, are saved with the project and travel to `.sb3` with one id per name.
 - **Named procedures**: define a routine with the "Define {v}" hat and call it with "Call {v}" from any script on the same sprite. The name is picked from a shared dropdown, the call runs on the same thread and recursion stops itself. They do not take parameters yet.
 - Hat blocks (green flag, tap, key, shake the phone, receive message, score) and C blocks: `Repeat {v} times`, `Forever` and conditionals with `if... else`.
@@ -255,7 +255,7 @@ Want to add a new block? It is an entry in `data.js` and its logic in `engine.js
 
 ## Verification
 
-The project has **1573 automated checks per language, 6292 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), **named lists** (4 blocks, 2 reporters, one dropdown per block, per-name execution and one declaration per list in `.sb3`), **named procedures** (definition hat, call on the same thread, recursion guard and Scratch's `PROCCODE`), **pen** (a `<canvas>` layer inside the stage, trails on the four movement blocks, world-unit repaint and the `pen` extension in `.sb3`), **sprite-local variables** (per-sprite `vars` with a fallback to globals, scope chosen in the panel and one declaration per target in `.sb3`), the landing page and the on-screen gamepad with tilt.
+The project has **1676 automated checks per language, 6704 in total**: every scenario runs **four times —Spanish, English, Portuguese and French— in headless Chrome**, and all four have to give 0 failures. On top of that there are **143 PWA checks** that need no browser. Together they cover the block catalog and the four languages, the engine and its events, costumes and image import, the editor and its tools, the stage and the stage size —including the visual edge margin that keeps the drawing fully inside the stage—, clones, sensors and collisions, sounds and their real synthesis, the `.sb3` export, **named messages** (catalog, dropdown, per-name dispatch and one broadcast per name), **named lists** (4 blocks, 2 reporters, one dropdown per block, per-name execution and one declaration per list in `.sb3`), **named procedures** (definition hat, call on the same thread, recursion guard and Scratch's `PROCCODE`), **procedure parameters** (up to 3 named arguments, ephemeral per-sprite bindings and `argument_reporter_string_number` in `.sb3`), **pen** (a `<canvas>` layer inside the stage, trails on the four movement blocks, world-unit repaint and the `pen` extension in `.sb3`), **sprite-local variables** (per-sprite `vars` with a fallback to globals, scope chosen in the panel and one declaration per target in `.sb3`), the landing page and the on-screen gamepad with tilt.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -263,13 +263,13 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # text parity + static checks
 node tests/pwa-check.js          # manifest, icons and served routes
 node tests/pwa-sw.js             # service worker logic
-node tests/run.js my-run         # 30 scenarios × 4 languages in headless Chrome
-node tests/run-webkit.js my-run  # 12 scenarios × 1 language in WebKit
+node tests/run.js my-run         # 31 scenarios × 4 languages in headless Chrome
+node tests/run-webkit.js my-run  # 13 scenarios × 1 language in WebKit
 ```
 
 `tests/build.js` builds the test pages and the shared link; `tests/run.js` launches Chrome with an isolated profile per suite and per language, and counts `PASS` / `FAIL` / `ERROR`. On GitHub Actions, `.github/workflows/test.yml` repeats the same thing on every push and pull request.
 
-A second, shorter run covers **WebKit** —the engine of Safari and of every browser on iOS. `tests/run-webkit.js` runs **12 sensitive scenarios once, in Spanish**, watching the APIs where WebKit differs: compression streams, `createImageBitmap` and its `<img>` fallback, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, the `.sb3` exporter, the P2.12 dropdowns, the pen `<canvas>` with its `devicePixelRatio` and the variable scope in `.sb3`. Playwright is a test-only dependency confined to `tests/`; the root still has no `package.json` because the app has no build. Install it with `cd tests && npm ci && npx playwright install --with-deps webkit`, then run `node tests/run-webkit.js my-run`. It does **not** replace the manual iPhone list below: motion permission, WebAudio unlock, the notch and PWA install still need a real device.
+A second, shorter run covers **WebKit** —the engine of Safari and of every browser on iOS. `tests/run-webkit.js` runs **13 sensitive scenarios once, in Spanish**, watching the APIs where WebKit differs: compression streams, `createImageBitmap` and its `<img>` fallback, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, the `.sb3` exporter, the P2.12 dropdowns, the pen `<canvas>` with its `devicePixelRatio` and the variable scope and the ephemeral procedure arguments in `.sb3`. Playwright is a test-only dependency confined to `tests/`; the root still has no `package.json` because the app has no build. Install it with `cd tests && npm ci && npx playwright install --with-deps webkit`, then run `node tests/run-webkit.js my-run`. It does **not** replace the manual iPhone list below: motion permission, WebAudio unlock, the notch and PWA install still need a real device.
 
 The full log —what each suite checks, why four languages and `--lang`, the traps found along the way, the CI environment notes and the version/cache rules— is kept in the Spanish README, which is the source of truth for anything that changes with every release:
 
@@ -277,7 +277,7 @@ The full log —what each suite checks, why four languages and `--lang`, the tra
 
 ## Manual verification on iPhone (WebKit)
 
-The main suite runs in **headless Chrome** (30 scenarios × 4 languages) and, since this release, a short pass also runs in **WebKit** (12 scenarios in Spanish), the engine of Safari and of *every* browser on iOS because Apple allows no other. The blind spot in CI is gone; what remains can only be judged with a finger —the real motion permission, audio unlock, the notch and installing the PWA. This is the list run **by hand before every release**, with a real iPhone and Safari. It takes about ten minutes.
+The main suite runs in **headless Chrome** (31 scenarios × 4 languages) and, since this release, a short pass also runs in **WebKit** (13 scenarios in Spanish), the engine of Safari and of *every* browser on iOS because Apple allows no other. The blind spot in CI is gone; what remains can only be judged with a finger —the real motion permission, audio unlock, the notch and installing the PWA. This is the list run **by hand before every release**, with a real iPhone and Safari. It takes about ten minutes.
 
 | # | What to test | How | What has to happen |
 |---|---|---|---|

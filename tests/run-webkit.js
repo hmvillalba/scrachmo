@@ -62,7 +62,7 @@ if (desconocidos.length || !LANGS.length) {
 
 /* Los escenarios sensibles. Se mantienen en orden y con su motivo al lado:
    si alguien achica la lista para que dé verde, la guarda de check-parity.js
-   exige que estos diez sigan estando. */
+   exige que estos trece sigan estando. */
 const WEBKIT_SET = [
   'harness4',   // createImageBitmap, canvas, WebP→PNG, File y filtro de tipos
   'link',       // ?p=g1.… → DecompressionStream y proyecto compartido
@@ -75,6 +75,7 @@ const WEBKIT_SET = [
   'harness26',  // procedimientos con nombre
   'harness27',  // lápiz: canvas, devicePixelRatio y repintado
   'harness28',  // variables locales: resolución por personaje y .sb3
+  'harness29',  // parámetros de procedimientos: marcos efímeros y .sb3
   'landing'     // localStorage, color-scheme del <select> y 100dvh
 ];
 

@@ -451,6 +451,71 @@ window.addEventListener('load', function () {
       check('grafo_de_procedimientos_sano',
         conProcs.project.targets.every(t => graphProblems(t).length === 0));
 
+      /* ---- procedimientos CON parámetros: Scratch los identifica por un
+         PROCCODE con %s y declara los nombres en la mutación. El prototipo
+         y el cuerpo usan argument_reporter_string_number; la llamada, inputs
+         con los valores. Un procedimiento sin parámetros no cambia nada. ---- */
+      const defPar = { id: 'pa1', type: 'def_proc', val: 'saltar', params: ['pasos', 'veces'] };
+      defPar.body = [{ id: 'pa2', type: 'move', val: 'pasos' }];
+      const callPar = { id: 'pa3', type: 'call_proc', val: 'saltar', args: ['7', '3'] };
+      sprites = [make('Par', [defPar, { id: 'pa4', type: 'when_flag' }, callPar])];
+      selectedSpriteId = sprites[0].id;
+      const conPar = await sb3Build();
+      const bPar = {};
+      conPar.project.targets.forEach(t => {
+        Object.keys(t.blocks || {}).forEach(id => { bPar[id] = t.blocks[id]; });
+      });
+      const porOpPar = op => Object.keys(bPar).filter(id => bPar[id].opcode === op);
+      const protoPar = porOpPar('procedures_prototype')[0];
+      const llamadaPar = porOpPar('procedures_call')[0];
+      const mPar = protoPar ? bPar[protoPar].mutation : null;
+      check('sb3_param_proccode_con_placeholders', !!mPar && !!llamadaPar &&
+        mPar.proccode === 'saltar %s %s' &&
+        bPar[llamadaPar].fields.PROCCODE[0] === 'saltar %s %s');
+      check('sb3_param_argumentnames', !!mPar &&
+        mPar.argumentnames === '["pasos","veces"]');
+      check('sb3_param_defaults_y_ids', !!mPar &&
+        mPar.argumentdefaults === '["1","1"]' &&
+        mPar.argumentids === '["arg0","arg1"]' && mPar.warp === 'true');
+      check('sb3_param_llamada_con_la_misma_mutacion', !!llamadaPar &&
+        bPar[llamadaPar].mutation.proccode === mPar.proccode &&
+        bPar[llamadaPar].mutation.argumentids === mPar.argumentids);
+      check('sb3_param_prototipo_declara_dos_inputs', !!protoPar &&
+        Object.keys(bPar[protoPar].inputs).indexOf('arg0') >= 0 &&
+        Object.keys(bPar[protoPar].inputs).indexOf('arg1') >= 0);
+      check('sb3_param_reporteros_de_argumento', (() => {
+        const reps = porOpPar('argument_reporter_string_number');
+        return reps.length === 3 && ['pasos', 'veces'].every(nm => reps.some(id =>
+          bPar[id].fields && bPar[id].fields.VALUE && bPar[id].fields.VALUE[0] === nm));
+      })());
+      check('sb3_param_llamada_lleva_los_valores', !!llamadaPar &&
+        bPar[llamadaPar].inputs.arg0[1][1] === '7' &&
+        bPar[llamadaPar].inputs.arg1[1][1] === '3');
+      check('sb3_param_cuerpo_usa_el_argumento', (() => {
+        const mv = porOpPar('motion_movesteps')[0];
+        if (!mv || !bPar[mv].inputs.STEPS) return false;
+        const ref = bPar[mv].inputs.STEPS[1];
+        return typeof ref === 'string' && bPar[ref] &&
+          bPar[ref].opcode === 'argument_reporter_string_number';
+      })());
+      check('sb3_param_proyecto_viejo_sin_inputs', llamadasP.length === 2 &&
+        llamadasP.every(id => Object.keys(bloquesP[id].inputs).length === 0) &&
+        prototiposP.every(id => bloquesP[id].mutation.argumentnames === '[]'));
+      sprites = [make('Huerfana', [{ id: 'ph1', type: 'when_flag' },
+        { id: 'ph2', type: 'call_proc', val: 'no_existe', args: ['9'] }])];
+      const sinDef = await sb3Build();
+      const llamadasSinDef = [];
+      sinDef.project.targets.forEach(t => Object.keys(t.blocks || {}).forEach(id => {
+        if (t.blocks[id].opcode === 'procedures_call') llamadasSinDef.push(t.blocks[id]);
+      }));
+      check('sb3_param_llamada_sin_definicion_no_rompe', llamadasSinDef.length === 1 &&
+        llamadasSinDef[0].fields.PROCCODE[0] === 'no_existe' &&
+        Object.keys(llamadasSinDef[0].inputs).length === 0);
+      check('sb3_param_grafo_sano',
+        conPar.project.targets.every(t => graphProblems(t).length === 0));
+      check('sb3_param_sin_extensiones_espurias',
+        Array.isArray(conPar.project.extensions) && conPar.project.extensions.length === 0);
+
       /* ============ 7. extensión Pen del lápiz ============ */
       sprites = [make('Lapicero', [
         { id: 'pe1', type: 'when_flag' },

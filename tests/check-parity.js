@@ -695,6 +695,7 @@ if (fs.existsSync(wfDir)) {
   } else {
     const css = html.slice(at, end);
     const resto = html.slice(0, at) + html.slice(end);
+    const dataSrc = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
     const declaradas = new Set();
     const reClase = /\.(-?[_a-zA-Z][_a-zA-Z0-9-]*)/g;
     let mc;
@@ -702,7 +703,7 @@ if (fs.existsSync(wfDir)) {
     const muertas = [];
     declaradas.forEach(c => {
       const patron = new RegExp('(^|[^\\w-])' + c + '([^\\w-]|$)');
-      if (!patron.test(resto) && !patron.test(engine) && !patron.test(data)) muertas.push(c);
+      if (!patron.test(resto) && !patron.test(engine) && !patron.test(dataSrc)) muertas.push(c);
     });
     if (muertas.length) {
       ok = false;
@@ -1146,7 +1147,7 @@ if (fs.existsSync(wfDir)) {
       !/PROCCODE: \[nm\]/.test(engine) ||
       !/inputs\.custom_block = \[1, proto\]/.test(engine) ||
       !/buildStack\(node\.body, did\)/.test(engine) ||
-      !/argumentnames: '\[\]'/.test(engine)) {
+      !/argumentnames: ps\.length \? JSON\.stringify\(ps\) : '\[\]'/.test(engine)) {
     ok = false; console.log('FAIL el .sb3 no exporta la definición, el prototipo y la llamada');
   }
   if (!/id="blocksCount">65</.test(html)) {
@@ -1269,8 +1270,65 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- P2.12, fase 6: parámetros en procedimientos ----------------
+   Hasta 3 nombres en la definición y un valor por nombre en la llamada. Los
+   marcos son EFÍMEROS: varHas/varGet/varSet los consultan primero, así el
+   cuerpo lee un parámetro igual que una variable sin propagar un contexto
+   nuevo por todo el motor. El .sb3 declara PROCCODE, argumentids y reporteros
+   de argumento; un proyecto viejo sin parámetros sigue exportando '[]'. */
+{
+  const data6 = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const html6 = fs.readFileSync(path.join(SRC, 'app.html'), 'utf8');
+  const build6 = fs.readFileSync(path.join(SRC, 'tests', 'build.js'), 'utf8');
+  const claves6 = ['procParams', 'procParamsTitle', 'procParamsHint', 'procParamsBad'];
+  const sinClave6 = claves6.filter(k =>
+    (data6.match(new RegExp('\\b' + k + ':', 'g')) || []).length !== 4);
+  if (sinClave6.length) {
+    ok = false;
+    console.log('FAIL faltan textos de parámetros en los 4 idiomas: ' + sinClave6.join(', '));
+  }
+  if (!/const PROC_MAX_PARAMS = 3/.test(data6) ||
+      !/const PROC_ARG_DEFAULT = '1'/.test(data6)) {
+    ok = false; console.log('FAIL faltan los topes de parámetros');
+  }
+  if (!/\.proc-params\{/.test(html6) || !/\.proc-param\{/.test(html6) ||
+      !/\.proc-arg\{/.test(html6)) {
+    ok = false; console.log('FAIL falta el CSS de los controles de parámetros');
+  }
+  const fns6 = ['normalizeProcParams', 'procParams', 'normalizeProcArgs', 'procArgs',
+    'cleanProcParams', 'procArgId', 'procCode', 'syncProcArgs', 'openProcParams', 'paramFrame'];
+  const sinFn6 = fns6.filter(f => engine.indexOf('function ' + f + '(') < 0);
+  if (sinFn6.length) {
+    ok = false; console.log('FAIL faltan funciones de parámetros: ' + sinFn6.join(', '));
+  }
+  const rutas6 = [
+    'let procFrames = {};', 'return !!paramFrame(name, sprite)',
+    'const marco = paramFrame(name, sprite);', 'procFrames = {};',
+    "if (type === 'def_proc' && Array.isArray(raw.params))",
+    "if (type === 'call_proc' && Array.isArray(raw.args))",
+    'procArgs(node, ps.length).map(v => resolveValue(v, sprite))',
+    'procFrames[clave].push(marco)', 'procFrames[clave].pop()',
+    "e.target.closest('[data-procarg]')", "e.target.closest('.proc-params')"
+  ];
+  const sinRuta6 = rutas6.filter(r => engine.indexOf(r) < 0);
+  if (sinRuta6.length) {
+    ok = false;
+    console.log('FAIL una pieza del ligado efímero se perdió: ' + sinRuta6.join(' | '));
+  }
+  if (!/argument_reporter_string_number/.test(engine) ||
+      !/argumentids: ps\.length/.test(engine) ||
+      !/PROCCODE = \[codigo\]/.test(engine) ||
+      !/procScopeParams = procParams\(node\)/.test(engine) ||
+      !/argumentnames: ps\.length/.test(engine)) {
+    ok = false; console.log('FAIL el .sb3 no declara los argumentos del procedimiento');
+  }
+  if (!/'harness29\.js'/.test(build6)) {
+    ok = false; console.log('FAIL tests/build.js no registra harness29.js');
+  }
+}
+
 /* ---------------- P2.10 B: WebKit se corre de verdad ----------------
-   Los 6292 checks de Chrome no dicen nada del motor de un iPhone. La parte
+   Los 6704 checks de Chrome no dicen nada del motor de un iPhone. La parte
    manual ya está documentada en los cuatro README; lo que falta es que en
    cada push se ejecute una corrida corta en WebKit. Acá se exige que el
    runner, su dependencia fijada, el job de CI y la documentación sigan
@@ -1302,12 +1360,12 @@ if (fs.existsSync(wfDir)) {
     ok = false; console.log('FAIL .gitignore no ignora tests/node_modules/');
   }
 
-  /* Los doce escenarios sensibles. No se exige que sean los únicos: se exige
+  /* Los trece escenarios sensibles. No se exige que sean los únicos: se exige
      que ninguno desaparezca. El runner además comprueba en ejecución que
      build() los genere a todos. */
   const minimo = ['harness4', 'link', 'harness14', 'harness15', 'harness16',
     'harness23', 'harness24', 'harness25', 'harness26', 'harness27', 'harness28',
-    'landing'];
+    'harness29', 'landing'];
   if (!fs.existsSync(wkPath)) {
     ok = false; console.log('FAIL falta tests/run-webkit.js');
   } else {
@@ -1366,7 +1424,8 @@ if (fs.existsSync(wfDir)) {
   }
   ['README.md', 'README.en.md', 'README.pt.md', 'README.fr.md'].forEach(f => {
     const t = fs.readFileSync(path.join(SRC, f), 'utf8');
-    if (/1332|5328|1413|5652|1486|5944/.test(t) || !/1573[\s\S]{0,80}6292/.test(t)) {
+    if (/1332|5328|1413|5652|1486|5944|1573|6292/.test(t) ||
+        !/1676[\s\S]{0,80}6704/.test(t)) {
       ok = false; console.log('FAIL ' + f + ' no declara el total nuevo de la suite');
     }
   });

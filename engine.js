@@ -54,19 +54,37 @@ function normalizeVars(raw) {
   });
   return out;
 }
+/* Parámetros de los procedimientos: marcos EFÍMEROS por personaje. Los
+   consulta el evaluador de variables, así el cuerpo lee «pasos» igual que
+   una variable sin que haya que propagar un ctx por todas las funciones.
+   Nunca se guardan y nunca tocan s.vars: al terminar la llamada se sacan. */
+let procFrames = {};
+function paramFrame(name, sprite) {
+  const pila = sprite && procFrames[sprite.id];
+  if (!pila || !pila.length) return null;
+  for (let i = pila.length - 1; i >= 0; i--) {
+    if (pila[i] && Object.prototype.hasOwnProperty.call(pila[i], name)) return pila[i];
+  }
+  return null;
+}
 function varStore(name, sprite) {
   if (sprite && sprite.vars && Object.prototype.hasOwnProperty.call(sprite.vars, name)) return sprite.vars;
   return variables;
 }
 function varHas(name, sprite) {
-  return Object.prototype.hasOwnProperty.call(varStore(name, sprite), name);
+  return !!paramFrame(name, sprite) ||
+    Object.prototype.hasOwnProperty.call(varStore(name, sprite), name);
 }
 function varGet(name, sprite) {
   if (name === 'score') return score;
+  const marco = paramFrame(name, sprite);
+  if (marco) return marco[name];
   const store = varStore(name, sprite);
   return Object.prototype.hasOwnProperty.call(store, name) ? store[name] : 0;
 }
 function varSet(name, value, sprite) {
+  const marco = paramFrame(name, sprite);
+  if (marco) { marco[name] = value; return; }
   varStore(name, sprite)[name] = value;
 }
 function varPairs(sprite) {
@@ -634,6 +652,10 @@ function normalizeOneNode(raw, seen, depth, wantRep) {
   /* El tamaño del globo viaja en el proyecto. Sin este campo, exportar y
      volver a importar (link o .scmo) devolvería todos los diálogos al 100 %. */
   if (def.zoom) node.zoom = clamp(Math.round(num(raw.zoom, 100)), 50, 250);
+  /* Los nombres viajan en la definición y los valores en la llamada, nunca
+     en node.val. Sólo se copian si existen: un proyecto viejo no cambia. */
+  if (type === 'def_proc' && Array.isArray(raw.params)) node.params = normalizeProcParams(raw.params);
+  if (type === 'call_proc' && Array.isArray(raw.args)) node.args = normalizeProcArgs(raw.args);
   /* Sólo los bloques declarados como anfitriones (y los propios reporteros,
      para poder anidar) aceptan casillas con reportero. Ignorar reps en
      sombreros o en bloques de texto evita estados imposibles al importar. */
@@ -3426,6 +3448,42 @@ function blockContent(node, def, t) {
     content.appendChild(wrap);
   });
   if (parts[parts.length - 1]) content.appendChild(document.createTextNode(parts[parts.length - 1]));
+  /* Parámetros: no van en node.val, así que se dibujan aparte del hueco. */
+  if (isProcNode(node) && !opts.preview) {
+    const ps = node.type === 'def_proc' ? procParams(node)
+      : procParams(procDefNode(selectedSprite(), procName(node.val)));
+    if (node.type === 'def_proc') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'proc-params';
+      btn.dataset.procparams = node.id;
+      btn.textContent = tr.procParams;
+      btn.title = tr.procParamsHint;
+      btn.setAttribute('aria-label', tr.procParamsHint);
+      content.appendChild(btn);
+      ps.forEach(p => {
+        const chip = document.createElement('span');
+        chip.className = 'proc-param';
+        chip.textContent = p;
+        content.appendChild(chip);
+      });
+    } else {
+      const args = procArgs(node, ps.length);
+      ps.forEach((p, i) => {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'sb-input proc-arg';
+        inp.value = args[i];
+        inp.dataset.procarg = node.id;
+        inp.dataset.argi = String(i);
+        inp.setAttribute('inputmode', 'text');
+        inp.setAttribute('aria-label', tr.procParams + ' ' + (i + 1) + ': ' + p);
+        inp.autocomplete = 'off';
+        inp.spellcheck = false;
+        content.appendChild(inp);
+      });
+    }
+  }
   /* El globo de diálogo se puede agrandar o achicar. El tamaño vive en
      node.zoom y NO dentro de node.val: si fuera un segundo hueco, un mensaje
      con comas («Hola, mundo») se partiría en dos campos, porque los bloques
@@ -5449,6 +5507,97 @@ function procDefNode(sprite, name) {
     n && n.type === 'def_proc' && procName(n.val) === buscado) || null;
 }
 
+/* Un parámetro es un identificador: el cuerpo lo lee con el evaluador de
+   variables. Se recorta a 16 caracteres como las variables del panel, no
+   puede llamarse «score» ni tocar claves prohibidas, y no se repite. */
+function normalizeProcParams(raw) {
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  raw.forEach(p => {
+    const nm = typeof p === 'string' ? p.trim() : '';
+    if (out.length >= PROC_MAX_PARAMS ||
+        !/^[A-Za-z_][A-Za-z0-9_]{0,15}$/.test(nm) ||
+        nm === 'score' || nm === '__proto__' || nm === 'constructor' ||
+        nm === 'prototype' || out.indexOf(nm) >= 0) return;
+    out.push(nm);
+  });
+  return out;
+}
+function procParams(node) {
+  return normalizeProcParams(node && node.params);
+}
+function normalizeProcArgs(raw) {
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  for (let i = 0; i < raw.length && i < PROC_MAX_PARAMS; i++) {
+    const v = raw[i];
+    out.push((typeof v === 'number' && isFinite(v))
+      ? String(v) : String(v === undefined || v === null ? '' : v).slice(0, 120));
+  }
+  return out;
+}
+/* Una llamada siempre entrega un valor por parámetro: si le faltan (proyecto
+   viejo o definición recién editada) se completa con el valor de fábrica. */
+function procArgs(node, count) {
+  const base = normalizeProcArgs(node && node.args);
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(base[i] !== undefined ? base[i] : PROC_ARG_DEFAULT);
+  return out;
+}
+/* Lo que escribe la persona en el modal: «pasos, veces». Vacío = sin
+   parámetros; cualquier cosa inválida devuelve null y no se guarda nada. */
+function cleanProcParams(texto) {
+  if (typeof texto !== 'string') return null;
+  const s = texto.trim();
+  if (!s) return [];
+  const partes = s.split(',').map(x => x.trim());
+  if (partes.length > PROC_MAX_PARAMS || partes.some(p => !p)) return null;
+  const limpios = normalizeProcParams(partes);
+  return limpios.length === partes.length ? limpios : null;
+}
+function procArgId(i) { return 'arg' + i; }
+function procCode(nm, ps) {
+  return procName(nm) + ps.map(() => ' %s').join('');
+}
+/* Si cambian los parámetros de la definición, TODAS las llamadas con ese
+   nombre (en cualquier personaje y en cualquier cuerpo anidado) se ajustan:
+   conservan los valores que ya tenían y rellenan o recortan el resto. */
+function syncProcArgs(nombre, ps) {
+  const buscado = procName(nombre);
+  const walk = nodes => (nodes || []).forEach(n => {
+    if (n.type === 'call_proc' && procName(n.val) === buscado) {
+      const antes = normalizeProcArgs(n.args);
+      const despues = [];
+      for (let i = 0; i < ps.length; i++) {
+        despues.push(antes[i] !== undefined ? antes[i] : PROC_ARG_DEFAULT);
+      }
+      if (ps.length) n.args = despues; else delete n.args;
+    }
+    if (n.reps) n.reps.forEach(r => { if (r) walk([r]); });
+    walk(n.body); walk(n.elseBody);
+  });
+  sprites.forEach(s => walk(s.code));
+}
+async function openProcParams(id) {
+  const antes = findNode(id);
+  if (!antes || antes.node.type !== 'def_proc') return;
+  const nombre = procName(antes.node.val);
+  const crudo = await askText(UI[lang].procParamsTitle,
+    procParams(antes.node).join(', '), UI[lang].procParamsHint, 64);
+  /* El bloque pudo borrarse mientras el modal estaba abierto. */
+  const info = findNode(id);
+  if (!info || info.node.type !== 'def_proc') return;
+  const ps = cleanProcParams(crudo);
+  if (!ps) {
+    if (typeof crudo === 'string' && crudo.trim()) toast(UI[lang].procParamsBad);
+    return;
+  }
+  if (ps.length) info.node.params = ps; else delete info.node.params;
+  syncProcArgs(nombre, ps);
+  renderCode();
+  saveProject();
+}
+
 async function runProcedure(node, sprite, ctx) {
   /* execBlock() se llama suelto desde los arneses, sin ctx: se fabrica uno
      propio para que el cuerpo se ejecute exactamente igual. */
@@ -5461,9 +5610,24 @@ async function runProcedure(node, sprite, ctx) {
   if (c.calls.length >= MAX_CALL_DEPTH || c.calls.indexOf(nm) >= 0) return;
   const defNode = procDefNode(sprite, nm);
   if (!defNode) return;
+  /* Los argumentos se resuelven ANTES de ligar: así pueden usar variables o
+     parámetros del procedimiento que llama, no los que se están creando. */
+  const ps = procParams(defNode);
+  const valores = procArgs(node, ps.length).map(v => resolveValue(v, sprite));
+  const marco = {};
+  ps.forEach((p, i) => { marco[p] = valores[i]; });
+  const clave = sprite ? sprite.id : '_';
+  const liga = ps.length > 0;
   c.calls.push(nm);
+  if (liga) {
+    if (!procFrames[clave]) procFrames[clave] = [];
+    procFrames[clave].push(marco);
+  }
   try { await execStack(defNode.body || [], sprite, c); }
-  finally { c.calls.pop(); }
+  finally {
+    if (liga) procFrames[clave].pop();
+    c.calls.pop();
+  }
 }
 
 function projectUsesMotion() {
@@ -5558,6 +5722,7 @@ function beginRun() {
   runActive = true;
   runtimeSnapshot = snapshotRuntime();
   penReset();
+  procFrames = {};
   updateResetButton();
 }
 
@@ -6114,6 +6279,9 @@ function sb3SpriteBlocks(sprite, index) {
   const usedPen = new Set();
   let seq = 0;
   let scriptY = 0;
+  /* Mientras se construye el CUERPO de una definición, estos nombres se
+     exportan como argument_reporter_string_number, no como variables. */
+  let procScopeParams = [];
 
   const newId = () => 'b' + index + '_' + (++seq);
 
@@ -6168,9 +6336,28 @@ function sb3SpriteBlocks(sprite, index) {
   /* Un procedimiento se identifica por su PROCCODE, no por un id: no hay
      nada que declarar en el Stage. warp=true equivale a nuestro hilo
      síncrono («ejecutar sin refrescar la pantalla»). */
-  function procMutation(nm) {
-    return { tagName: 'mutation', children: [], proccode: nm,
-      argumentnames: '[]', argumentdefaults: '[]', warp: 'true' };
+  function procMutation(nm, params) {
+    const ps = normalizeProcParams(params);
+    return { tagName: 'mutation', children: [], proccode: procCode(nm, ps),
+      argumentnames: ps.length ? JSON.stringify(ps) : '[]',
+      argumentdefaults: ps.length ? JSON.stringify(ps.map(() => PROC_ARG_DEFAULT)) : '[]',
+      argumentids: ps.length ? JSON.stringify(ps.map((p, i) => procArgId(i))) : '[]',
+      warp: 'true' };
+  }
+  function argReporter(name, hostId) {
+    return mk('argument_reporter_string_number', hostId,
+      { shadow: true, fields: { VALUE: [name, null] } });
+  }
+  /* Un argumento de la llamada puede ser un número, una variable o el
+     parámetro del procedimiento que está llamando. */
+  function procArgIn(raw, hostId) {
+    const v = String(raw).trim();
+    const shadow = [4, v];
+    if (procScopeParams.indexOf(v) >= 0) return [3, argReporter(v, hostId), shadow];
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(v) && v !== 'score' && varHas(v, sprite)) {
+      return [3, varBlock(v, hostId), shadow];
+    }
+    return [1, shadow];
   }
 
   function slotIn(node, i, shadowType, hostId) {
@@ -6180,6 +6367,12 @@ function sb3SpriteBlocks(sprite, index) {
     const raw = vals[i] !== undefined ? vals[i] : '';
     const shadow = [shadowType || 10, String(raw)];
     const rep = node.reps && node.reps[i];
+    if (!rep && procScopeParams.length) {
+      const nombre = String(raw).trim();
+      if (procScopeParams.indexOf(nombre) >= 0) {
+        return [3, argReporter(nombre, hostId), shadow];
+      }
+    }
     if (!rep) return [1, shadow];
     const rid = reporterIn(rep, hostId);
     return rid ? [3, rid, shadow] : [1, shadow];
@@ -6200,6 +6393,7 @@ function sb3SpriteBlocks(sprite, index) {
       case 'rep_score': return varBlock('puntaje', hostId);
       case 'rep_var': {
         const name = String(rep.val === undefined ? '' : rep.val).trim();
+        if (procScopeParams.indexOf(name) >= 0) return argReporter(name, hostId);
         return varBlock(name || 'variable', hostId);
       }
       case 'rep_list_len': {
@@ -6516,8 +6710,13 @@ function sb3SpriteBlocks(sprite, index) {
       }
       case 'call_proc': {
         const nm = procName(node.val);
+        const ps = procParams(procDefNode(sprite, nm));
         const bid = mk('procedures_call', parentId, { fields: { PROCCODE: [nm] } });
-        blocks[bid].mutation = procMutation(nm);
+        const codigo = procCode(nm, ps);
+        if (ps.length) blocks[bid].fields.PROCCODE = [codigo];
+        blocks[bid].mutation = procMutation(nm, ps);
+        const args = procArgs(node, ps.length);
+        ps.forEach((p, i) => { blocks[bid].inputs[procArgId(i)] = procArgIn(args[i], bid); });
         return bid;
       }
       case 'send_msg': {
@@ -6560,9 +6759,13 @@ function sb3SpriteBlocks(sprite, index) {
     }
     if (node.type === 'def_proc') {
       const nm = procName(node.val);
+      const ps = procParams(node);
       const did = mk('procedures_definition', null);
       const proto = mk('procedures_prototype', did, { shadow: true });
-      blocks[proto].mutation = procMutation(nm);
+      blocks[proto].mutation = procMutation(nm, ps);
+      ps.forEach((p, i) => {
+        blocks[proto].inputs[procArgId(i)] = [1, argReporter(p, proto)];
+      });
       blocks[did].inputs.custom_block = [1, proto];
       return did;
     }
@@ -6597,7 +6800,10 @@ function sb3SpriteBlocks(sprite, index) {
       const did = hatBlock(node);
       if (did) {
         topLevel(did);
+        const anterior = procScopeParams;
+        procScopeParams = procParams(node);
         const first = buildStack(node.body, did);
+        procScopeParams = anterior;
         if (first) { blocks[did].next = first; blocks[first].parent = did; }
       } else note(node);
       prev = null;
@@ -7446,6 +7652,17 @@ function bindEvents() {
   });
 
   const applyBlockValue = e => {
+    /* Los argumentos NO tocan node.val: viven en node.args[i]. */
+    const arg = e.target.closest('[data-procarg]');
+    if (arg) {
+      const ai = findNode(arg.dataset.procarg);
+      if (!ai) return;
+      const i = Number(arg.dataset.argi);
+      if (!Array.isArray(ai.node.args)) ai.node.args = [];
+      ai.node.args[i] = String(arg.value).slice(0, 120);
+      scheduleSave();
+      return;
+    }
     const input = e.target.closest('[data-input],[data-zoom]');
     if (!input) return;
     /* El campo de tamaño del globo no toca node.val: sólo node.zoom. */
@@ -7490,6 +7707,8 @@ function bindEvents() {
     saveProject();
   });
   $('#codeList').addEventListener('click', e => {
+    const pp = e.target.closest('.proc-params');
+    if (pp) { openProcParams(pp.dataset.procparams); return; }
     const fx = e.target.closest('.rep-fx');
     if (fx) { openRepPicker(fx.dataset.repHost, Number(fx.dataset.repSlot)); return; }
     const rdel = e.target.closest('.rep-del');

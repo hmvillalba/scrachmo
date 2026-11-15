@@ -297,7 +297,8 @@ const CATS = [
   { id: 'sensor', color: '#5CB1D6', tint: '#EDF9FD', icon: 'vibrate', name: L('Sensores', 'Sensing', 'Sensores', 'Capteurs') },
   { id: 'ops', color: '#59C059', tint: '#EDFAED', icon: 'calculator', name: L('Operadores', 'Operators', 'Operadores', 'Opérateurs') },
   { id: 'vars', color: '#FF8C1A', tint: '#FFF1E3', icon: 'box', name: L('Variables', 'Variables', 'Variáveis', 'Variables') },
-  { id: 'multi', color: '#FF6680', tint: '#FFEEF1', icon: 'message', name: L('Mensajes', 'Messages', 'Mensagens', 'Messages') }
+  { id: 'multi', color: '#FF6680', tint: '#FFEEF1', icon: 'message', name: L('Mensajes', 'Messages', 'Mensagens', 'Messages') },
+  { id: 'pen', color: '#0FBD8C', tint: '#E3F8F1', icon: 'edit', name: L('Lápiz', 'Pen', 'Lápis', 'Crayon') }
 ];
 const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c]));
 
@@ -672,6 +673,41 @@ const BLOCKS = [
     def: PROC_DEFAULT, w: 112, pick: 'procs',
     n: L('Llamar {v}', 'Call {v}', 'Chamar {v}', 'Appeler {v}'),
     d: L('Ejecuta los bloques de la definición con ese nombre, en este mismo personaje.', 'Runs the blocks of the definition with that name, on this same sprite.', 'Executa os blocos da definição com esse nome, neste mesmo personagem.', 'Exécute les blocs de la définition de ce nom, sur ce même lutin.')
+  },
+  /* ---------------- lápiz ----------------
+     Extensión clásica de Scratch: el personaje deja una línea al moverse.
+     El dibujo es EFÍMERO (se borra al dar Ejecutar) y no se guarda en el
+     proyecto; los trazos viven en unidades del mundo, así sobreviven al
+     cambio de tamaño del escenario y al zoom sin deformarse. */
+  {
+    id: 'pen_down', cat: 'pen', icon: 'edit',
+    n: L('Bajar lápiz', 'Pen down', 'Baixar lápis', 'Baisser le crayon'),
+    d: L('Desde ahora este personaje dibuja al moverse.', 'From now on this sprite draws as it moves.', 'A partir de agora este personagem desenha ao se mover.', 'Désormais ce lutin dessine en se déplaçant.')
+  },
+  {
+    id: 'pen_up', cat: 'pen', icon: 'arrow-right',
+    n: L('Subir lápiz', 'Pen up', 'Levantar lápis', 'Lever le crayon'),
+    d: L('Deja de dibujar al moverse.', 'Stops drawing when it moves.', 'Para de desenhar ao se mover.', 'Arrête de dessiner en se déplaçant.')
+  },
+  {
+    id: 'pen_color', cat: 'pen', icon: 'palette', def: '#4C97FF', w: 96,
+    n: L('Color del lápiz {v}', 'Set pen color to {v}', 'Cor do lápis {v}', 'Couleur du crayon {v}'),
+    d: L('Color hexadecimal, por ejemplo #FF0000.', 'A hex colour, for example #FF0000.', 'Cor hexadecimal, por exemplo #FF0000.', 'Couleur hexadécimale, par exemple #FF0000.')
+  },
+  {
+    id: 'pen_size', cat: 'pen', icon: 'box', def: 2, w: 78, num: 1,
+    n: L('Grosor del lápiz {v}', 'Set pen size to {v}', 'Espessura do lápis {v}', 'Épaisseur du crayon {v}'),
+    d: L('Grosor de la línea en unidades del mundo.', 'Line width in world units.', 'Espessura da linha em unidades do mundo.', 'Épaisseur du trait en unités du monde.')
+  },
+  {
+    id: 'pen_clear', cat: 'pen', icon: 'close',
+    n: L('Borrar dibujo', 'Erase all', 'Apagar desenho', 'Effacer le dessin'),
+    d: L('Limpia todas las líneas y sellos del escenario.', 'Clears every line and stamp from the stage.', 'Limpa todas as linhas e carimbos do cenário.', 'Efface tous les traits et tampons de la scène.')
+  },
+  {
+    id: 'pen_stamp', cat: 'pen', icon: 'copy',
+    n: L('Sellar', 'Stamp', 'Carimbar', 'Tamponner'),
+    d: L('Deja una copia del disfraz en la posición actual.', 'Leaves a copy of the costume at the current position.', 'Deixa uma cópia do traje na posição atual.', 'Laisse une copie du costume à la position actuelle.')
   },
   /* ---------------- reporteros ----------------
      Un reportero NO es un enunciado: devuelve un valor y vive dentro de la

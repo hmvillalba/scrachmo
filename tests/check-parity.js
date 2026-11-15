@@ -1101,8 +1101,8 @@ if (fs.existsSync(wfDir)) {
       !callP || callP.pick !== 'procs' || callP.hat || callP.c) {
     ok = false; console.log('FAIL «Definir» no es sombrero con cuerpo o «Llamar» está mal declarado');
   }
-  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 59) {
-    ok = false; console.log('FAIL la paleta no tiene 59 bloques con los dos de procedimientos');
+  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 65) {
+    ok = false; console.log('FAIL la paleta no tiene 65 bloques con los dos de procedimientos');
   }
   ['isProcNode', 'procName', 'cleanProcName', 'procDefNode', 'runProcedure',
     'newProcFor', 'procMutation'].forEach(fn => {
@@ -1149,16 +1149,70 @@ if (fs.existsSync(wfDir)) {
       !/argumentnames: '\[\]'/.test(engine)) {
     ok = false; console.log('FAIL el .sb3 no exporta la definición, el prototipo y la llamada');
   }
-  if (!/id="blocksCount">59</.test(html)) {
-    ok = false; console.log('FAIL el badge de bloques no está en 59');
+  if (!/id="blocksCount">65</.test(html)) {
+    ok = false; console.log('FAIL el badge de bloques no está en 65');
   }
   if (!/'harness26\.js'/.test(buildSrc3)) {
     ok = false; console.log('FAIL tests/build.js no registra harness26.js');
   }
 }
 
+/* ---------------- P2.12 fase 4: el lápiz dibuja de verdad ----------------
+   El dibujo es efímero y vive en unidades del mundo. Se exige la capa,
+   los seis bloques, el trazo en los CUATRO puntos de movimiento, la
+   limpieza al ejecutar y la extensión 'pen' en el .sb3. */
+{
+  const dataTxt4 = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const htmlTxt4 = fs.readFileSync(path.join(SRC, 'app.html'), 'utf8');
+  const buildTxt4 = fs.readFileSync(path.join(SRC, 'tests', 'build.js'), 'utf8');
+  const penIds = ['pen_down', 'pen_up', 'pen_color', 'pen_size', 'pen_clear', 'pen_stamp'];
+  if (!/id: 'pen', color: '#0FBD8C'/.test(dataTxt4)) {
+    ok = false; console.log('FAIL falta la categoría pen en CATS');
+  }
+  const sinBloque = penIds.filter(id => !new RegExp("id: '" + id + "', cat: 'pen'").test(dataTxt4));
+  if (sinBloque.length) {
+    ok = false; console.log('FAIL faltan bloques de lápiz: ' + sinBloque.join(', '));
+  }
+  if (!/<canvas class="pen-layer" id="penLayer"/.test(htmlTxt4) ||
+      !/\.pen-layer\{/.test(htmlTxt4) || !/z-index:2/.test(htmlTxt4)) {
+    ok = false; console.log('FAIL falta la capa de canvas del lápiz en el escenario');
+  }
+  const penFns = ['penState', 'penColor', 'penBox', 'penXY', 'penRepaint',
+    'penAdd', 'penStroke', 'penStamp', 'penClear', 'penReset'];
+  const sinFn = penFns.filter(f => engine.indexOf('function ' + f + '(') < 0);
+  if (sinFn.length) {
+    ok = false; console.log('FAIL faltan funciones del lápiz: ' + sinFn.join(', '));
+  }
+  if (!/let penStrokes = \[\]/.test(engine) || !/let penStates = \{\}/.test(engine) ||
+      !/const PEN_MAX = 4000/.test(engine)) {
+    ok = false; console.log('FAIL falta el estado efímero del lápiz');
+  }
+  const trazos = (engine.match(/penStroke\(sprite, px0, py0\)/g) || []).length;
+  if (trazos !== 4) {
+    ok = false; console.log('FAIL el lápiz no traza en los 4 movimientos (hay ' + trazos + ')');
+  }
+  if (!/runtimeSnapshot = snapshotRuntime\(\);\s*penReset\(\);/.test(engine)) {
+    ok = false; console.log('FAIL Ejecutar no limpia el dibujo anterior');
+  }
+  if ((engine.match(/penRepaint\(\);/g) || []).length < 5) {
+    ok = false; console.log('FAIL el dibujo no se repinta al cambiar la caja');
+  }
+  if (!/extensions: penUsed \? \['pen'\] : \[\]/.test(engine)) {
+    ok = false; console.log('FAIL el .sb3 no declara la extensión pen cuando hace falta');
+  }
+  const penOps = ['pen_penDown', 'pen_penUp', 'pen_clear', 'pen_stamp',
+    'pen_setPenColorToColor', 'pen_setPenSizeTo'];
+  const sinOp = penOps.filter(op => engine.indexOf("'" + op + "'") < 0);
+  if (sinOp.length) {
+    ok = false; console.log('FAIL faltan opcodes pen: ' + sinOp.join(', '));
+  }
+  if (!/'harness27\.js'/.test(buildTxt4)) {
+    ok = false; console.log('FAIL tests/build.js no registra harness27.js');
+  }
+}
+
 /* ---------------- P2.10 B: WebKit se corre de verdad ----------------
-   Los 5652 checks de Chrome no dicen nada del motor de un iPhone. La parte
+   Los 5944 checks de Chrome no dicen nada del motor de un iPhone. La parte
    manual ya está documentada en los cuatro README; lo que falta es que en
    cada push se ejecute una corrida corta en WebKit. Acá se exige que el
    runner, su dependencia fijada, el job de CI y la documentación sigan
@@ -1190,11 +1244,12 @@ if (fs.existsSync(wfDir)) {
     ok = false; console.log('FAIL .gitignore no ignora tests/node_modules/');
   }
 
-  /* Los diez escenarios sensibles. No se exige que sean los únicos: se exige
+  /* Los once escenarios sensibles. No se exige que sean los únicos: se exige
      que ninguno desaparezca. El runner además comprueba en ejecución que
      build() los genere a todos. */
   const minimo = ['harness4', 'link', 'harness14', 'harness15', 'harness16',
-    'harness23', 'harness24', 'harness25', 'harness26', 'landing'];
+    'harness23', 'harness24', 'harness25', 'harness26', 'harness27',
+    'landing'];
   if (!fs.existsSync(wkPath)) {
     ok = false; console.log('FAIL falta tests/run-webkit.js');
   } else {
@@ -1253,7 +1308,7 @@ if (fs.existsSync(wfDir)) {
   }
   ['README.md', 'README.en.md', 'README.pt.md', 'README.fr.md'].forEach(f => {
     const t = fs.readFileSync(path.join(SRC, f), 'utf8');
-    if (/1332|5328/.test(t) || !/1413[\s\S]{0,80}5652/.test(t)) {
+    if (/1332|5328|1413|5652/.test(t) || !/1486[\s\S]{0,80}5944/.test(t)) {
       ok = false; console.log('FAIL ' + f + ' no declara el total nuevo de la suite');
     }
   });

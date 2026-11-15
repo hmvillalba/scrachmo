@@ -41,6 +41,16 @@ let hiddenVars = {};
 let lists = {};
 let listsSig = '';
 let listFormOpen = false;
+/* ---------------- lápiz ----------------
+   El dibujo es estado de EJECUCIÓN: se borra al dar Ejecutar y NUNCA se
+   guarda en el proyecto. Los trazos están en UNIDADES DEL MUNDO, no en
+   píxeles: el canvas se repinta (no se estira), así el zoom, el modo juego
+   y un cambio de tamaño del escenario los reescalan sin deformarlos. */
+let penStrokes = [];
+let penStates = {};
+const PEN_MAX = 4000;
+const PEN_COLOR_DEFAULT = '#4C97FF';
+const PEN_SIZE_DEFAULT = 2;
 let stageBg = 0;
 let stageBgImg = '';
 let showScore = false;
@@ -322,6 +332,7 @@ function applyWorldSize() {
     py.max = String(Math.round(worldTop() - r));
   }
   applySpriteCap();
+  penRepaint();
 }
 
 /* ---------------- project ---------------- */
@@ -2514,6 +2525,108 @@ function bindRepPicker() {
   });
 }
 
+/* ---------------- lápiz: capa de dibujo ----------------
+   `#penLayer` vive DENTRO de `.stage-world`, así el transform:scale() del
+   zoom lo agranda junto con el fondo y los personajes. Su sistema de
+   coordenadas es el de la caja SIN escalar: se mide `#stage`, no el canvas
+   (getBoundingClientRect() del canvas vendría ya multiplicado por el zoom). */
+function penState(s) {
+  const id = s && s.id ? s.id : '_';
+  if (!penStates[id]) penStates[id] = {
+    down: false, color: PEN_COLOR_DEFAULT, size: PEN_SIZE_DEFAULT
+  };
+  return penStates[id];
+}
+
+function penColor(v) {
+  const t = String(v === undefined || v === null ? '' : v).trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(t)) return t.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(t)) {
+    return '#' + t[1] + t[1] + t[2] + t[2] + t[3] + t[3];
+  }
+  return PEN_COLOR_DEFAULT;
+}
+
+function penBox() {
+  const stage = $('#stage');
+  const rect = stage && stage.getBoundingClientRect();
+  if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+  return { w: rect.width, h: rect.height };
+}
+
+function penXY(x, y, box) {
+  return {
+    x: (x - worldLeft()) / worldW * box.w,
+    y: (worldTop() - y) / worldH * box.h
+  };
+}
+
+/* Repinta desde cero: barato (miles de segmentos como mucho) y es la única
+   forma de que un cambio de mundo no deje líneas corridas. */
+function penRepaint() {
+  const cv = $('#penLayer');
+  const box = penBox();
+  if (!cv || !box || typeof cv.getContext !== 'function') return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = Math.max(1, Math.round(box.w * dpr));
+  const H = Math.max(1, Math.round(box.h * dpr));
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, box.w, box.h);
+  const scale = box.w / worldW;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  penStrokes.forEach(t => {
+    if (t.k === 'line') {
+      const a = penXY(t.x1, t.y1, box), b = penXY(t.x2, t.y2, box);
+      ctx.strokeStyle = t.color;
+      ctx.lineWidth = Math.max(0.5, t.size * scale);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (t.k === 'stamp') {
+      const p = penXY(t.x, t.y, box);
+      ctx.save();
+      ctx.font = Math.max(8, 48 * scale) + 'px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.face, p.x, p.y);
+      ctx.restore();
+    }
+  });
+}
+
+function penAdd(t) {
+  if (penStrokes.length >= PEN_MAX) penStrokes.shift();
+  penStrokes.push(t);
+}
+
+/* Sólo se llama desde los bloques de movimiento de execBlock(): arrastrar
+   un personaje o editar sus propiedades NO dibuja, igual que en Scratch. */
+function penStroke(sprite, x0, y0) {
+  if (!sprite) return;
+  const p = penState(sprite);
+  if (!p.down) return;
+  if (Math.abs(sprite.x - x0) < 0.001 && Math.abs(sprite.y - y0) < 0.001) return;
+  penAdd({ k: 'line', x1: x0, y1: y0, x2: sprite.x, y2: sprite.y,
+    color: p.color, size: p.size });
+  penRepaint();
+}
+
+function penStamp(sprite) {
+  if (!sprite) return;
+  const c = currentCostume(sprite);
+  const face = c && c.kind === 'emoji' ? c.src : '🐱';
+  penAdd({ k: 'stamp', x: sprite.x, y: sprite.y, face: face });
+  penRepaint();
+}
+
+function penClear() { penStrokes = []; penRepaint(); }
+
+/* Al dar Ejecutar TODO vuelve a cero, incluidos los lápices bajados. El
+   dibujo de la corrida anterior sigue visible hasta ese momento. */
+function penReset() { penStrokes = []; penStates = {}; penRepaint(); }
+
 /* ---------------- stage and sprites ---------------- */
 function applyStageBg() {
   /* El fondo va en su propia capa DENTRO del mundo (`.stage-bg`), no en
@@ -2583,6 +2696,7 @@ function reclampAllSprites() {
     updateSpriteEl(s);
   });
   applyWorldSize();
+  penRepaint();
 }
 
 /* ---------------- clones ----------------
@@ -4929,6 +5043,13 @@ async function execBlock(node, sprite) {
       return;
     /* «Llamar» suelto (arnés, sin execNode) se ejecuta con un ctx propio. */
     case 'call_proc': await runProcedure(node, sprite); return;
+    /* Lápiz: el estado es POR PERSONAJE y vive sólo durante la corrida. */
+    case 'pen_down': penState(sprite).down = true; return;
+    case 'pen_up': penState(sprite).down = false; return;
+    case 'pen_color': penState(sprite).color = penColor(v); return;
+    case 'pen_size': penState(sprite).size = clamp(num(v, PEN_SIZE_DEFAULT), 1, 40); return;
+    case 'pen_clear': penClear(); return;
+    case 'pen_stamp': penStamp(sprite); return;
     case 'create_clone': {
       /* `self` clona al que ejecuta (que puede ser otro clon); si apunta a un
          personaje, se clona ese. Un id que ya no existe no hace nada, igual
@@ -4953,7 +5074,9 @@ async function execBlock(node, sprite) {
     case 'move': {
       const steps = num(v, 10);
       const rad = sprite.dir * Math.PI / 180;
+      const px0 = sprite.x, py0 = sprite.y;
       clampSpritePos(sprite, sprite.x + steps * Math.sin(rad), sprite.y + steps * Math.cos(rad));
+      penStroke(sprite, px0, py0);
       updateSpriteEl(sprite);
       await sleep(180);
       return;
@@ -4971,26 +5094,34 @@ async function execBlock(node, sprite) {
     case 'go_xy': {
       /* node.val guarda "x,y"; una casilla vacía o inválida vale 0. */
       const xy = String(v == null ? '' : v).split(',');
+      const px0 = sprite.x, py0 = sprite.y;
       clampSpritePos(sprite, num(xy[0], 0), num(xy[1], 0));
+      penStroke(sprite, px0, py0);
       updateSpriteEl(sprite);
       await sleep(180);
       return;
     }
-    case 'bounce':
+    case 'bounce': {
+      const px0 = sprite.x, py0 = sprite.y;
       bounceSprite(sprite);
+      penStroke(sprite, px0, py0);
       updateSpriteEl(sprite);
       await sleep(180);
       return;
+    }
     case 'timer_reset':
       timerStart = Date.now();
       await sleep(120);
       return;
-    case 'go_random':
+    case 'go_random': {
+      const px0 = sprite.x, py0 = sprite.y;
       sprite.x = Math.round((Math.random() * 2 - 1) * 210);
       sprite.y = Math.round((Math.random() * 2 - 1) * 150);
+      penStroke(sprite, px0, py0);
       updateSpriteEl(sprite);
       await sleep(180);
       return;
+    }
     case 'wait':
       await sleep(Math.max(0, num(v, 1)) * 1000);
       return;
@@ -5355,6 +5486,7 @@ function beginRun() {
   if (runActive) return;
   runActive = true;
   runtimeSnapshot = snapshotRuntime();
+  penReset();
   updateResetButton();
 }
 
@@ -5908,6 +6040,7 @@ function sb3SpriteBlocks(sprite, index) {
   const usedVars = new Set();
   const usedMsgs = new Set();
   const usedLists = new Set();
+  const usedPen = new Set();
   let seq = 0;
   let scriptY = 0;
 
@@ -6081,6 +6214,21 @@ function sb3SpriteBlocks(sprite, index) {
       return bid;
     };
     switch (t) {
+      /* Extensión Pen de Scratch: el proyecto la declara sólo si alguien
+         usa uno de estos bloques. */
+      case 'pen_down': usedPen.add(1); return mk('pen_penDown', parentId);
+      case 'pen_up': usedPen.add(1); return mk('pen_penUp', parentId);
+      case 'pen_clear': usedPen.add(1); return mk('pen_clear', parentId);
+      case 'pen_stamp': usedPen.add(1); return mk('pen_stamp', parentId);
+      case 'pen_color': {
+        usedPen.add(1);
+        const col = penColor(node.val === undefined ? '' : node.val);
+        return id('pen_setPenColorToColor', { COLOR: () => [1, [9, col]] });
+      }
+      case 'pen_size': {
+        usedPen.add(1);
+        return id('pen_setPenSizeTo', { SIZE: b => slotIn(node, 0, 4, b) });
+      }
       case 'move': return id('motion_movesteps', { STEPS: b => slotIn(node, 0, 4, b) });
       case 'turn': return id('motion_turnright', { DEGREES: b => slotIn(node, 0, 4, b) });
       case 'point_dir': return id('motion_pointindirection', { DIRECTION: b => slotIn(node, 0, 8, b) });
@@ -6409,7 +6557,8 @@ function sb3SpriteBlocks(sprite, index) {
   });
 
   return { blocks: blocks, dropped: dropped, usedSounds: usedSounds,
-    usedVars: usedVars, usedMsgs: usedMsgs, usedLists: usedLists };
+    usedVars: usedVars, usedMsgs: usedMsgs, usedLists: usedLists,
+    usedPen: usedPen };
 }
 
 /* Ids de variables y de mensajes: estables dentro de un mismo export. Antes
@@ -6449,6 +6598,7 @@ async function sb3Build() {
   const allLists = new Set();
   const soundsNeeded = new Set();
   let assets = 0;
+  let penUsed = false;
 
   function addAsset(bytes, ext) {
     const md5 = md5hex(bytes);
@@ -6481,6 +6631,7 @@ async function sb3Build() {
     const built = sb3SpriteBlocks(s, i);
     built.dropped.forEach(d => { if (dropped.indexOf(d) < 0) dropped.push(d); });
     built.usedVars.forEach(v => allVars.set(v, true));
+    if (built.usedPen.size) penUsed = true;
     built.usedSounds.forEach(k => soundsNeeded.add(k));
     built.usedMsgs.forEach(m => allMsgs.add(m));
     built.usedLists.forEach(n => allLists.add(n));
@@ -6603,7 +6754,7 @@ async function sb3Build() {
   const project = {
     targets: [stage].concat(spriteTargets),
     monitors: [],
-    extensions: [],
+    extensions: penUsed ? ['pen'] : [],
     meta: { semver: '3.0.0', vm: '0.2.0', agent: 'ScrachMo' }
   };
 
@@ -7328,6 +7479,7 @@ function bindEvents() {
     /* `clamp(48px,15vw,68px)` y el ancho de la caja cambian con la ventana:
        girar el celular puede dejar un personaje del borde cortado. */
     reclampAllSprites();
+    penRepaint();
   });
   $('#undoBtn').addEventListener('click', undo);
   $('#redoBtn').addEventListener('click', redo);

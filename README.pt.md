@@ -14,7 +14,7 @@ Sem frameworks, sem dependências, sem build: arquivos estáticos que funcionam 
 
 ### Blocos como no Scratch
 
-- 59 blocos em 9 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis, **listas com nome**, **mensagens locais com nome** e **procedimentos com nome**.
+- 65 blocos em 10 categorias com as cores clássicas do Scratch: movimento, aparência, som, eventos, controle, sensores, operadores, variáveis, **listas com nome**, **mensagens locais com nome**, **procedimentos com nome** e **lápis**.
 - **Listas com nome**: crie várias listas (por exemplo «inventário»), escolha o nome num menu e use **adicionar**, **apagar por posição**, **pôr na posição** e **esvaziar**, além dos repórteres **tamanho de** e **item de**. Os valores aparecem e são editados no seu próprio cartão, são guardados com o projeto e viajam no `.sb3` com um id por nome.
 - **Procedimentos com nome**: defina uma rotina com o chapéu «Definir {v}» e chame-a com «Chamar {v}» em qualquer script do mesmo personagem. O nome escolhe-se num menu partilhado, a chamada corre no mesmo fio e a recursão corta-se sozinha. Por enquanto não têm parâmetros.
 - Blocos chapéu (bandeira verde, toque, tecla, agitar o celular, receber mensagem, pontuação) e blocos C: `Repetir {v} vezes`, `Para sempre` e condicionais com `se... senão`.
@@ -255,7 +255,7 @@ Quer adicionar um bloco novo? É uma entrada em `data.js` e a sua lógica em `en
 
 ## Verificação
 
-O projeto tem **1413 verificações por idioma, 5652 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), as **listas com nome** (4 blocos, 2 repórteres, um menu por bloco, execução por nome e uma declaração por lista no `.sb3`), os **procedimentos com nome** (chapéu de definição, chamada no mesmo fio, corte de recursão e o `PROCCODE` do Scratch), a landing e o controle na tela com a inclinação.
+O projeto tem **1486 verificações por idioma, 5944 no total**: cada cenário roda **quatro vezes —espanhol, inglês, português e francês— no Chrome headless**, e as quatro têm que dar 0 falhas. Além disso há **143 verificações de PWA** que não precisam de navegador. Juntas cobrem o catálogo de blocos e os quatro idiomas, o motor e os seus eventos, trajes e importação de imagens, o editor e as suas ferramentas, o palco e o seu tamanho —incluindo a margem visual que mantém o desenho inteiro dentro do palco—, clones, sensores e colisões, sons e a sua síntese de verdade, a exportação `.sb3`, as **mensagens com nome** (catálogo, menu, despacho por nome e um *broadcast* por nome), as **listas com nome** (4 blocos, 2 repórteres, um menu por bloco, execução por nome e uma declaração por lista no `.sb3`), os **procedimentos com nome** (chapéu de definição, chamada no mesmo fio, corte de recursão e o `PROCCODE` do Scratch), o **lápis** (uma camada `<canvas>` no palco, rastro nos quatro blocos de movimento, repintado em unidades do mundo e a extensão `pen` no `.sb3`), a landing e o controle na tela com a inclinação.
 
 ```bash
 node --check data.js && node --check engine.js && node --check sw.js && \
@@ -263,13 +263,13 @@ node --check landing.js && node --check boot.js
 node tests/check-parity.js       # paridade de textos + verificações estáticas
 node tests/pwa-check.js          # manifest, ícones e rotas servidas
 node tests/pwa-sw.js             # lógica do service worker
-node tests/run.js minha-corrida  # 28 cenários × 4 idiomas no Chrome headless
-node tests/run-webkit.js minha-corrida  # 10 cenários × 1 idioma no WebKit
+node tests/run.js minha-corrida  # 29 cenários × 4 idiomas no Chrome headless
+node tests/run-webkit.js minha-corrida  # 11 cenários × 1 idioma no WebKit
 ```
 
 `tests/build.js` monta as páginas de teste e o link compartilhado; `tests/run.js` abre o Chrome com um perfil isolado por suíte e por idioma, e conta `PASS` / `FAIL` / `ERROR`. No GitHub Actions, `.github/workflows/test.yml` repete o mesmo em cada push e pull request.
 
-Uma segunda corrida, mais curta, cobre o **WebKit** —o motor do Safari e de todos os navegadores do iOS. `tests/run-webkit.js` roda **10 cenários sensíveis uma vez, em espanhol**, vigiando as APIs onde o WebKit muda: fluxos de compressão, `createImageBitmap` e o seu respaldo para `<img>`, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, o exportador `.sb3` e os menus das três fases de P2.12. O Playwright é dependência só das provas, confinada em `tests/`; a raiz segue sem `package.json` porque o app não tem build. Instale com `cd tests && npm ci && npx playwright install --with-deps webkit` e rode `node tests/run-webkit.js minha-corrida`. **Não substitui a lista manual** abaixo: a permissão de movimento, o desbloqueio do WebAudio, o notch e a instalação da PWA ainda exigem um aparelho real.
+Uma segunda corrida, mais curta, cobre o **WebKit** —o motor do Safari e de todos os navegadores do iOS. `tests/run-webkit.js` roda **11 cenários sensíveis uma vez, em espanhol**, vigiando as APIs onde o WebKit muda: fluxos de compressão, `createImageBitmap` e o seu respaldo para `<img>`, WebP→PNG, `100dvh`, `DeviceMotionEvent`, `localStorage`, o exportador `.sb3`, os menus das três fases de P2.12 e o `<canvas>` do lápis com o seu `devicePixelRatio`. O Playwright é dependência só das provas, confinada em `tests/`; a raiz segue sem `package.json` porque o app não tem build. Instale com `cd tests && npm ci && npx playwright install --with-deps webkit` e rode `node tests/run-webkit.js minha-corrida`. **Não substitui a lista manual** abaixo: a permissão de movimento, o desbloqueio do WebAudio, o notch e a instalação da PWA ainda exigem um aparelho real.
 
 O registro completo —o que cada suíte verifica, por que quatro idiomas e `--lang`, as armadilhas encontradas pelo caminho, as notas de ambiente do CI e as regras de versão e cache— fica no README em espanhol, que é a fonte de verdade para tudo o que muda a cada versão:
 
@@ -277,7 +277,7 @@ O registro completo —o que cada suíte verifica, por que quatro idiomas e `--l
 
 ## Verificação manual no iPhone (WebKit)
 
-A suíte automática roda no **Chrome headless** (28 cenários × 4 idiomas) e, desde esta versão, também no **WebKit**: uma passada curta de 10 cenários em espanhol que vigia as APIs onde o Safari se diferencia. O WebKit —o motor do Safari e de *todos* os navegadores do iOS, porque a Apple não deixa usar outro— já não é um ponto cego no CI. Mas ainda há coisas que só se podem julgar com o dedo (a permissão real de movimento, o desbloqueio do áudio, o notch e a instalação da PWA). Esta é a lista que se roda **à mão antes de cada versão**, com um iPhone real e Safari. São uns dez minutos.
+A suíte automática roda no **Chrome headless** (29 cenários × 4 idiomas) e, desde esta versão, também no **WebKit**: uma passada curta de 11 cenários em espanhol que vigia as APIs onde o Safari se diferencia. O WebKit —o motor do Safari e de *todos* os navegadores do iOS, porque a Apple não deixa usar outro— já não é um ponto cego no CI. Mas ainda há coisas que só se podem julgar com o dedo (a permissão real de movimento, o desbloqueio do áudio, o notch e a instalação da PWA). Esta é a lista que se roda **à mão antes de cada versão**, com um iPhone real e Safari. São uns dez minutos.
 
 | # | O que testar | Como | O que tem que acontecer |
 |---|---|---|---|

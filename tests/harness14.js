@@ -447,6 +447,57 @@ window.addEventListener('load', function () {
       check('grafo_de_procedimientos_sano',
         conProcs.project.targets.every(t => graphProblems(t).length === 0));
 
+      /* ============ 7. extensión Pen del lápiz ============ */
+      sprites = [make('Lapicero', [
+        { id: 'pe1', type: 'when_flag' },
+        { id: 'pe2', type: 'pen_down' },
+        { id: 'pe3', type: 'pen_color', val: '#FF0000' },
+        { id: 'pe4', type: 'pen_size', val: 5 },
+        { id: 'pe5', type: 'move', val: 20 },
+        { id: 'pe6', type: 'pen_stamp' },
+        { id: 'pe7', type: 'pen_up' },
+        { id: 'pe8', type: 'pen_clear' }
+      ])];
+      selectedSpriteId = sprites[0].id;
+      const conPen = await sb3Build();
+      const todosPen = {};
+      conPen.project.targets.forEach(t => {
+        Object.keys(t.blocks || {}).forEach(id => { todosPen[id] = t.blocks[id]; });
+      });
+      const opsPen = Object.keys(todosPen).map(id => todosPen[id].opcode);
+      const porOpPen = op => Object.keys(todosPen).filter(id => todosPen[id].opcode === op);
+      check('pen_declara_la_extension',
+        Array.isArray(conPen.project.extensions) &&
+        conPen.project.extensions.indexOf('pen') > -1 &&
+        conPen.project.extensions.length === 1);
+      check('pen_down_se_exporta', opsPen.indexOf('pen_penDown') > -1);
+      check('pen_up_se_exporta', opsPen.indexOf('pen_penUp') > -1);
+      check('pen_color_se_exporta', opsPen.indexOf('pen_setPenColorToColor') > -1);
+      check('pen_size_se_exporta', opsPen.indexOf('pen_setPenSizeTo') > -1);
+      check('pen_clear_se_exporta', opsPen.indexOf('pen_clear') > -1);
+      check('pen_stamp_se_exporta', opsPen.indexOf('pen_stamp') > -1);
+      const colB = porOpPen('pen_setPenColorToColor');
+      check('pen_color_es_input_de_color', colB.length === 1 &&
+        !!todosPen[colB[0]].inputs.COLOR &&
+        todosPen[colB[0]].inputs.COLOR[1][0] === 9 &&
+        todosPen[colB[0]].inputs.COLOR[1][1] === '#ff0000');
+      const sizeB = porOpPen('pen_setPenSizeTo');
+      check('pen_size_lleva_el_valor', sizeB.length === 1 &&
+        JSON.stringify(todosPen[sizeB[0]].inputs.SIZE).indexOf('"5"') > -1);
+      check('grafo_de_pen_sano',
+        conPen.project.targets.every(t => graphProblems(t).length === 0));
+
+      /* Sin bloques de lápiz, la extensión NO se declara: un proyecto viejo
+         exporta exactamente igual que antes. */
+      sprites = [make('SinLapiz', [
+        { id: 'np1', type: 'when_flag' },
+        { id: 'np2', type: 'move', val: 10 }
+      ])];
+      selectedSpriteId = sprites[0].id;
+      const sinPen = await sb3Build();
+      check('sin_lapiz_no_declara_la_extension',
+        Array.isArray(sinPen.project.extensions) && sinPen.project.extensions.length === 0);
+
       /* El botón existe y está enganchado. */
       check('boton_sb3', !!document.getElementById('sb3Btn') &&
         typeof exportSb3 === 'function');

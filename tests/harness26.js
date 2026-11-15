@@ -53,8 +53,8 @@ window.addEventListener('load', function () {
         ['procNew', 'procNameTitle', 'procNameHint', 'procBadName'].every(k =>
           typeof UI[l][k] === 'string' && UI[l][k].length)));
       check('opcion_nueva_traducida', new Set(LANGS.map(l => UI[l].procNew)).size === 4);
-      check('paleta_en_59', PALETTE_BLOCKS.length === 59 && REPORTER_BLOCKS.length === 13);
-      check('badge_en_59', document.getElementById('blocksCount').textContent === '59');
+      check('paleta_en_59', PALETTE_BLOCKS.length === 65 && REPORTER_BLOCKS.length === 13);
+      check('badge_en_59', document.getElementById('blocksCount').textContent === '65');
 
       /* ============ 2. nombres ============ */
       check('nombre_se_normaliza', procName('  girar  ') === 'girar');

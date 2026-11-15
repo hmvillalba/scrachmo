@@ -73,6 +73,7 @@ const WEBKIT_SET = [
   'harness24',  // mensajes con nombre
   'harness25',  // listas con nombre
   'harness26',  // procedimientos con nombre
+  'harness27',  // lápiz: canvas, devicePixelRatio y repintado
   'landing'     // localStorage, color-scheme del <select> y 100dvh
 ];
 

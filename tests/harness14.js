@@ -230,11 +230,15 @@ window.addEventListener('load', function () {
          declarados en el escenario, con el mismo id. */
       const idsVar = Object.keys(project.targets[0].variables || {});
       const idsMsg = Object.keys(project.targets[0].broadcasts || {});
-      check('ids_de_variable_existen', project.targets.every(t =>
-        Object.keys(t.blocks || {}).every(id => {
+      /* Las globales se declaran en el Stage; las locales, en el target del
+         personaje. Un bloque puede apuntar a cualquiera de los dos. */
+      check('ids_de_variable_existen', project.targets.every(t => {
+        const propios = Object.keys(t.variables || {}).concat(idsVar);
+        return Object.keys(t.blocks || {}).every(id => {
           const f = t.blocks[id] && t.blocks[id].fields && t.blocks[id].fields.VARIABLE;
-          return !f || idsVar.indexOf(f[1]) > -1;
-        })));
+          return !f || propios.indexOf(f[1]) > -1;
+        });
+      }));
       check('ids_de_mensaje_existen', project.targets.every(t =>
         Object.keys(t.blocks || {}).every(id => {
           const f = t.blocks[id] && t.blocks[id].fields && t.blocks[id].fields.BROADCAST_OPTION;
@@ -497,6 +501,54 @@ window.addEventListener('load', function () {
       const sinPen = await sb3Build();
       check('sin_lapiz_no_declara_la_extension',
         Array.isArray(sinPen.project.extensions) && sinPen.project.extensions.length === 0);
+
+      /* ============ variables locales en el .sb3 ============ */
+      const viejo = make('Viejo', [
+        { id: 'hv', type: 'when_flag' },
+        { id: 'sv', type: 'set_var', val: 'g=3' }
+      ]);
+      variables = { g: 3 };
+      sprites = [viejo];
+      selectedSpriteId = viejo.id;
+      const sinLocales = await sb3Build();
+      check('sb3_proyecto_viejo_targets_sin_variables',
+        sinLocales.project.targets.slice(1).every(t =>
+          Object.keys(t.variables || {}).length === 0));
+      check('sb3_proyecto_viejo_stage_con_la_global',
+        Object.keys(sinLocales.project.targets[0].variables).some(k =>
+          sinLocales.project.targets[0].variables[k][0] === 'g'));
+
+      const localA = make('LocalA', [
+        { id: 'hl', type: 'when_flag' },
+        { id: 'sl', type: 'set_var', val: 'vidas=4' }
+      ]);
+      localA.vars = { vidas: 3 };
+      sprites = [localA];
+      selectedSpriteId = localA.id;
+      const conLocal = await sb3Build();
+      check('sb3_local_no_esta_en_el_stage',
+        Object.keys(conLocal.project.targets[0].variables).every(k =>
+          conLocal.project.targets[0].variables[k][0] !== 'vidas'));
+      check('sb3_local_esta_en_su_target',
+        Object.keys(conLocal.project.targets[1].variables).some(k =>
+          conLocal.project.targets[1].variables[k][0] === 'vidas' &&
+          conLocal.project.targets[1].variables[k][1] === 3));
+      check('sb3_bloque_apunta_al_id_local', (() => {
+        const t = conLocal.project.targets[1];
+        const id = Object.keys(t.variables).find(k => t.variables[k][0] === 'vidas');
+        return !!id && Object.keys(t.blocks).some(k => {
+          const f = t.blocks[k].fields && t.blocks[k].fields.VARIABLE;
+          return f && f[1] === id;
+        });
+      })());
+      check('sb3_project_json_declara_las_locales', (() => {
+        const f = conLocal.files.find(x => x.name === 'project.json');
+        if (!f) return false;
+        try {
+          const j = JSON.parse(new TextDecoder().decode(f.bytes));
+          return j.targets[1] && Object.keys(j.targets[1].variables).length === 1;
+        } catch (e) { return false; }
+      })());
 
       /* El botón existe y está enganchado. */
       check('boton_sb3', !!document.getElementById('sb3Btn') &&

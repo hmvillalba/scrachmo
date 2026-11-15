@@ -1211,8 +1211,66 @@ if (fs.existsSync(wfDir)) {
   }
 }
 
+/* ---------------- P2.12, fase 5: variables locales ----------------
+   El ámbito lo decide el personaje que EJECUTA, no un campo del bloque:
+   si declaró la variable en su `vars`, se usa esa; si no, se cae a la
+   global. Se exige que TODAS las rutas de evaluación reciban el sprite,
+   que el estado se serialice y que el .sb3 declare cada local en su
+   target (nunca en el Stage). */
+{
+  const data5 = fs.readFileSync(path.join(SRC, 'data.js'), 'utf8');
+  const html5 = fs.readFileSync(path.join(SRC, 'app.html'), 'utf8');
+  const build5 = fs.readFileSync(path.join(SRC, 'tests', 'build.js'), 'utf8');
+  const clave5 = ['varScope', 'varScopeGlobal', 'varScopeLocal', 'varLocalTag'];
+  const sinClave = clave5.filter(k =>
+    (data5.match(new RegExp('\\b' + k + ':', 'g')) || []).length !== 4);
+  if (sinClave.length) {
+    ok = false; console.log('FAIL faltan textos de ámbito en los 4 idiomas: ' + sinClave.join(', '));
+  }
+  if (!/\.var-form-scope\{/.test(html5) || !/\.var-scope\{/.test(html5)) {
+    ok = false; console.log('FAIL falta el CSS del selector de ámbito o del chip local');
+  }
+  const fns5 = ['normalizeVars', 'varStore', 'varHas', 'varGet', 'varSet',
+    'varPairs', 'varsSignature', 'varPanelStore', 'sb3VarOwner'];
+  const sinFn5 = fns5.filter(f => engine.indexOf('function ' + f + '(') < 0);
+  if (sinFn5.length) {
+    ok = false; console.log('FAIL faltan funciones de variables locales: ' + sinFn5.join(', '));
+  }
+  if (!/vars: normalizeVars\(raw\.vars\)/.test(engine) ||
+      !/vars: s\.vars \|\| \{\}/.test(engine) ||
+      !/vars: \{\}/.test(engine)) {
+    ok = false; console.log('FAIL las variables locales no se leen ni se guardan con el personaje');
+  }
+  /* Cadenas literales: dentro de un string JS '\(' pierde la barra y los
+     paréntesis se vuelven un grupo de captura en RegExp. indexOf no engaña. */
+  const rutas5 = [
+    'function evalExpr(txt, sprite)', 'function evalCond(txt, sprite)',
+    'function condSide(txt, sprite)', 'function resolveValue(raw, sprite)',
+    'function applyVar(node, sprite)', 'applyVar(node, sprite);',
+    'evalCond(nodeVal(node, sprite), sprite)', 'evalExpr(v, sprite)',
+    'varGet(String(v).trim(), sprite)'
+  ];
+  const sinRuta = rutas5.filter(r => engine.indexOf(r) < 0);
+  if (sinRuta.length) {
+    ok = false; console.log('FAIL una ruta de evaluación perdió el sprite: ' + sinRuta.join(' | '));
+  }
+  if (!/id="newVarScope"/.test(engine) || !/data-scope/.test(engine) ||
+      !/varsSignature\(selectedSprite\(\)\)/.test(engine)) {
+    ok = false; console.log('FAIL el panel no distingue el ámbito de cada variable');
+  }
+  if (!/function sb3VarId\(name, ownerId\)/.test(engine) ||
+      !/variables: localVars/.test(engine) ||
+      !/stageVars\[sb3VarId\(name, ''\)\]/.test(engine) ||
+      !/if \(!sb3VarOwner\(s, v\)\) allVars\.set\(v, true\)/.test(engine)) {
+    ok = false; console.log('FAIL el .sb3 no declara las locales en su target');
+  }
+  if (!/'harness28\.js'/.test(build5)) {
+    ok = false; console.log('FAIL tests/build.js no registra harness28.js');
+  }
+}
+
 /* ---------------- P2.10 B: WebKit se corre de verdad ----------------
-   Los 5944 checks de Chrome no dicen nada del motor de un iPhone. La parte
+   Los 6292 checks de Chrome no dicen nada del motor de un iPhone. La parte
    manual ya está documentada en los cuatro README; lo que falta es que en
    cada push se ejecute una corrida corta en WebKit. Acá se exige que el
    runner, su dependencia fijada, el job de CI y la documentación sigan
@@ -1244,11 +1302,11 @@ if (fs.existsSync(wfDir)) {
     ok = false; console.log('FAIL .gitignore no ignora tests/node_modules/');
   }
 
-  /* Los once escenarios sensibles. No se exige que sean los únicos: se exige
+  /* Los doce escenarios sensibles. No se exige que sean los únicos: se exige
      que ninguno desaparezca. El runner además comprueba en ejecución que
      build() los genere a todos. */
   const minimo = ['harness4', 'link', 'harness14', 'harness15', 'harness16',
-    'harness23', 'harness24', 'harness25', 'harness26', 'harness27',
+    'harness23', 'harness24', 'harness25', 'harness26', 'harness27', 'harness28',
     'landing'];
   if (!fs.existsSync(wkPath)) {
     ok = false; console.log('FAIL falta tests/run-webkit.js');
@@ -1308,7 +1366,7 @@ if (fs.existsSync(wfDir)) {
   }
   ['README.md', 'README.en.md', 'README.pt.md', 'README.fr.md'].forEach(f => {
     const t = fs.readFileSync(path.join(SRC, f), 'utf8');
-    if (/1332|5328|1413|5652/.test(t) || !/1486[\s\S]{0,80}5944/.test(t)) {
+    if (/1332|5328|1413|5652|1486|5944/.test(t) || !/1573[\s\S]{0,80}6292/.test(t)) {
       ok = false; console.log('FAIL ' + f + ' no declara el total nuevo de la suite');
     }
   });

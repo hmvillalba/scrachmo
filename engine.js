@@ -36,6 +36,48 @@ const MAX_CLONES = 300;
 let selectedSpriteId = null;
 let variables = {};
 let hiddenVars = {};
+/* ---------------- variables locales (P2.12, fase 5) ----------------
+   Cada personaje puede tener su propio `vars`. La resolución es la de
+   Scratch: si el personaje que EJECUTA declaró una variable con ese nombre,
+   se usa esa; si no, se cae a la global. Es estado de DISENO, igual que
+   `variables`: lo que una corrida cambie queda guardado. Un proyecto viejo
+   no tiene `vars` y sigue siendo 100 % global, sin migración. */
+function normalizeVars(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  Object.keys(raw).forEach(k => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,15}$/.test(k) ||
+        k === 'score' || k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+    const v = raw[k];
+    out[k] = (typeof v === 'number' && isFinite(v))
+      ? v : String(v === undefined || v === null ? '' : v).slice(0, 120);
+  });
+  return out;
+}
+function varStore(name, sprite) {
+  if (sprite && sprite.vars && Object.prototype.hasOwnProperty.call(sprite.vars, name)) return sprite.vars;
+  return variables;
+}
+function varHas(name, sprite) {
+  return Object.prototype.hasOwnProperty.call(varStore(name, sprite), name);
+}
+function varGet(name, sprite) {
+  if (name === 'score') return score;
+  const store = varStore(name, sprite);
+  return Object.prototype.hasOwnProperty.call(store, name) ? store[name] : 0;
+}
+function varSet(name, value, sprite) {
+  varStore(name, sprite)[name] = value;
+}
+function varPairs(sprite) {
+  const locals = (sprite && sprite.vars) || {};
+  return Object.keys(variables).map(k => [k, variables[k]])
+    .concat(Object.keys(locals).map(k => [k, locals[k]]));
+}
+function varsSignature(sprite) {
+  return Object.keys(variables).join('\u0001') + '\u0002' + (sprite ? sprite.id : '') +
+    '\u0002' + Object.keys((sprite && sprite.vars) || {}).join('\u0001');
+}
 /* Listas con nombre: cada nombre guarda un arreglo de valores. Igual que las
    variables, son estado de DISENO: lo que haga una corrida queda guardado. */
 let lists = {};
@@ -465,7 +507,8 @@ function createSpriteData(emoji, name, code) {
     x: 0, y: 0, dir: 90, size: 100, visible: true, rot: 'all',
     costumes: normalizeCostumes(null, emoji || '🐱'),
     costumeIndex: 0,
-    code: code || []
+    code: code || [],
+    vars: {}
   };
   syncCostume(s);
   return s;
@@ -707,7 +750,8 @@ function normalizeSprites(list) {
         rot: normRot(raw.rot),
         costumes: costumes,
         costumeIndex: clamp(Math.floor(num(raw.costumeIndex, 0)), 0, costumes.length - 1),
-        code: normalizeNodes(raw.code, new Set())
+        code: normalizeNodes(raw.code, new Set()),
+        vars: normalizeVars(raw.vars)
       };
       clampSpritePos(s);
       syncCostume(s);
@@ -891,7 +935,8 @@ function serializeProject() {
       rot: normRot(s.rot),
       costumes: s.costumes,
       costumeIndex: s.costumeIndex,
-      code: s.code
+      code: s.code,
+      vars: s.vars || {}
     })),
     variables: variables,
     lists: lists,
@@ -1801,19 +1846,20 @@ function updateHUD() {
 
 /* ---------------- variables panel ---------------- */
 function ensureVarsRendered() {
-  const sig = Object.keys(variables).join('\u0001');
-  if (sig !== varsSig) renderVars();
+  if (varsSignature(selectedSprite()) !== varsSig) renderVars();
   else syncVars();
 }
 
 function syncVars() {
   const list = $('#varsList');
   if (!list) return;
+  const sp = selectedSprite();
   list.querySelectorAll('input[data-var]').forEach(inp => {
     const name = inp.dataset.var;
-    if (!(name in variables)) return;
-    if (document.activeElement !== inp) inp.value = String(variables[name]);
-    const numeric = typeof variables[name] === 'number';
+    const store = inp.dataset.scope === 'local' ? ((sp && sp.vars) || {}) : variables;
+    if (!(name in store)) return;
+    if (document.activeElement !== inp) inp.value = String(store[name]);
+    const numeric = typeof store[name] === 'number';
     const card = inp.closest('.var-card');
     if (card) card.querySelectorAll('[data-step]').forEach(b => { b.disabled = !numeric; });
   });
@@ -1823,39 +1869,48 @@ function renderVars() {
   const list = $('#varsList');
   if (!list) return;
   const t = UI[lang];
-  const names = Object.keys(variables);
-  varsSig = names.join('\u0001');
+  const sp = selectedSprite();
+  const globales = Object.keys(variables).map(k => ({ name: k, value: variables[k], local: false }));
+  const locales = Object.keys((sp && sp.vars) || {}).map(k => ({ name: k, value: sp.vars[k], local: true }));
+  const all = globales.concat(locales);
+  varsSig = varsSignature(sp);
   const count = $('#varsCount');
-  if (count) count.textContent = String(names.length);
+  if (count) count.textContent = String(all.length);
 
-  if (!names.length) {
+  if (!all.length) {
     list.innerHTML = '<div class="empty">' + icon('list') +
       '<b>' + esc(t.varsEmpty) + '</b><p>' + esc(t.varsEmptyDesc) + '</p></div>';
   } else {
-    list.innerHTML = names.map((name, i) => {
+    list.innerHTML = all.map((item, i) => {
       const c = VAR_COLORS[i % VAR_COLORS.length];
-      const value = variables[name];
+      const name = item.name;
+      const value = item.value;
       const numeric = typeof value === 'number';
-      const hidden = !!hiddenVars[name];
+      const hidden = !item.local && !!hiddenVars[name];
       const safe = esc(name);
       const toggleLabel = hidden ? t.showOnStage : t.hideOnStage;
-      return '<div class="var-card" style="--v:' + c.v + ';--vt:' + c.t + '">' +
+      const scope = item.local ? 'local' : 'global';
+      const tag = item.local
+        ? '<span class="var-scope" title="' + esc(t.varScopeLocal) + '">' + esc(t.varLocalTag) + '</span>'
+        : '';
+      const eye = item.local ? '' :
+        '<button type="button" class="var-mini' + (hidden ? '' : ' on') + '" data-eye="' + safe + '"' +
+          ' aria-pressed="' + String(!hidden) + '" aria-label="' + esc(toggleLabel) + '" title="' + esc(toggleLabel) + '">' +
+          icon(hidden ? 'eye-off' : 'eye') + '</button>';
+      return '<div class="var-card" data-scope="' + scope + '" style="--v:' + c.v + ';--vt:' + c.t + '">' +
         '<div class="var-head">' +
           '<span class="var-dot"></span>' +
-          '<span class="var-name" title="' + safe + '">' + safe + '</span>' +
-          '<button type="button" class="var-mini' + (hidden ? '' : ' on') + '" data-eye="' + safe + '"' +
-            ' aria-pressed="' + String(!hidden) + '" aria-label="' + esc(toggleLabel) + '" title="' + esc(toggleLabel) + '">' +
-            icon(hidden ? 'eye-off' : 'eye') + '</button>' +
-          '<button type="button" class="var-mini" data-del-var="' + safe + '"' +
+          '<span class="var-name" title="' + safe + '">' + safe + '</span>' + tag + eye +
+          '<button type="button" class="var-mini" data-del-var="' + safe + '" data-scope="' + scope + '"' +
             ' aria-label="' + esc(t.deleteVar) + '" title="' + esc(t.deleteVar) + '">' + icon('close') + '</button>' +
         '</div>' +
         '<div class="var-value-row">' +
-          '<button type="button" class="var-step" data-var-step="' + safe + '" data-step="-1"' + (numeric ? '' : ' disabled') +
+          '<button type="button" class="var-step" data-var-step="' + safe + '" data-scope="' + scope + '" data-step="-1"' + (numeric ? '' : ' disabled') +
             ' aria-label="' + esc(t.minusOne) + '">−</button>' +
-          '<input class="var-val" data-var="' + safe + '" value="' + esc(value) + '"' +
+          '<input class="var-val" data-var="' + safe + '" data-scope="' + scope + '" value="' + esc(value) + '"' +
             ' inputmode="' + (numeric ? 'decimal' : 'text') + '" aria-label="' + safe + '"' +
             ' autocomplete="off" spellcheck="false">' +
-          '<button type="button" class="var-step" data-var-step="' + safe + '" data-step="1"' + (numeric ? '' : ' disabled') +
+          '<button type="button" class="var-step" data-var-step="' + safe + '" data-scope="' + scope + '" data-step="1"' + (numeric ? '' : ' disabled') +
             ' aria-label="' + esc(t.plusOne) + '">+</button>' +
         '</div></div>';
     }).join('');
@@ -1877,6 +1932,10 @@ function varFormHTML(t) {
     '<button type="submit" class="var-form-ok">' + esc(t.create) + '</button>' +
     '<button type="button" class="var-form-cancel" id="cancelVar" aria-label="' + esc(t.cancel) + '" title="' + esc(t.cancel) + '">' +
       icon('close') + '</button>' +
+    '<select id="newVarScope" class="var-form-scope" aria-label="' + esc(t.varScope) + '" title="' + esc(t.varScope) + '">' +
+      '<option value="global">' + esc(t.varScopeGlobal) + '</option>' +
+      '<option value="local">' + esc(t.varScopeLocal) + '</option>' +
+    '</select>' +
     '<span class="var-form-hint" id="varFormHint">' + esc(t.varNameHint) + '</span>' +
   '</form>';
 }
@@ -1900,6 +1959,11 @@ function closeVarForm() {
   renderVars();
 }
 
+function varPanelStore(local) {
+  const sp = selectedSprite();
+  return local ? (sp ? sp.vars : null) : variables;
+}
+
 function createVariable() {
   const inp = $('#newVarName');
   const hint = $('#varFormHint');
@@ -1918,13 +1982,18 @@ function createVariable() {
     inp.focus();
     return;
   }
-  if (name in variables) {
+  const sel = $('#newVarScope');
+  const local = !!(sel && sel.value === 'local');
+  const store = varPanelStore(local);
+  if (!store) return;
+  /* El mismo nombre puede existir en el otro ámbito: cada cual es suya. */
+  if (name in store) {
     if (hint) { hint.textContent = t.varExists; hint.classList.add('error'); }
     inp.focus();
     return;
   }
-  variables[name] = 0;
-  delete hiddenVars[name];
+  store[name] = 0;
+  if (!local) delete hiddenVars[name];
   varFormOpen = false;
   renderVars();
   updateHUD();
@@ -1932,10 +2001,11 @@ function createVariable() {
   toast(t.varCreated);
 }
 
-function deleteVariable(name) {
-  if (!(name in variables)) return;
-  delete variables[name];
-  delete hiddenVars[name];
+function deleteVariable(name, local) {
+  const store = varPanelStore(local);
+  if (!store || !(name in store)) return;
+  delete store[name];
+  if (!local) delete hiddenVars[name];
   renderVars();
   updateHUD();
   saveProject();
@@ -1951,10 +2021,11 @@ function toggleVarVisibility(name) {
   saveProject();
 }
 
-function stepVariable(name, step) {
-  if (!(name in variables)) return;
-  const current = Number(variables[name]);
-  variables[name] = (Number.isFinite(current) ? current : 0) + step;
+function stepVariable(name, step, local) {
+  const store = varPanelStore(local);
+  if (!store || !(name in store)) return;
+  const current = Number(store[name]);
+  store[name] = (Number.isFinite(current) ? current : 0) + step;
   updateHUD();
   saveProject();
 }
@@ -4608,7 +4679,7 @@ function calcExpr(src) {
   return value;
 }
 
-function evalExpr(txt) {
+function evalExpr(txt, sprite) {
   try {
     let s = String(txt).trim();
     if (s === '') return null;
@@ -4618,8 +4689,8 @@ function evalExpr(txt) {
     });
     s = s.replace(/[A-Za-z_][A-Za-z0-9_]*/g, w => {
       if (w === 'score') return String(score);
-      if (w in variables) {
-        const val = variables[w];
+      if (varHas(w, sprite)) {
+        const val = varGet(w, sprite);
         return (typeof val === 'number') ? String(val) : '@';
       }
       return '0';
@@ -4631,27 +4702,27 @@ function evalExpr(txt) {
   } catch (e) { return null; }
 }
 
-function condSide(txt) {
+function condSide(txt, sprite) {
   const s = String(txt).trim().replace(/^["']+|["']+$/g, '');
   if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(s)) {
     if (s === 'score') return score;
-    return (s in variables) ? variables[s] : s;
+    return varHas(s, sprite) ? varGet(s, sprite) : s;
   }
-  const ev = evalExpr(s);
+  const ev = evalExpr(s, sprite);
   return (ev === null) ? s : ev;
 }
 
-function evalCond(txt) {
+function evalCond(txt, sprite) {
   const s = String(txt).trim();
   if (s === '') return false;
   const m = s.match(/^(.+?)\s*(==|!=|>=|<=|>|<|=)\s*(.+)$/);
   if (!m) {
-    const ev = evalExpr(s);
+    const ev = evalExpr(s, sprite);
     return ev !== null && ev !== 0;
   }
   const op = m[2];
-  const lv = condSide(m[1]);
-  const rv = condSide(m[3]);
+  const lv = condSide(m[1], sprite);
+  const rv = condSide(m[3], sprite);
   const bothNum = (typeof lv === 'number' && typeof rv === 'number');
   const ln = Number(lv), rn = Number(rv);
   if (op === '>') return ln > rn;
@@ -4671,15 +4742,15 @@ function evalCond(txt) {
   return false;
 }
 
-function resolveValue(raw) {
+function resolveValue(raw, sprite) {
   if (raw === '') return '';
   if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
   if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(raw)) {
     if (raw === 'score') return score;
-    if (raw in variables) return variables[raw];
+    if (varHas(raw, sprite)) return varGet(raw, sprite);
     return raw;
   }
-  const ev = evalExpr(raw);
+  const ev = evalExpr(raw, sprite);
   return (ev === null) ? raw : ev;
 }
 
@@ -4731,9 +4802,7 @@ function evalReporter(node, sprite, depth) {
     case 'rep_x': return sprite ? sprite.x : 0;
     case 'rep_y': return sprite ? sprite.y : 0;
     case 'rep_var': {
-      const key = String(v).trim();
-      if (key === 'score') return score;
-      return (key in variables) ? variables[key] : 0;
+      return varGet(String(v).trim(), sprite);
     }
     case 'rep_list_len': return listRead(listName(v)).length;
     case 'rep_list_item': {
@@ -4755,7 +4824,7 @@ function evalReporter(node, sprite, depth) {
   }
 }
 
-function applyVar(node) {
+function applyVar(node, sprite) {
   const txt = String(node.val === undefined ? '' : node.val);
   const eq = txt.indexOf('=');
   if (eq < 0) return;
@@ -4763,13 +4832,14 @@ function applyVar(node) {
   if (!name) return;
   const raw = txt.slice(eq + 1).trim();
   if (node.type === 'set_var') {
-    variables[name] = resolveValue(raw);
+    varSet(name, resolveValue(raw, sprite), sprite);
     return;
   }
-  const amount = Number(resolveValue(raw));
+  const amount = Number(resolveValue(raw, sprite));
   if (!Number.isFinite(amount)) return;
-  if (!(name in variables)) variables[name] = 0;
-  variables[name] = Number(variables[name] || 0) + (node.type === 'add_var' ? amount : -amount);
+  if (!varHas(name, sprite)) varSet(name, 0, sprite);
+  varSet(name, Number(varGet(name, sprite) || 0) +
+    (node.type === 'add_var' ? amount : -amount), sprite);
 }
 
 /* ---------------- audio / stage bg ----------------
@@ -5030,7 +5100,7 @@ function checkNodeCondition(node, sprite) {
   if (node.type === 'if_edge') return touchingEdge(sprite);
   if (node.type === 'if_touch') return touchingOther(sprite);
   if (node.type === 'if_touch_sprite') return touchingSprite(sprite, nodeVal(node, sprite));
-  return evalCond(nodeVal(node, sprite));
+  return evalCond(nodeVal(node, sprite), sprite);
 }
 
 async function execBlock(node, sprite) {
@@ -5224,16 +5294,17 @@ async function execBlock(node, sprite) {
       return;
     }
     case 'set_var': case 'add_var': case 'sub_var':
-      applyVar(node);
+      applyVar(node, sprite);
       updateHUD();
       await sleep(130);
       return;
-    case 'show_vars':
-      toast(Object.keys(variables).length
-        ? Object.entries(variables).map(([k, x]) => k + ': ' + x).join(' · ')
+    case 'show_vars': {
+      const pares = varPairs(sprite);
+      toast(pares.length ? pares.map(([k, x]) => k + ': ' + x).join(' · ')
         : UI[lang].noVars);
       await sleep(130);
       return;
+    }
     case 'list_add': case 'list_del': case 'list_replace': case 'list_clear':
       applyListBlock(node, sprite);
       updateHUD();
@@ -5250,7 +5321,7 @@ async function execBlock(node, sprite) {
       return;
     }
     case 'op_calc': {
-      const r = evalExpr(v);
+      const r = evalExpr(v, sprite);
       if (r !== null) { variables.res = r; updateHUD(); }
       await sleep(130);
       return;
@@ -6077,7 +6148,8 @@ function sb3SpriteBlocks(sprite, index) {
 
   function varBlock(name, parentId) {
     usedVars.add(name);
-    return mk('data_variable', parentId, { fields: { VARIABLE: [name, sb3VarId(name)] } });
+    return mk('data_variable', parentId,
+      { fields: { VARIABLE: [name, sb3VarId(name, sb3VarOwner(sprite, name))] } });
   }
 
   /* El nombre de la lista vive en el hueco pickAt del bloque. */
@@ -6397,12 +6469,12 @@ function sb3SpriteBlocks(sprite, index) {
         usedVars.add(name);
         if (t === 'set_var') {
           const bid = mk('data_setvariableto', parentId);
-          blocks[bid].fields.VARIABLE = [name, sb3VarId(name)];
+          blocks[bid].fields.VARIABLE = [name, sb3VarId(name, sb3VarOwner(sprite, name))];
           blocks[bid].inputs.VALUE = [1, [10, raw]];
           return bid;
         }
         const bid = mk('data_changevariableby', parentId);
-        blocks[bid].fields.VARIABLE = [name, sb3VarId(name)];
+        blocks[bid].fields.VARIABLE = [name, sb3VarId(name, sb3VarOwner(sprite, name))];
         const amount = num(raw, 0);
         blocks[bid].inputs.VALUE = [1, [4, String(t === 'sub_var' ? -amount : amount)]];
         return bid;
@@ -6567,10 +6639,19 @@ function sb3SpriteBlocks(sprite, index) {
 let sb3VarIds = null;
 let sb3MsgIds = null;
 let sb3ListIds = null;
-function sb3VarId(name) {
+function sb3VarId(name, ownerId) {
   if (!sb3VarIds) sb3VarIds = new Map();
-  if (!sb3VarIds.has(name)) sb3VarIds.set(name, 'var_' + (sb3VarIds.size + 1));
-  return sb3VarIds.get(name);
+  /* La clave incluye al dueño: dos personajes pueden tener «vidas» local
+     y cada una necesita su propio id en el project.json. */
+  const key = (ownerId || '') + '\u0001' + name;
+  if (!sb3VarIds.has(key)) sb3VarIds.set(key, 'var_' + (sb3VarIds.size + 1));
+  return sb3VarIds.get(key);
+}
+/* Devuelve el id del personaje cuando la variable es local a él; '' si es
+   global. Es la MISMA regla que varStore() usa al ejecutar. */
+function sb3VarOwner(sprite, name) {
+  return (sprite && sprite.vars &&
+    Object.prototype.hasOwnProperty.call(sprite.vars, name)) ? sprite.id : '';
 }
 function sb3MsgId(name) {
   if (!sb3MsgIds) sb3MsgIds = new Map();
@@ -6630,7 +6711,8 @@ async function sb3Build() {
     const s = sprites[i];
     const built = sb3SpriteBlocks(s, i);
     built.dropped.forEach(d => { if (dropped.indexOf(d) < 0) dropped.push(d); });
-    built.usedVars.forEach(v => allVars.set(v, true));
+    /* Las locales NO se declaran en el Stage: van en el target del sprite. */
+    built.usedVars.forEach(v => { if (!sb3VarOwner(s, v)) allVars.set(v, true); });
     if (built.usedPen.size) penUsed = true;
     built.usedSounds.forEach(k => soundsNeeded.add(k));
     built.usedMsgs.forEach(m => allMsgs.add(m));
@@ -6670,10 +6752,14 @@ async function sb3Build() {
       }, addAsset(wav, 'wav')));
     });
 
+    const localVars = {};
+    Object.keys(s.vars || {}).forEach(k => {
+      localVars[sb3VarId(k, s.id)] = [k, Number(s.vars[k]) || 0];
+    });
     spriteTargets.push({
       isStage: false,
       name: String(s.name || ('Personaje' + (i + 1))),
-      variables: {},
+      variables: localVars,
       lists: {},
       broadcasts: {},
       blocks: built.blocks,
@@ -6700,7 +6786,7 @@ async function sb3Build() {
   /* Las listas del proyecto también viajan aunque ningún bloque las nombre. */
   Object.keys(lists || {}).forEach(k => allLists.add(k));
   allVars.forEach((_, name) => {
-    stageVars[sb3VarId(name)] = [name, Number(variables && variables[name]) || 0];
+    stageVars[sb3VarId(name, '')] = [name, Number(variables && variables[name]) || 0];
   });
 
   /* Comentario con lo que no se pudo traducir, colgado del primer bloque de
@@ -7541,11 +7627,11 @@ function bindEvents() {
   $('#newVarBtn').addEventListener('click', openVarForm);
   $('#varsList').addEventListener('click', e => {
     const del = e.target.closest('[data-del-var]');
-    if (del) { deleteVariable(del.dataset.delVar); return; }
+    if (del) { deleteVariable(del.dataset.delVar, del.dataset.scope === 'local'); return; }
     const eye = e.target.closest('[data-eye]');
     if (eye) { toggleVarVisibility(eye.dataset.eye); return; }
     const step = e.target.closest('[data-var-step]');
-    if (step) { stepVariable(step.dataset.varStep, Number(step.dataset.step)); return; }
+    if (step) { stepVariable(step.dataset.varStep, Number(step.dataset.step), step.dataset.scope === 'local'); return; }
     if (e.target.closest('#cancelVar')) closeVarForm();
   });
   $('#varsList').addEventListener('submit', e => {
@@ -7558,8 +7644,10 @@ function bindEvents() {
     const inp = e.target.closest('input[data-var]');
     if (inp) {
       const name = inp.dataset.var;
-      if (name in variables) {
-        variables[name] = parseVarValue(inp.value);
+      const sp = selectedSprite();
+      const store = inp.dataset.scope === 'local' ? ((sp && sp.vars) || {}) : variables;
+      if (name in store) {
+        store[name] = parseVarValue(inp.value);
         updateHUD();
         scheduleSave();
       }
@@ -7574,7 +7662,9 @@ function bindEvents() {
     const inp = e.target.closest('input[data-var]');
     if (!inp) return;
     const name = inp.dataset.var;
-    if (name in variables) inp.value = String(variables[name]);
+    const sp = selectedSprite();
+    const store = inp.dataset.scope === 'local' ? ((sp && sp.vars) || {}) : variables;
+    if (name in store) inp.value = String(store[name]);
   });
 
   $('#newListBtn').addEventListener('click', openListForm);

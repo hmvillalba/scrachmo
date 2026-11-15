@@ -74,6 +74,7 @@ const WEBKIT_SET = [
   'harness25',  // listas con nombre
   'harness26',  // procedimientos con nombre
   'harness27',  // lápiz: canvas, devicePixelRatio y repintado
+  'harness28',  // variables locales: resolución por personaje y .sb3
   'landing'     // localStorage, color-scheme del <select> y 100dvh
 ];
 

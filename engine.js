@@ -260,6 +260,30 @@ function normRot(v) {
   return (v === 'leftright' || v === 'none') ? v : 'all';
 }
 
+/* Hacia dónde apunta el DIBUJO de un emoji cuando no está rotado. Casi todos
+   miran a la derecha (90), pero el cohete viene dibujado en diagonal (45,
+   arriba-derecha): sin este ajuste, «dirección 0» lo deja mirando arriba a la
+   izquierda y la punta no coincide con hacia dónde avanza. */
+const ART_HEADING = {
+  /* Dibujados en diagonal en todos los sistemas: cohete y avión miran arriba
+     a la derecha; en el cometa la cabeza está abajo a la izquierda. */
+  '🚀': 45, '✈': 45, '☄': 225,
+  /* Flechas y triángulos: su dibujo ES una dirección. */
+  '➡': 90, '⬅': 270, '⬆': 0, '⬇': 180,
+  '↗': 45, '↘': 135, '↙': 225, '↖': 315,
+  '⏩': 90, '⏪': 270, '⏫': 0, '⏬': 180,
+  '🔺': 0, '🔻': 180
+};
+function artHeading(s) {
+  const c = currentCostume(s);
+  if (c && c.kind !== 'img') {
+    /* Sin el selector de variación (U+FE0F) que traen ✈️, ➡️, ☄️, etc. */
+    const k = String(c.src || '').replace(/\uFE0F/g, '');
+    if (Object.prototype.hasOwnProperty.call(ART_HEADING, k)) return ART_HEADING[k];
+  }
+  return 90;
+}
+
 function spriteTransform(s) {
   const size = (Number(s.size) || 100) / 100;
   const dir = Number(s.dir) || 0;
@@ -269,7 +293,7 @@ function spriteTransform(s) {
     const flip = dir < 0 ? -1 : 1;
     return 'translate(-50%,-50%) scale(' + (flip * size) + ',' + size + ')';
   }
-  return 'translate(-50%,-50%) rotate(' + (dir - 90) + 'deg) scale(' + size + ')';
+  return 'translate(-50%,-50%) rotate(' + (dir - artHeading(s)) + 'deg) scale(' + size + ')';
 }
 
 function fold(s) {

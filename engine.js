@@ -4889,10 +4889,11 @@ function evalReporter(node, sprite, depth) {
     }
     case 'rep_x': return sprite ? sprite.x : 0;
     case 'rep_y': return sprite ? sprite.y : 0;
-    case 'rep_x_of': case 'rep_y_of': {
+    case 'rep_x_of': case 'rep_y_of': case 'rep_dir_of': {
       const key = String(v).trim();
       const t = (key === 'self' || key === '') ? sprite : getSprite(key);
       if (!t) return 0;
+      if (node.type === 'rep_dir_of') return normDir(Number(t.dir) || 0);
       return node.type === 'rep_x_of' ? t.x : t.y;
     }
     case 'rep_var': {
@@ -5287,6 +5288,18 @@ async function execBlock(node, sprite) {
       varSet(nm[1], Math.round(sprite.y * 100) / 100, sprite);
       updateHUD();
       await sleep(130);
+      return;
+    }
+    case 'go_sprite': {
+      const key = String(v == null ? 'self' : v).trim();
+      const t = (key === 'self' || key === '') ? null : getSprite(key);
+      if (t && t !== sprite) {
+        const px0 = sprite.x, py0 = sprite.y;
+        clampSpritePos(sprite, t.x, t.y);
+        penStroke(sprite, px0, py0);
+        updateSpriteEl(sprite);
+      }
+      await sleep(180);
       return;
     }
     case 'bounce': {
@@ -6471,6 +6484,15 @@ function sb3SpriteBlocks(sprite, index) {
     switch (rep.type) {
       case 'rep_x': return mk('motion_xposition', hostId);
       case 'rep_y': return mk('motion_yposition', hostId);
+      case 'rep_dir_of': {
+        const key = String(rep.val === undefined ? 'self' : rep.val).trim();
+        const tgt = (key && key !== 'self') ? sprites.find(s => s.id === key) : null;
+        if (!tgt || tgt === sprite) return mk('motion_direction', hostId);
+        const oid = mk('sensing_of', hostId);
+        blocks[oid].fields.PROPERTY = ['direction', null];
+        blocks[oid].inputs.OBJECT = [1, menu('sensing_of_object_menu', 'OBJECT', tgt.name, oid)];
+        return oid;
+      }
       case 'rep_x_of': case 'rep_y_of': {
         const key = String(rep.val === undefined ? 'self' : rep.val).trim();
         const tgt = (key && key !== 'self') ? sprites.find(s => s.id === key) : null;
@@ -6594,6 +6616,14 @@ function sb3SpriteBlocks(sprite, index) {
         X: b => slotVar(node, 0, b),
         Y: b => slotVar(node, 1, b)
       });
+      case 'go_sprite': {
+        const key = String(node.val === undefined ? 'self' : node.val).trim();
+        const tgt = (key && key !== 'self') ? sprites.find(s => s.id === key) : null;
+        if (!tgt) return null;
+        const gid = mk('motion_goto', parentId);
+        blocks[gid].inputs.TO = [1, menu('motion_goto_menu', 'TO', tgt.name, gid)];
+        return gid;
+      }
       case 'bounce': return mk('motion_ifonedgebounce', parentId);
       case 'go_random': return id('motion_gotoxy', {
         X: b => {

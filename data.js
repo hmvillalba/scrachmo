@@ -14,7 +14,7 @@ const L = (es, en, pt, fr) => ({ es, en, pt, fr });
    con esta misma cadena más una huella de los tres archivos de la app;
    tests/check-parity.js verifica que no se desincronicen y
    tests/bump-sw.js los actualiza juntos. */
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v18';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -391,6 +391,13 @@ const BLOCKS = [
     n: L('Ir a x: {x} y: {y}', 'Go to x: {x} y: {y}', 'Ir para x: {x} y: {y}', 'Aller à x : {x} y : {y}'),
     d: L('Salta directo a esa coordenada. x va de -240 a 240 e y de -180 a 180.', 'Jumps straight to that coordinate. x goes from -240 to 240 and y from -180 to 180.', 'Vai direto para essa coordenada. x vai de -240 a 240 e y de -180 a 180.', 'Va directement à cette coordonnée. x va de -240 à 240 et y de -180 à 180.')
   },
+  /* Va a donde está otro personaje. Junto con «Dirección de {v}» sirve para
+     que un disparo salga de la punta de la nave sin importar hacia dónde mire. */
+  {
+    id: 'go_sprite', cat: 'motion', icon: 'target', def: 'self', w: 104, pick: 'sprites',
+    n: L('Ir a {v}', 'Go to {v}', 'Ir para {v}', 'Aller à {v}'),
+    d: L('Salta a la posición de ese personaje (con «mí mismo» no se mueve).', 'Jumps to that sprite’s position (with «myself» it does not move).', 'Vai para a posição desse personagem (com «eu mesmo» não se move).', 'Saute à la position de ce personnage (avec « moi-même », ne bouge pas).')
+  },
   {
     id: 'bounce', cat: 'motion', icon: 'bounce',
     n: L('Rebotar si toca el borde', 'Bounce if on edge', 'Rebater se tocar a borda', 'Rebondir au bord'),
@@ -763,6 +770,11 @@ const BLOCKS = [
     id: 'rep_y_of', cat: 'ops', icon: 'target', rep: 1, def: 'self', w: 104, pick: 'sprites',
     n: L('Posición y de {v}', 'Y position of {v}', 'Posição y de {v}', 'Position y de {v}'),
     d: L('Devuelve la coordenada y de ese personaje (con «mí mismo», la del propio).', 'Returns the y coordinate of that sprite (with «myself», its own).', 'Devolve a coordenada y desse personagem (com «eu mesmo», a do próprio).', 'Renvoie la coordonnée y de ce personnage (avec « moi-même », la sienne).')
+  },
+  {
+    id: 'rep_dir_of', cat: 'ops', icon: 'target', rep: 1, def: 'self', w: 104, pick: 'sprites',
+    n: L('Dirección de {v}', 'Direction of {v}', 'Direção de {v}', 'Direction de {v}'),
+    d: L('Devuelve hacia dónde mira ese personaje (0 = arriba, 90 = derecha, 180 = abajo, 270 = izquierda). Con «mí mismo», la propia.', 'Returns where that sprite is facing (0 = up, 90 = right, 180 = down, 270 = left). With «myself», its own.', 'Devolve para onde esse personagem olha (0 = cima, 90 = direita, 180 = baixo, 270 = esquerda). Com «eu mesmo», a própria.', 'Renvoie où regarde ce personnage (0 = haut, 90 = droite, 180 = bas, 270 = gauche). Avec « moi-même », la sienne.')
   },
   {
     id: 'rep_var', cat: 'ops', icon: 'box', rep: 1, repName: 1, def: 'vidas', w: 76,

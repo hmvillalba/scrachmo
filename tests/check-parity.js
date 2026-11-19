@@ -1102,8 +1102,8 @@ if (fs.existsSync(wfDir)) {
       !callP || callP.pick !== 'procs' || callP.hat || callP.c) {
     ok = false; console.log('FAIL «Definir» no es sombrero con cuerpo o «Llamar» está mal declarado');
   }
-  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 66) {
-    ok = false; console.log('FAIL la paleta no tiene 66 bloques con los dos de procedimientos');
+  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 67) {
+    ok = false; console.log('FAIL la paleta no tiene 67 bloques con los dos de procedimientos');
   }
   ['isProcNode', 'procName', 'cleanProcName', 'procDefNode', 'runProcedure',
     'newProcFor', 'procMutation'].forEach(fn => {
@@ -1189,8 +1189,8 @@ if (fs.existsSync(wfDir)) {
     ok = false; console.log('FAIL falta el estado efímero del lápiz');
   }
   const trazos = (engine.match(/penStroke\(sprite, px0, py0\)/g) || []).length;
-  if (trazos !== 4) {
-    ok = false; console.log('FAIL el lápiz no traza en los 4 movimientos (hay ' + trazos + ')');
+  if (trazos !== 5) {
+    ok = false; console.log('FAIL el lápiz no traza en los 5 movimientos (hay ' + trazos + ')');
   }
   if (!/runtimeSnapshot = snapshotRuntime\(\);\s*penReset\(\);/.test(engine)) {
     ok = false; console.log('FAIL Ejecutar no limpia el dibujo anterior');

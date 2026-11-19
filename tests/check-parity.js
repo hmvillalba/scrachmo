@@ -1102,8 +1102,8 @@ if (fs.existsSync(wfDir)) {
       !callP || callP.pick !== 'procs' || callP.hat || callP.c) {
     ok = false; console.log('FAIL «Definir» no es sombrero con cuerpo o «Llamar» está mal declarado');
   }
-  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 65) {
-    ok = false; console.log('FAIL la paleta no tiene 65 bloques con los dos de procedimientos');
+  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 66) {
+    ok = false; console.log('FAIL la paleta no tiene 66 bloques con los dos de procedimientos');
   }
   ['isProcNode', 'procName', 'cleanProcName', 'procDefNode', 'runProcedure',
     'newProcFor', 'procMutation'].forEach(fn => {

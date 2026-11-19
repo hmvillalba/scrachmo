@@ -4745,6 +4745,12 @@ function evalExpr(txt, sprite) {
       const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
       return String(Math.floor(Math.random() * (hi - lo + 1)) + lo);
     });
+    /* nombre.x / nombre.y: posición de otro personaje por su nombre. */
+    s = s.replace(/([A-Za-z_][A-Za-z0-9_]*)\.(posicion|pos)?([xy])\b/gi, (m, nm, p, ax) => {
+      const t = sprites.find(o => o.name === nm);
+      if (!t) return m;
+      return String(ax.toLowerCase() === 'x' ? t.x : t.y);
+    });
     s = s.replace(/[A-Za-z_][A-Za-z0-9_]*/g, w => {
       if (w === 'score') return String(score);
       if (varHas(w, sprite)) {
@@ -4859,6 +4865,12 @@ function evalReporter(node, sprite, depth) {
     }
     case 'rep_x': return sprite ? sprite.x : 0;
     case 'rep_y': return sprite ? sprite.y : 0;
+    case 'rep_x_of': case 'rep_y_of': {
+      const key = String(v).trim();
+      const t = (key === 'self' || key === '') ? sprite : getSprite(key);
+      if (!t) return 0;
+      return node.type === 'rep_x_of' ? t.x : t.y;
+    }
     case 'rep_var': {
       return varGet(String(v).trim(), sprite);
     }
@@ -4880,6 +4892,18 @@ function evalReporter(node, sprite, depth) {
     case 'rep_gt': return a > b ? 1 : 0;
     default: return 0;
   }
+}
+
+/* Nombres de las dos variables de «Guardar posición». Un nombre vacío o
+   inválido cae en el de fábrica para no escribir claves raras en el almacén. */
+function posVarNames(val) {
+  const p = String(val == null ? '' : val).split(',');
+  const defs = ['posx', 'posy'];
+  return [0, 1].map(i => {
+    const n = String(p[i] == null ? '' : p[i]).trim();
+    return (/^[A-Za-z_][A-Za-z0-9_]{0,15}$/.test(n) && n !== 'score' &&
+      n !== '__proto__' && n !== 'constructor' && n !== 'prototype') ? n : defs[i];
+  });
 }
 
 function applyVar(node, sprite) {
@@ -5223,10 +5247,22 @@ async function execBlock(node, sprite) {
       /* node.val guarda "x,y"; una casilla vacía o inválida vale 0. */
       const xy = String(v == null ? '' : v).split(',');
       const px0 = sprite.x, py0 = sprite.y;
-      clampSpritePos(sprite, num(xy[0], 0), num(xy[1], 0));
+      /* Cada casilla puede ser un número, el nombre de una variable o una
+         cuenta (posx+10): resolveValue ya sabe leer las tres cosas. */
+      const gx = num(resolveValue(String(xy[0] == null ? '' : xy[0]).trim(), sprite), 0);
+      const gy = num(resolveValue(String(xy[1] == null ? '' : xy[1]).trim(), sprite), 0);
+      clampSpritePos(sprite, gx, gy);
       penStroke(sprite, px0, py0);
       updateSpriteEl(sprite);
       await sleep(180);
+      return;
+    }
+    case 'save_pos': {
+      const nm = posVarNames(v);
+      varSet(nm[0], Math.round(sprite.x * 100) / 100, sprite);
+      varSet(nm[1], Math.round(sprite.y * 100) / 100, sprite);
+      updateHUD();
+      await sleep(130);
       return;
     }
     case 'bounce': {
@@ -6271,6 +6307,7 @@ function sb3SlotCount(def) {
    comentarios, los recursos usados y la lista de lo que quedó afuera. */
 function sb3SpriteBlocks(sprite, index) {
   const blocks = {};
+  const tail = {}; /* sentencias que se exportan como dos bloques: id -> último */
   const dropped = [];
   const usedSounds = new Set();
   const usedVars = new Set();
@@ -6360,6 +6397,27 @@ function sb3SpriteBlocks(sprite, index) {
     return [1, shadow];
   }
 
+  /* Como slotIn, pero una casilla con el nombre de una variable (o score)
+     se exporta como el reportero de esa variable. Sólo para «Ir a x: y:». */
+  function slotVar(node, i, hostId) {
+    const base = slotIn(node, i, 4, hostId);
+    if (base[0] !== 1) return base;
+    const raw = String(base[1][1]).trim();
+    if (raw === 'score') return [3, varBlock('puntaje', hostId), base[1]];
+    const pm = /^([A-Za-z_][A-Za-z0-9_]*)\.(posicion|pos)?([xy])$/i.exec(raw);
+    if (pm) {
+      const tgt = sprites.find(o => o.name === pm[1]);
+      if (tgt) {
+        const rid = reporterIn({ type: pm[3].toLowerCase() === 'x' ? 'rep_x_of' : 'rep_y_of', val: tgt.id }, hostId);
+        if (rid) return [3, rid, base[1]];
+      }
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(raw) && varHas(raw, sprite)) {
+      return [3, varBlock(raw, hostId), base[1]];
+    }
+    return base;
+  }
+
   function slotIn(node, i, shadowType, hostId) {
     const def = BYID[node.type] || { n: { es: '' }, def: '' };
     const count = Math.max(sb3SlotCount(def), i + 1);
@@ -6389,6 +6447,16 @@ function sb3SpriteBlocks(sprite, index) {
     switch (rep.type) {
       case 'rep_x': return mk('motion_xposition', hostId);
       case 'rep_y': return mk('motion_yposition', hostId);
+      case 'rep_x_of': case 'rep_y_of': {
+        const key = String(rep.val === undefined ? 'self' : rep.val).trim();
+        const tgt = (key && key !== 'self') ? sprites.find(s => s.id === key) : null;
+        const isX = rep.type === 'rep_x_of';
+        if (!tgt || tgt === sprite) return mk(isX ? 'motion_xposition' : 'motion_yposition', hostId);
+        const oid = mk('sensing_of', hostId);
+        blocks[oid].fields.PROPERTY = [isX ? 'x position' : 'y position', null];
+        blocks[oid].inputs.OBJECT = [1, menu('sensing_of_object_menu', 'OBJECT', tgt.name, oid)];
+        return oid;
+      }
       case 'rep_timer': return mk('sensing_timer', hostId);
       case 'rep_score': return varBlock('puntaje', hostId);
       case 'rep_var': {
@@ -6499,8 +6567,8 @@ function sb3SpriteBlocks(sprite, index) {
       case 'turn': return id('motion_turnright', { DEGREES: b => slotIn(node, 0, 4, b) });
       case 'point_dir': return id('motion_pointindirection', { DIRECTION: b => slotIn(node, 0, 8, b) });
       case 'go_xy': return id('motion_gotoxy', {
-        X: b => slotIn(node, 0, 4, b),
-        Y: b => slotIn(node, 1, 4, b)
+        X: b => slotVar(node, 0, b),
+        Y: b => slotVar(node, 1, b)
       });
       case 'bounce': return mk('motion_ifonedgebounce', parentId);
       case 'go_random': return id('motion_gotoxy', {
@@ -6673,6 +6741,19 @@ function sb3SpriteBlocks(sprite, index) {
         blocks[bid].inputs.VALUE = [1, [4, String(t === 'sub_var' ? -amount : amount)]];
         return bid;
       }
+      case 'save_pos': {
+        const nm = posVarNames(node.val === undefined ? 'posx,posy' : node.val);
+        const a = mk('data_setvariableto', parentId);
+        blocks[a].fields.VARIABLE = [nm[0], sb3VarId(nm[0], sb3VarOwner(sprite, nm[0]))];
+        blocks[a].inputs.VALUE = [3, mk('motion_xposition', a), [10, '0']];
+        const b = mk('data_setvariableto', a);
+        blocks[b].fields.VARIABLE = [nm[1], sb3VarId(nm[1], sb3VarOwner(sprite, nm[1]))];
+        blocks[b].inputs.VALUE = [3, mk('motion_yposition', b), [10, '0']];
+        usedVars.add(nm[0]); usedVars.add(nm[1]);
+        blocks[a].next = b;
+        tail[a] = b;
+        return a;
+      }
       case 'op_random': {
         const parts = String(node.val === undefined ? '1,10' : node.val).split(',');
         usedVars.add('res');
@@ -6784,7 +6865,7 @@ function sb3SpriteBlocks(sprite, index) {
       } else {
         first = id;
       }
-      prev = id;
+      prev = tail[id] || id;
     });
     return first;
   }
@@ -6831,7 +6912,7 @@ function sb3SpriteBlocks(sprite, index) {
       /* Quedaron sueltos porque su sombrero no tiene equivalente: flotan. */
       topLevel(id);
     }
-    prev = id;
+    prev = tail[id] || id;
   });
 
   return { blocks: blocks, dropped: dropped, usedSounds: usedSounds,

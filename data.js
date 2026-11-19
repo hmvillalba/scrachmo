@@ -14,7 +14,7 @@ const L = (es, en, pt, fr) => ({ es, en, pt, fr });
    con esta misma cadena más una huella de los tres archivos de la app;
    tests/check-parity.js verifica que no se desincronicen y
    tests/bump-sw.js los actualiza juntos. */
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v14';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -629,6 +629,13 @@ const BLOCKS = [
     n: L('Restar a {v}', 'Subtract {v}', 'Subtrair de {v}', 'Soustraire à {v}'),
     d: L('Resta una cantidad a una variable (nombre=valor).', 'Subtracts from a variable (name=value).', 'Subtrai de uma variável (nome=valor).', 'Retire une valeur (nom=valeur).')
   },
+  /* Guarda la posición del personaje en dos variables (nombres separados por
+     coma en node.val, como en go_xy). Luego «Ir a x: y:» acepta esos nombres. */
+  {
+    id: 'save_pos', cat: 'vars', icon: 'target', def: 'posx,posy', w: 66,
+    n: L('Guardar posición en x: {x} y: {y}', 'Save position in x: {x} y: {y}', 'Guardar posição em x: {x} y: {y}', 'Enregistrer la position dans x : {x} y : {y}'),
+    d: L('Guarda la x y la y actuales del personaje en dos variables (escribí sus nombres). Después podés usarlas en «Ir a x: y:».', 'Stores the character’s current x and y in two variables (type their names). You can then use them in «Go to x: y:».', 'Guarda o x e o y atuais do personagem em duas variáveis (escreva os nomes). Depois use-as em «Ir para x: y:».', 'Range le x et le y actuels du personnage dans deux variables (tapez leurs noms). Utilisez-les ensuite dans « Aller à x : y : ».')
+  },
   {
     id: 'show_vars', cat: 'vars', icon: 'list',
     n: L('Mostrar variables', 'Show variables', 'Mostrar variáveis', 'Montrer les variables'),
@@ -744,6 +751,18 @@ const BLOCKS = [
     id: 'rep_y', cat: 'ops', icon: 'target', rep: 1,
     n: L('Posición y', 'Y position', 'Posição y', 'Position y'),
     d: L('Devuelve la coordenada y del personaje.', 'Returns the character’s y coordinate.', 'Devolve a coordenada y do personagem.', 'Renvoie la coordonnée y du personnage.')
+  },
+  /* Posición de OTRO personaje (o de uno mismo con «mí mismo»). Sirve para
+     llevar un personaje hasta donde está otro: Ir a x: [x de nave1] y: [y de nave1 + 20]. */
+  {
+    id: 'rep_x_of', cat: 'ops', icon: 'target', rep: 1, def: 'self', w: 104, pick: 'sprites',
+    n: L('Posición x de {v}', 'X position of {v}', 'Posição x de {v}', 'Position x de {v}'),
+    d: L('Devuelve la coordenada x de ese personaje (con «mí mismo», la del propio).', 'Returns the x coordinate of that sprite (with «myself», its own).', 'Devolve a coordenada x desse personagem (com «eu mesmo», a do próprio).', 'Renvoie la coordonnée x de ce personnage (avec « moi-même », la sienne).')
+  },
+  {
+    id: 'rep_y_of', cat: 'ops', icon: 'target', rep: 1, def: 'self', w: 104, pick: 'sprites',
+    n: L('Posición y de {v}', 'Y position of {v}', 'Posição y de {v}', 'Position y de {v}'),
+    d: L('Devuelve la coordenada y de ese personaje (con «mí mismo», la del propio).', 'Returns the y coordinate of that sprite (with «myself», its own).', 'Devolve a coordenada y desse personagem (com «eu mesmo», a do próprio).', 'Renvoie la coordonnée y de ce personnage (avec « moi-même », la sienne).')
   },
   {
     id: 'rep_var', cat: 'ops', icon: 'box', rep: 1, repName: 1, def: 'vidas', w: 76,

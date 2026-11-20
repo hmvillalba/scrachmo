@@ -9,7 +9,7 @@
 
   /* Mantener sincronizado con APP_VERSION de data.js: tests/check-parity.js
      falla si este número queda viejo. */
-  const VERSION = 'v18';
+  const VERSION = 'v20';
 
   if (/[?&]p=/.test(location.search)) {
     location.replace('app.html' + location.search + location.hash);

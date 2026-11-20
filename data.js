@@ -14,7 +14,7 @@ const L = (es, en, pt, fr) => ({ es, en, pt, fr });
    con esta misma cadena más una huella de los tres archivos de la app;
    tests/check-parity.js verifica que no se desincronicen y
    tests/bump-sw.js los actualiza juntos. */
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v20';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -102,7 +102,7 @@ const UI = {
     chooseSprite: 'Elegí un personaje',
     chooseSpriteDesc: 'Tocá uno para agregarlo. Después podés cambiarle el nombre.',
     spriteName: 'Nombre', spriteDirection: 'Dirección', spriteSize: 'Tamaño %', spriteVisible: 'Visible', spriteHidden: 'Oculto',
-    spriteRotation: 'Rotación', rotAll: 'Gira', rotLeftRight: 'Voltea', rotNone: 'Fijo',
+    spriteArt: 'Dibujo mira hacia', artAuto: 'Auto', spriteRotation: 'Rotación', rotAll: 'Gira', rotLeftRight: 'Voltea', rotNone: 'Fijo',
     addSprite: 'Agregar personaje', spriteDefault: 'Personaje',
     deleteSprite: 'Borrar personaje', confirmDeleteSprite: '¿Borrar este personaje y sus bloques?',
     cantDeleteSprite: 'Tiene que quedar al menos un personaje',
@@ -163,7 +163,7 @@ const UI = {
     chooseSprite: 'Choose a sprite',
     chooseSpriteDesc: 'Tap one to add it. You can rename it later.',
     spriteName: 'Name', spriteDirection: 'Direction', spriteSize: 'Size %', spriteVisible: 'Visible', spriteHidden: 'Hidden',
-    spriteRotation: 'Rotation', rotAll: 'All around', rotLeftRight: 'Left-right', rotNone: "Don't rotate",
+    spriteArt: 'Art faces', artAuto: 'Auto', spriteRotation: 'Rotation', rotAll: 'All around', rotLeftRight: 'Left-right', rotNone: "Don't rotate",
     addSprite: 'Add sprite', spriteDefault: 'Sprite',
     deleteSprite: 'Delete sprite', confirmDeleteSprite: 'Delete this sprite and its blocks?',
     cantDeleteSprite: 'At least one sprite must remain',
@@ -224,7 +224,7 @@ const UI = {
     chooseSprite: 'Escolha um personagem',
     chooseSpriteDesc: 'Toque em um para adicionar. Depois pode mudar o nome.',
     spriteName: 'Nome', spriteDirection: 'Direção', spriteSize: 'Tamanho %', spriteVisible: 'Visível', spriteHidden: 'Oculto',
-    spriteRotation: 'Rotação', rotAll: 'Gira', rotLeftRight: 'Vira', rotNone: 'Fixo',
+    spriteArt: 'Desenho olha para', artAuto: 'Auto', spriteRotation: 'Rotação', rotAll: 'Gira', rotLeftRight: 'Vira', rotNone: 'Fixo',
     addSprite: 'Adicionar personagem', spriteDefault: 'Personagem',
     deleteSprite: 'Apagar personagem', confirmDeleteSprite: 'Apagar este personagem e seus blocos?',
     cantDeleteSprite: 'Tem que ficar pelo menos um personagem',
@@ -285,7 +285,7 @@ const UI = {
     chooseSprite: 'Choisis un personnage',
     chooseSpriteDesc: 'Touche-en un pour l’ajouter. Tu pourras le renommer.',
     spriteName: 'Nom', spriteDirection: 'Direction', spriteSize: 'Taille %', spriteVisible: 'Visible', spriteHidden: 'Caché',
-    spriteRotation: 'Rotation', rotAll: 'Tourne', rotLeftRight: 'Miroir', rotNone: 'Fixe',
+    spriteArt: 'Le dessin regarde', artAuto: 'Auto', spriteRotation: 'Rotation', rotAll: 'Tourne', rotLeftRight: 'Miroir', rotNone: 'Fixe',
     addSprite: 'Ajouter un personnage', spriteDefault: 'Personnage',
     deleteSprite: 'Supprimer le personnage', confirmDeleteSprite: 'Supprimer ce personnage et ses blocs ?',
     cantDeleteSprite: 'Il doit rester au moins un personnage',

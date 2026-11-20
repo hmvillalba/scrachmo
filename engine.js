@@ -256,6 +256,15 @@ function normDir(d) {
 }
 
 /* rotation style: 'all' (gira todo) | 'leftright' (voltea) | 'none' (fijo) */
+/* Hacia dónde mira el DIBUJO sin rotar, en grados (0 = arriba, 90 = derecha).
+   undefined = automático (tabla ART_HEADING). Sólo múltiplos de 45. */
+function normArt(v) {
+  if (v === undefined || v === null || v === '' || v === 'auto') return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return undefined;
+  return ((Math.round(n / 45) * 45) % 360 + 360) % 360;
+}
+
 function normRot(v) {
   return (v === 'leftright' || v === 'none') ? v : 'all';
 }
@@ -267,7 +276,7 @@ function normRot(v) {
 const ART_HEADING = {
   /* Dibujados en diagonal en todos los sistemas: cohete y avión miran arriba
      a la derecha; en el cometa la cabeza está abajo a la izquierda. */
-  '🚀': 45, '✈': 45, '☄': 225,
+  '🚀': 45, '✈': 45, '☄': 225, '✏': 225,
   /* Flechas y triángulos: su dibujo ES una dirección. */
   '➡': 90, '⬅': 270, '⬆': 0, '⬇': 180,
   '↗': 45, '↘': 135, '↙': 225, '↖': 315,
@@ -275,6 +284,8 @@ const ART_HEADING = {
   '🔺': 0, '🔻': 180
 };
 function artHeading(s) {
+  /* Ajuste manual del usuario (Dibujo mira hacia): manda sobre la tabla. */
+  if (s && s.art !== undefined && Number.isFinite(Number(s.art))) return Number(s.art);
   const c = currentCostume(s);
   if (c && c.kind !== 'img') {
     /* Sin el selector de variación (U+FE0F) que traen ✈️, ➡️, ☄️, etc. */
@@ -794,6 +805,7 @@ function normalizeSprites(list) {
         size: clamp(num(raw.size, 100), 20, 200),
         visible: raw.visible !== false,
         rot: normRot(raw.rot),
+        art: normArt(raw.art),
         costumes: costumes,
         costumeIndex: clamp(Math.floor(num(raw.costumeIndex, 0)), 0, costumes.length - 1),
         code: normalizeNodes(raw.code, new Set()),
@@ -979,6 +991,7 @@ function serializeProject() {
       size: Math.round(s.size * 10) / 10,
       visible: !!s.visible,
       rot: normRot(s.rot),
+      art: normArt(s.art),
       costumes: s.costumes,
       costumeIndex: s.costumeIndex,
       code: s.code,
@@ -2840,7 +2853,7 @@ function makeClone(src) {
     costumes: src.costumes || [],
     costumeIndex: src.costumeIndex || 0,
     x: src.x, y: src.y, dir: src.dir, size: src.size,
-    visible: src.visible, rot: src.rot,
+    visible: src.visible, rot: src.rot, art: src.art,
     code: src.code
   };
   /* El disfraz se recalcula: si el original usa una imagen, el clon necesita
@@ -2982,6 +2995,8 @@ function renderProps() {
     del.setAttribute('aria-label', del.title);
   }
 
+  const artSel = $('#propArt');
+  if (artSel) artSel.value = normArt(s.art) === undefined ? 'auto' : String(normArt(s.art));
   const rot = normRot(s.rot);
   $$('#propRot button').forEach(b => {
     const on = b.dataset.rot === rot;
@@ -7755,6 +7770,16 @@ function bindEvents() {
     saveProject();
   });
   $('#propDelete').addEventListener('click', deleteSelectedSprite);
+
+  const artSel = $('#propArt');
+  if (artSel) artSel.addEventListener('change', () => {
+    const s = selectedSprite();
+    if (!s) return;
+    const a = normArt(artSel.value);
+    if (a === undefined) delete s.art; else s.art = a;
+    updateSpriteEl(s);
+    saveProject();
+  });
 
   $('#propRot').addEventListener('click', e => {
     const b = e.target.closest('[data-rot]');

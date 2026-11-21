@@ -19,7 +19,7 @@
    caché sirve; tests/check-parity.js falla si la huella está desactualizada.
    En Vercel, vercel.json evita que la CDN cachee este archivo. */
 
-const VERSION = 'scrachmo-v20-b0f83836';
+const VERSION = 'scrachmo-v22-6d834817';
 
 /* Todo lo que se pide en install tiene que existir: si un solo archivo falta,
    addAll() rechaza y el service worker no se instala. */
@@ -27,6 +27,7 @@ const ASSETS = [
   './',
   'index.html',
   'app.html',
+  'tutorial.html',
   'landing.js',
   'boot.js',
   'data.js',
@@ -40,6 +41,9 @@ const ASSETS = [
 ];
 
 function shellPara(url) {
+  /* La guía de juegos tiene su propia página: sin esto, abrirla con red
+     reemplazaría la landing guardada (index.html) por la guía. */
+  if (/\/tutorial\.html$/.test(url.pathname)) return { nombre: 'tutorial.html', refrescar: true };
   /* ?p= en la raíz = proyecto compartido con la URL vieja: abrir el editor.
      Cualquier otra navegación que no sea app.html cae en la landing. */
   const comparte = url.searchParams.has('p');

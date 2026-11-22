@@ -9,7 +9,7 @@
 
   /* Mantener sincronizado con APP_VERSION de data.js: tests/check-parity.js
      falla si este número queda viejo. */
-  const VERSION = 'v20';
+  const VERSION = 'v24';
 
   if (/[?&]p=/.test(location.search)) {
     location.replace('app.html' + location.search + location.hash);
@@ -22,7 +22,7 @@
       'doc.desc': 'Entorno de programación por bloques inspirado en Scratch, pensado para el celular. Sin cuenta, sin instalar, en 4 idiomas y funciona sin internet.',
       'brand.tag': 'ESTUDIO MÓVIL',
       'nav.features': 'Qué podés hacer', 'nav.how': 'Cómo empezar',
-      'nav.support': 'Apoyar', 'nav.launch': 'Abrir la app',
+      'nav.tutorial': 'Tutoriales', 'foot.tutorial': 'Tutoriales de juegos', 'nav.support': 'Apoyar', 'nav.launch': 'Abrir la app',
       'hero.eyebrow': 'Sin cuenta · Sin instalar · Funciona sin internet',
       'hero.title': 'Programá con bloques desde el celular',
       'hero.lead': 'Un entorno visual inspirado en Scratch, hecho para pantallas verticales. Armá personajes, encastrá bloques y jugá lo que creaste en el mismo lugar.',
@@ -76,7 +76,7 @@
       'doc.desc': 'A Scratch-inspired visual coding environment built for phones. No account, no install, 4 languages, works offline.',
       'brand.tag': 'MOBILE STUDIO',
       'nav.features': 'Features', 'nav.how': 'Get started',
-      'nav.support': 'Support', 'nav.launch': 'Open the app',
+      'nav.tutorial': 'Tutorials', 'foot.tutorial': 'Game tutorials', 'nav.support': 'Support', 'nav.launch': 'Open the app',
       'hero.eyebrow': 'No account · No install · Works offline',
       'hero.title': 'Build with blocks, right from your phone',
       'hero.lead': 'A visual coding environment inspired by Scratch, designed for portrait screens. Pick characters, snap blocks together and play what you made in the same place.',
@@ -130,7 +130,7 @@
       'doc.desc': 'Ambiente de programação visual inspirado no Scratch, feito para o celular. Sem conta, sem instalação, 4 idiomas e funciona offline.',
       'brand.tag': 'ESTÚDIO MÓVEL',
       'nav.features': 'O que dá para fazer', 'nav.how': 'Como começar',
-      'nav.support': 'Apoiar', 'nav.launch': 'Abrir o app',
+      'nav.tutorial': 'Tutoriais', 'foot.tutorial': 'Tutoriais de jogos', 'nav.support': 'Apoiar', 'nav.launch': 'Abrir o app',
       'hero.eyebrow': 'Sem conta · Sem instalar · Funciona offline',
       'hero.title': 'Programe com blocos direto do celular',
       'hero.lead': 'Um ambiente visual inspirado no Scratch, feito para telas verticais. Escolha personagens, encaixe blocos e jogue o que criou no mesmo lugar.',
@@ -184,7 +184,7 @@
       'doc.desc': 'Un environnement de programmation visuelle inspiré de Scratch, conçu pour le mobile. Sans compte, sans installation, 4 langues et fonctionne hors ligne.',
       'brand.tag': 'STUDIO MOBILE',
       'nav.features': 'Fonctionnalités', 'nav.how': 'Commencer',
-      'nav.support': 'Soutenir', 'nav.launch': 'Ouvrir l’appli',
+      'nav.tutorial': 'Tutoriels', 'foot.tutorial': 'Tutoriels de jeux', 'nav.support': 'Soutenir', 'nav.launch': 'Ouvrir l’appli',
       'hero.eyebrow': 'Sans compte · Sans installation · Fonctionne hors ligne',
       'hero.title': 'Programmez avec des blocs depuis votre téléphone',
       'hero.lead': 'Un environnement visuel inspiré de Scratch, pensé pour les écrans verticaux. Choisissez des personnages, emboîtez les blocs et jouez votre création au même endroit.',

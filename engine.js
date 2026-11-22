@@ -1635,10 +1635,206 @@ function exCometas(t) {
   return { sprites: [nave, cometa], selected: nave.id, showScore: true };
 }
 
+/* ---------------- tres juegos de la guía (simple, intermedio, avanzado) ----------------
+   Son los mismos que explica tutorial.html. Los nombres de variables y de
+   mensajes salen de t.* para que se lean bien en cada idioma. */
+function exNode(type, val, extra) {
+  const n = makeNode(type, val);
+  if (n && extra) Object.assign(n, extra);
+  return n;
+}
+function exBody(n, list) { n.body = list.filter(Boolean); return n; }
+
+/* Ir a x: [al azar −150…150] y: fija — un reportero dentro de «Ir a». */
+function exAzarX(y) {
+  const ir = makeNode('go_xy', '0,' + y);
+  ir.reps = [makeNode('rep_random', EX_X_AZAR), null];
+  return ir;
+}
+
+function exEstrella(t) {
+  const gato = createSpriteData('🐱', t.exCat, []);
+  const est = createSpriteData('⭐', t.exStar, []);
+  gato.rot = 'leftright';
+  gato.y = -60;
+  gato.code = [
+    makeNode('when_flag'), makeNode('score_reset'), makeNode('go_xy', '0,-60'),
+    exSay(t.exStarInstr, 110),
+    makeNode('when_key', 'arrowleft'), makeNode('point_dir', -90), makeNode('move', 20),
+    makeNode('when_key', 'arrowright'), makeNode('point_dir', 90), makeNode('move', 20),
+    makeNode('when_key', 'arrowup'), makeNode('point_dir', 0), makeNode('move', 20),
+    makeNode('when_key', 'arrowdown'), makeNode('point_dir', 180), makeNode('move', 20),
+    makeNode('when_score', 5), exSay(t.exWin, 140)
+  ];
+  est.code = [
+    makeNode('when_flag'), makeNode('go_random'),
+    exBody(makeNode('forever'), [
+      exBody(makeNode('if_touch_sprite', gato.id), [makeNode('score_add', 1), makeNode('go_random')]),
+      makeNode('wait', 0.2)
+    ]),
+    makeNode('when_score', 5), makeNode('hide')
+  ];
+  return { sprites: [gato, est], selected: gato.id, showScore: true };
+}
+
+function exMeteoritos(t) {
+  const V = t.exVarLives, F = t.exVarEnd;
+  const ovni = createSpriteData('🛸', t.exUfo, []);
+  const met = createSpriteData('☄️', t.exMeteor, []);
+  ovni.rot = 'none';
+  ovni.y = -90;
+  met.size = 80;
+  ovni.code = [
+    makeNode('when_flag'), makeNode('go_xy', '0,-90'), makeNode('score_reset'),
+    makeNode('set_var', V + '=3'), makeNode('set_var', F + '=0'),
+    exSay(t.exMeteorTitle, 150), makeNode('wait', 2),
+    exSay(t.exMeteorInstr, 110), makeNode('wait', 2),
+    makeNode('send_msg', t.exMsgGo),
+    makeNode('when_key', 'arrowleft'), makeNode('point_dir', -90), makeNode('move', 20),
+    makeNode('when_key', 'arrowright'), makeNode('point_dir', 90), makeNode('move', 20),
+    makeNode('when_msg', t.exMsgGo),
+    exBody(makeNode('forever'), [
+      exBody(makeNode('if_touch_sprite', met.id), [makeNode('sub_var', V + '=1'), makeNode('delete_touched_clone', met.id)]),
+      exBody(makeNode('if_cond', V + ' < 1'), [
+        exBody(makeNode('if_cond', F + ' = 0'), [makeNode('set_var', F + '=1'), exSay(t.exLose, 150)])
+      ]),
+      makeNode('wait', 0.2)
+    ]),
+    makeNode('when_score', 10),
+    exBody(makeNode('if_cond', F + ' = 0'), [makeNode('set_var', F + '=1'), exSay(t.exWin, 150)])
+  ];
+  met.code = [
+    makeNode('when_flag'), makeNode('hide'),
+    makeNode('when_msg', t.exMsgGo),
+    exBody(makeNode('repeat', 30), [
+      exBody(makeNode('if_cond', F + ' = 0'), [makeNode('create_clone', 'self')]),
+      makeNode('wait', 1)
+    ]),
+    makeNode('when_clone'), makeNode('show'), exAzarX(EX_Y_CIELO), makeNode('point_dir', 180),
+    exBody(makeNode('repeat', 17), [makeNode('move', 10)]),
+    makeNode('score_add', 1), makeNode('delete_clone')
+  ];
+  const vars = {};
+  vars[V] = 3; vars[F] = 0;
+  return { sprites: [ovni, met], selected: ovni.id, showScore: true, stageBg: 5, vars: vars };
+}
+
+function exDefensa(t) {
+  const V = t.exVarLives, F = t.exVarEnd;
+  const nave = createSpriteData('🚀', t.exShip, []);
+  const bala = createSpriteData('🔴', t.exBullet, []);
+  const ene = createSpriteData('👾', t.exInvader, []);
+  nave.y = -85;
+  nave.dir = 0;
+  bala.size = 45;
+  nave.code = [
+    makeNode('when_flag'), makeNode('go_xy', '0,-85'), makeNode('point_dir', 0), makeNode('score_reset'),
+    makeNode('set_var', V + '=3'), makeNode('set_var', F + '=0'),
+    exSay(t.exDefTitle, 150), makeNode('wait', 2),
+    exSay(t.exDefInstr, 100), makeNode('wait', 3),
+    makeNode('send_msg', t.exMsgGo),
+    makeNode('when_key', 'arrowleft'), makeNode('turn', -15),
+    makeNode('when_key', 'arrowright'), makeNode('turn', 15),
+    makeNode('when_key', ' '),
+    exBody(makeNode('if_cond', F + ' = 0'), [makeNode('send_msg', t.exMsgShoot)]),
+    makeNode('when_msg', t.exMsgGo),
+    exBody(makeNode('forever'), [
+      exBody(makeNode('if_cond', V + ' < 1'), [
+        exBody(makeNode('if_cond', F + ' = 0'), [makeNode('set_var', F + '=1'), exSay(t.exLose, 150)])
+      ]),
+      makeNode('wait', 0.3)
+    ]),
+    makeNode('when_score', 10),
+    exBody(makeNode('if_cond', F + ' = 0'), [makeNode('set_var', F + '=1'), exSay(t.exWin, 150)])
+  ];
+  /* Apuntar en dirección [ƒ Dirección de la nave]: la bala sale por donde mira. */
+  const apuntar = makeNode('point_dir', 0);
+  apuntar.reps = [makeNode('rep_dir_of', nave.id)];
+  bala.code = [
+    makeNode('when_flag'), makeNode('hide'),
+    makeNode('when_msg', t.exMsgShoot), makeNode('go_sprite', nave.id), apuntar,
+    makeNode('move', 30), makeNode('create_clone', 'self'),
+    makeNode('when_clone'), makeNode('show'),
+    exBody(makeNode('repeat', 20), [
+      makeNode('move', 12),
+      exBody(makeNode('if_touch_sprite', ene.id), [
+        makeNode('score_add', 1), makeNode('delete_touched_clone', ene.id), makeNode('delete_clone')
+      ])
+    ]),
+    makeNode('delete_clone')
+  ];
+  ene.code = [
+    makeNode('when_flag'), makeNode('hide'),
+    makeNode('when_msg', t.exMsgGo),
+    exBody(makeNode('repeat', 40), [
+      exBody(makeNode('if_cond', F + ' = 0'), [makeNode('create_clone', 'self')]),
+      makeNode('wait', 1.2)
+    ]),
+    makeNode('when_clone'), makeNode('show'), exAzarX(EX_Y_CIELO), makeNode('point_dir', 180),
+    exBody(makeNode('repeat', 17), [makeNode('move', 10)]),
+    makeNode('sub_var', V + '=1'), makeNode('delete_clone')
+  ];
+  const vars = {};
+  vars[V] = 3; vars[F] = 0;
+  return { sprites: [nave, bala, ene], selected: nave.id, showScore: true, stageBg: 5, vars: vars };
+}
+
+/* Quiz: preguntas y respuestas en dos listas. «Preguntar» muestra la pregunta
+   número «indice», se compara lo escrito con la respuesta del mismo número y
+   «Avanzar» pasa a la siguiente. */
+function exQuiz(t) {
+  const I = t.exVarIdx, LQ = t.exListQ, LA = t.exListA;
+  const buho = createSpriteData('🦉', t.exOwl, []);
+  const agregar = (valor, lista) => makeNode('list_add', valor + ',' + lista);
+  const elemento = lista => {
+    const n = makeNode('rep_list_item', '1,' + lista);
+    n.reps = [makeNode('rep_var', I), null];
+    return n;
+  };
+  const pregunta = makeNode('ask', 'x\u0001' + t.exVarAns);
+  pregunta.reps = [elemento(LQ), null];
+  const igual = makeNode('rep_eq', '1\u00011');
+  igual.reps = [makeNode('rep_answer'), elemento(LA)];
+  const unirEra = makeNode('rep_join', t.exQuizBad + '\u0001');
+  unirEra.reps = [null, elemento(LA)];
+  const decirEra = exSay('x', 120);
+  decirEra.reps = [unirEra];
+  const revisar = makeNode('if_else', '0');
+  revisar.reps = [igual];
+  revisar.body = [exSay(t.exQuizOk, 140), makeNode('score_add', 1)];
+  revisar.elseBody = [decirEra];
+  const ronda = makeNode('repeat', 3);
+  ronda.reps = [makeNode('rep_list_len', LQ)];
+  ronda.body = [pregunta, revisar, makeNode('wait', 1.5), makeNode('idx_next', I + ',' + LQ)];
+  const unirFin = makeNode('rep_join', t.exQuizEnd + '\u0001');
+  unirFin.reps = [null, makeNode('rep_score')];
+  const decirFin = exSay('x', 130);
+  decirFin.reps = [unirFin];
+  buho.code = [
+    makeNode('when_flag'), makeNode('score_reset'),
+    makeNode('list_clear', LQ), makeNode('list_clear', LA),
+    agregar(t.exQ1, LQ), agregar(t.exQ2, LQ), agregar(t.exQ3, LQ),
+    agregar(t.exA1, LA), agregar(t.exA2, LA), agregar(t.exA3, LA),
+    makeNode('set_var', I + '=1'),
+    exSay(t.exQuizTitle, 150), makeNode('wait', 2),
+    ronda, decirFin, makeNode('wait', 3)
+  ];
+  const listas = {};
+  listas[LQ] = [t.exQ1, t.exQ2, t.exQ3];
+  listas[LA] = [t.exA1, t.exA2, t.exA3];
+  const vars = {};
+  vars[I] = 1;
+  return { sprites: [buho], selected: buho.id, showScore: true, stageBg: 0, vars: vars, lists: listas };
+}
+
 const EXAMPLES = [
   { id: 'hola', emoji: '🐱', nameKey: 'ex1', descKey: 'ex1d', build: exHola },
   { id: 'fruta', emoji: '🍎', nameKey: 'ex2', descKey: 'ex2d', build: exFruta },
-  { id: 'cometas', emoji: '☄️', nameKey: 'ex3', descKey: 'ex3d', build: exCometas }
+  { id: 'cometas', emoji: '☄️', nameKey: 'ex3', descKey: 'ex3d', build: exCometas },
+  { id: 'estrella', emoji: '⭐', nameKey: 'ex4', descKey: 'ex4d', build: exEstrella },
+  { id: 'meteoritos', emoji: '🛸', nameKey: 'ex5', descKey: 'ex5d', build: exMeteoritos },
+  { id: 'defensa', emoji: '🚀', nameKey: 'ex6', descKey: 'ex6d', build: exDefensa },
+  { id: 'quiz', emoji: '🦉', nameKey: 'ex7', descKey: 'ex7d', build: exQuiz }
 ];
 
 const EXAMPLE_GUIDE_STEPS = 5;
@@ -1651,8 +1847,9 @@ function examplePayload(ex) {
   return {
     version: '2.0',
     sprites: built.sprites,
-    variables: {},
+    variables: built.vars || {},
     hidden: {},
+    lists: built.lists || {},
     worldW: WORLD_W0,
     worldH: WORLD_H0,
     stageBg: built.stageBg || 0,
@@ -1904,7 +2101,24 @@ function updateHUD() {
 }
 
 /* ---------------- variables panel ---------------- */
+/* Sugerencias de nombres para las casillas de variable (poner, aumentar,
+   preguntar…): se escribe libre, pero la lista evita errores de tipeo. */
+function syncVarDatalist() {
+  const dl = $('#varNamesList');
+  if (!dl) return;
+  const names = varPairs(selectedSprite()).map(p => p[0]);
+  const sig = names.join('\u0001');
+  if (dl.dataset.sig === sig) return;
+  dl.dataset.sig = sig;
+  dl.replaceChildren.apply(dl, names.map(n => {
+    const o = document.createElement('option');
+    o.value = n;
+    return o;
+  }));
+}
+
 function ensureVarsRendered() {
+  syncVarDatalist();
   if (varsSignature(selectedSprite()) !== varsSig) renderVars();
   else syncVars();
 }
@@ -2101,7 +2315,8 @@ const LIST_MAX_ITEMS = 200;
 function isListNode(node) {
   return !!node && (node.type === 'list_add' || node.type === 'list_del' ||
     node.type === 'list_replace' || node.type === 'list_clear' ||
-    node.type === 'rep_list_len' || node.type === 'rep_list_item');
+    node.type === 'rep_list_len' || node.type === 'rep_list_item' ||
+    node.type === 'idx_next' || node.type === 'idx_prev');
 }
 
 function listName(v) {
@@ -2441,6 +2656,7 @@ function updateModalLock() {
    askText() devuelve el texto o null si se cancela. */
 let askResolver = null;
 let askMode = 'confirm';
+let askLocked = false;
 
 function askUser(opts) {
   const modal = $('#askModal');
@@ -2455,8 +2671,16 @@ function askUser(opts) {
   }
   const t = UI[lang];
   askMode = wantsText ? 'input' : 'confirm';
+  /* «Preguntar» no se cancela con Esc ni tocando afuera: sólo Enter/Enviar
+     (o Detener). Así el guion no sigue con una respuesta vacía por accidente. */
+  askLocked = !!o.locked;
+  const cancelBtn = $('#askCancel');
+  if (cancelBtn) cancelBtn.hidden = !!o.hideCancel;
+  const okLabel = $('#askOk span');
+  if (okLabel) okLabel.textContent = o.okLabel || t.accept;
   $('#askTitle').textContent = o.title || t.confirmTitle;
   $('#askMessage').textContent = o.message || '';
+  $('#askMessage').classList.toggle('ask-q', !!o.locked);
   const inp = $('#askInput');
   inp.hidden = !wantsText;
   inp.value = wantsText ? (o.value || '') : '';
@@ -2475,6 +2699,7 @@ function askUser(opts) {
 
 function closeAsk(value) {
   const modal = $('#askModal');
+  askLocked = false;
   if (modal) modal.hidden = true;
   updateModalLock();
   const resolve = askResolver;
@@ -2485,6 +2710,14 @@ function closeAsk(value) {
 function askConfirm(message, title) {
   return askUser({ message: message, title: title || UI[lang].confirmTitle })
     .then(v => v === true);
+}
+
+/* Diálogo del bloque «Preguntar»: devuelve lo escrito, o null si se detuvo. */
+function askQuestion(question) {
+  const t = UI[lang];
+  return askUser({ title: t.askTitle, message: question, value: '', placeholder: t.askPlaceholder,
+    maxLength: 200, okLabel: t.askSend, hideCancel: true, locked: true })
+    .then(v => (typeof v === 'string' ? v : null));
 }
 
 function askText(title, value, message, maxLength) {
@@ -2499,12 +2732,12 @@ function bindAskModal() {
   const inp = $('#askInput');
   $('#askOk').addEventListener('click', () => closeAsk(askMode === 'input' ? inp.value : true));
   $('#askCancel').addEventListener('click', () => closeAsk(null));
-  modal.addEventListener('click', e => { if (e.target === modal) closeAsk(null); });
+  modal.addEventListener('click', e => { if (e.target === modal && !askLocked) closeAsk(null); });
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); closeAsk(inp.value); }
   });
   document.addEventListener('keydown', e => {
-    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); closeAsk(null); }
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); if (!askLocked) closeAsk(null); }
   });
 }
 
@@ -2582,6 +2815,7 @@ function setReporter(hostId, slot, type) {
   if (!hostDef || !(hostDef.repOk || hostDef.rep) || hostDef.repName) return;
   const count = ((hostDef.n[lang] || hostDef.n.es || '').match(/\{(?:v|x|y)\}/g) || []).length;
   if (!(slot >= 0 && slot < count)) return;
+  if (hostDef.noRepAt && hostDef.noRepAt.indexOf(slot) > -1) return;
   if (!Array.isArray(info.node.reps)) info.node.reps = [];
   info.node.reps[slot] = makeNode(type);
   renderCode();
@@ -3342,11 +3576,29 @@ function codeTitle() {
 /* Un bloque puede tener uno o varios huecos ({v}, {x}, {y}). El valor del
    nodo sigue siendo un único escalar: con varios huecos se guarda como
    "x,y". Así los proyectos viejos, el historial y los links no cambian. */
+/* Separador de las casillas de un bloque: la coma de siempre, «=» en las
+   variables (nombre=valor) y un carácter de control en los bloques cuyas
+   casillas son TEXTO libre (preguntar, unir, comparar): así una coma escrita
+   por el jugador no parte el valor en dos. */
+function defSep(def) { return (def && def.sep) || ','; }
+
+function splitSlots(raw, def, count) {
+  const sep = defSep(def);
+  const txt = String(raw);
+  if (count < 2) return [txt];
+  if (sep === '=') {
+    /* Sólo el primer «=» separa: el valor puede traer más (x=a=b). */
+    const i = txt.indexOf('=');
+    return i < 0 ? [txt] : [txt.slice(0, i), txt.slice(i + 1)];
+  }
+  return txt.split(sep);
+}
+
 function blockValues(node, def, count) {
   const raw = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
   if (count < 2) return [raw];
-  const defs = String(def.def !== undefined ? def.def : '').split(',');
-  const parts = raw.split(',');
+  const defs = splitSlots(def.def !== undefined ? def.def : '', def, count);
+  const parts = splitSlots(raw, def, count);
   const out = [];
   for (let i = 0; i < count; i++) {
     out.push(parts[i] !== undefined ? parts[i] : (defs[i] !== undefined ? defs[i] : '0'));
@@ -3453,7 +3705,8 @@ function blockContent(node, def, t) {
       input.className = 'sb-input' + (def.bool ? ' bool' : '');
       input.type = 'text';
       input.value = cur;
-      input.style.width = (def.w || 58) + 'px';
+      input.style.width = ((def.ws && def.ws[i]) || def.w || 58) + 'px';
+      if (def.varAt === i) input.setAttribute('list', 'varNamesList');
       input.dataset.input = node.id;
       /* data-xy permite recomponer el par "x,y" al editar cualquiera de los dos. */
       if (slots.length > 1) input.dataset.xy = String(i);
@@ -3463,7 +3716,8 @@ function blockContent(node, def, t) {
       input.spellcheck = false;
       field = input;
     }
-    if (!canRep || isPick) { content.appendChild(field); return; }
+    const noRepHere = !!(def.noRepAt && def.noRepAt.indexOf(i) > -1);
+    if (!canRep || isPick || noRepHere) { content.appendChild(field); return; }
     /* Casilla con reportero: ƒ abre el selector y, si ya hay uno, el chip
        reemplaza al input. El texto escrito se conserva en node.val por si
        después se quita el reportero. */
@@ -3688,6 +3942,7 @@ function assignZ(container) {
 function renderCode() {
   const list = $('#codeList');
   if (!list) return;
+  syncVarDatalist();
   const s = selectedSprite();
   const t = UI[lang];
   list.innerHTML = '';
@@ -3903,7 +4158,7 @@ function pickLabel(kind, id) {
 
 function blockPlainName(def) {
   const label = def.n[lang] || def.n.es;
-  const defs = String(def.def !== undefined ? def.def : '').split(',');
+  const defs = String(def.def !== undefined ? def.def : '').split(defSep(def));
   let i = 0;
   return label.replace(/\{(?:v|x|y)\}/g, () => {
     const value = defs.length > 1 ? defs[i] : defs[0];
@@ -4862,27 +5117,38 @@ function resolveValue(raw, sprite) {
    huecos). node.reps[i] guarda el reportero que reemplaza a esa casilla; si
    no hay reportero se usa el texto. Así el formato guardado no cambia y los
    proyectos viejos se abren igual. */
-function nodeVal(node, sprite, depth) {
+/* Valores de cada casilla, CON TIPO: un reportero devuelve su resultado tal
+   cual (número o texto) y una casilla escrita devuelve su texto. Así «Unir»,
+   «=» o una respuesta con comas no pasan por un texto «a,b» que haya que
+   volver a partir. */
+function slotVals(node, sprite, depth) {
   const d = depth || 0;
   const def = BYID[node.type];
-  if (!def) return '';
-  const raw = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
-  if (!node.reps || !node.reps.length) return raw;
+  if (!def) return [''];
   const label = def.n[lang] || def.n.es || '';
-  const slots = label.match(/\{(?:v|x|y)\}/g) || [];
-  if (!slots.length) return raw;
-  const parts = raw.split(',');
-  const defs = String(def.def !== undefined ? def.def : '').split(',');
+  const count = (label.match(/\{(?:v|x|y)\}/g) || []).length;
+  const raw = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
+  if (!count) return [raw];
+  const parts = count < 2 ? [raw] : splitSlots(raw, def, count);
+  const defs = count < 2 ? [raw] : splitSlots(def.def !== undefined ? def.def : '', def, count);
   const out = [];
-  for (let i = 0; i < slots.length; i++) {
-    const rep = node.reps[i];
+  for (let i = 0; i < count; i++) {
+    const rep = node.reps && node.reps[i];
     if (rep && BYID[rep.type] && BYID[rep.type].rep) {
-      out.push(String(evalReporter(rep, sprite, d + 1)));
+      out.push(evalReporter(rep, sprite, d + 1));
     } else {
       out.push(parts[i] !== undefined ? parts[i] : (defs[i] !== undefined ? defs[i] : '0'));
     }
   }
-  return out.join(',');
+  return out;
+}
+
+function nodeVal(node, sprite, depth) {
+  const def = BYID[node.type];
+  if (!def) return '';
+  const raw = String(node.val !== undefined ? node.val : (def.def !== undefined ? def.def : ''));
+  if (!node.reps || !node.reps.length) return raw;
+  return slotVals(node, sprite, depth).map(String).join(defSep(def));
 }
 
 /* Evalúa un reportero. Los anidados ya vienen resueltos por nodeVal(); el
@@ -4892,12 +5158,14 @@ function evalReporter(node, sprite, depth) {
   if (!node || d > 12) return 0;
   const def = BYID[node.type];
   if (!def || !def.rep) return 0;
-  const v = nodeVal(node, sprite, d);
-  const parts = v.split(',');
-  const a = num(parts[0], 0);
-  const b = num(parts[1], 0);
+  const vals = slotVals(node, sprite, d);
+  const parts = vals.map(String);
+  const v = parts.join(defSep(def));
+  const a = num(vals[0], 0);
+  const b = num(vals[1], 0);
   switch (node.type) {
     case 'rep_score': return score;
+    case 'rep_answer': return typedAnswer(answerText);
     case 'rep_timer': {
       const secs = Math.max(0, (Date.now() - timerStart) / 1000);
       return Math.round(secs * 10) / 10;
@@ -4930,6 +5198,20 @@ function evalReporter(node, sprite, depth) {
     case 'rep_mul': return a * b;
     case 'rep_div': return b === 0 ? 0 : a / b;
     case 'rep_gt': return a > b ? 1 : 0;
+    case 'rep_lt': return a < b ? 1 : 0;
+    case 'rep_eq': return valuesEqual(vals[0], vals[1]) ? 1 : 0;
+    case 'rep_and': return (truthy(vals[0]) && truthy(vals[1])) ? 1 : 0;
+    case 'rep_or': return (truthy(vals[0]) || truthy(vals[1])) ? 1 : 0;
+    case 'rep_not': return truthy(vals[0]) ? 0 : 1;
+    case 'rep_mod': return b === 0 ? 0 : ((a % b) + b) % b;
+    case 'rep_round': return Math.round(a);
+    case 'rep_abs': return Math.abs(a);
+    case 'rep_join': return parts[0] + parts[1];
+    case 'rep_len': return parts[0].length;
+    case 'rep_letter': {
+      const k = Math.floor(a);
+      return (k >= 1 && k <= parts[1].length) ? parts[1].charAt(k - 1) : '';
+    }
     default: return 0;
   }
 }
@@ -4946,18 +5228,64 @@ function posVarNames(val) {
   });
 }
 
+/* Lo último que respondió el jugador en «Preguntar». Es estado de EJECUCIÓN:
+   se borra al dar Ejecutar y nunca se guarda en el proyecto. */
+let answerText = '';
+
+/* «12» se guarda como número para poder sumarlo; cualquier otra cosa queda
+   como texto. */
+function typedAnswer(s) {
+  const t = String(s == null ? '' : s).trim();
+  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : String(s == null ? '' : s);
+}
+
+/* Verdadero/falso de un valor cualquiera: 0, vacío, «false» y «falso» son
+   falsos. Los reporteros de comparación devuelven 1 o 0. */
+function truthy(x) {
+  if (typeof x === 'number') return x !== 0 && !Number.isNaN(x);
+  const s = String(x == null ? '' : x).trim().toLowerCase();
+  return !(s === '' || s === '0' || s === 'false' || s === 'falso');
+}
+
+/* Igualdad al estilo Scratch: si los dos son números se comparan como
+   números; si no, como texto sin distinguir mayúsculas. */
+function valuesEqual(x, y) {
+  const sx = String(x == null ? '' : x).trim();
+  const sy = String(y == null ? '' : y).trim();
+  const nx = sx !== '' && Number.isFinite(Number(sx));
+  const ny = sy !== '' && Number.isFinite(Number(sy));
+  if (nx && ny) return Number(sx) === Number(sy);
+  /* Sin mayúsculas ni tildes: «paris» acepta «París». */
+  const plano = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return plano(sx) === plano(sy);
+}
+
+/* Nombre de variable escrito en un bloque: vacío o con claves peligrosas no
+   sirve (variables es un objeto común). */
+function cleanVarName(v) {
+  const n = String(v == null ? '' : v).trim();
+  if (!n || n === '__proto__' || n === 'constructor' || n === 'prototype') return '';
+  return n;
+}
+
+/* Variables con dos casillas (nombre=valor). El valor puede venir de un
+   reportero: se usa su resultado TAL CUAL, sin volver a interpretarlo (si no,
+   una respuesta que se llame «vidas» se confundiría con la variable). */
 function applyVar(node, sprite) {
   const txt = String(node.val === undefined ? '' : node.val);
   const eq = txt.indexOf('=');
   if (eq < 0) return;
-  const name = txt.slice(0, eq).trim();
+  const name = cleanVarName(txt.slice(0, eq));
   if (!name) return;
-  const raw = txt.slice(eq + 1).trim();
+  const rep = node.reps && node.reps[1];
+  let value;
+  if (rep && BYID[rep.type] && BYID[rep.type].rep) value = evalReporter(rep, sprite, 1);
+  else value = resolveValue(txt.slice(eq + 1).trim(), sprite);
   if (node.type === 'set_var') {
-    varSet(name, resolveValue(raw, sprite), sprite);
+    varSet(name, value, sprite);
     return;
   }
-  const amount = Number(resolveValue(raw, sprite));
+  const amount = Number(value);
   if (!Number.isFinite(amount)) return;
   if (!varHas(name, sprite)) varSet(name, 0, sprite);
   varSet(name, Number(varGet(name, sprite) || 0) +
@@ -5439,6 +5767,36 @@ async function execBlock(node, sprite) {
       await sleep(130);
       return;
     }
+    case 'ask': {
+      const vals = slotVals(node, sprite);
+      const question = String(vals[0] == null ? '' : vals[0]);
+      const slots = splitSlots(node.val !== undefined ? node.val : (BYID.ask.def || ''), BYID.ask, 2);
+      const target = cleanVarName(slots[1]);
+      const text = await askQuestion(question);
+      if (!isRunning || text === null) return; /* Detener con el diálogo abierto. */
+      answerText = text;
+      if (target) varSet(target, typedAnswer(text), sprite);
+      updateHUD();
+      await sleep(60);
+      return;
+    }
+    case 'idx_next': case 'idx_prev': {
+      const p = String(v).split(',');
+      const name = cleanVarName(p[0]);
+      if (!name) return;
+      const len = listRead(listName(p[1])).length;
+      const cur = Math.floor(num(varGet(name, sprite), 0));
+      let nxt = 0;
+      if (len > 0) {
+        nxt = node.type === 'idx_next'
+          ? ((cur % len) + len) % len + 1
+          : (cur < 1 ? len : (((cur - 2) % len) + len) % len + 1);
+      }
+      varSet(name, nxt, sprite);
+      updateHUD();
+      await sleep(80);
+      return;
+    }
     case 'set_var': case 'add_var': case 'sub_var':
       applyVar(node, sprite);
       updateHUD();
@@ -5808,6 +6166,7 @@ function resetToStart() {
 function beginRun() {
   if (runActive) return;
   runActive = true;
+  answerText = '';
   runtimeSnapshot = snapshotRuntime();
   penReset();
   procFrames = {};
@@ -5889,6 +6248,19 @@ async function execNode(node, sprite, ctx) {
     if (node.type === 'repeat') {
       const times = Math.max(0, Math.min(2000, Math.floor(num(nodeVal(node, sprite), 4))));
       for (let i = 0; i < times && alive(); i++) await execStack(node.body || [], sprite, ctx);
+      return;
+    }
+    if (node.type === 'wait_until') {
+      while (alive() && !checkNodeCondition(node, sprite)) await sleep(50);
+      return;
+    }
+    if (node.type === 'repeat_until') {
+      while (alive() && !checkNodeCondition(node, sprite)) {
+        const body = node.body || [];
+        if (body.length) await execStack(body, sprite, ctx);
+        else await sleep(120);
+        await sleep(16);
+      }
       return;
     }
     if (node.type === 'forever') {
@@ -6547,6 +6919,61 @@ function sb3SpriteBlocks(sprite, index) {
       case 'rep_mul': return binop('operator_multiply', rep, hostId, 'NUM1', 'NUM2');
       case 'rep_div': return binop('operator_divide', rep, hostId, 'NUM1', 'NUM2');
       case 'rep_gt': return binop('operator_gt', rep, hostId, 'OPERAND1', 'OPERAND2');
+      case 'rep_lt': return binop('operator_lt', rep, hostId, 'OPERAND1', 'OPERAND2');
+      case 'rep_eq': {
+        /* Las casillas de «=» son texto: Scratch compara números o textos. */
+        const id = mk('operator_equals', hostId);
+        blocks[id].inputs.OPERAND1 = slotIn(rep, 0, 10, id);
+        blocks[id].inputs.OPERAND2 = slotIn(rep, 1, 10, id);
+        return id;
+      }
+      case 'rep_mod': return binop('operator_mod', rep, hostId, 'NUM1', 'NUM2');
+      case 'rep_and':
+      case 'rep_or': {
+        const id = mk(rep.type === 'rep_and' ? 'operator_and' : 'operator_or', hostId);
+        ['OPERAND1', 'OPERAND2'].forEach((k, i) => {
+          const r = rep.reps && rep.reps[i];
+          const rid = r ? reporterIn(r, id) : null;
+          if (rid) blocks[id].inputs[k] = [2, rid];
+        });
+        return id;
+      }
+      case 'rep_not': {
+        const id = mk('operator_not', hostId);
+        const r = rep.reps && rep.reps[0];
+        const rid = r ? reporterIn(r, id) : null;
+        if (rid) blocks[id].inputs.OPERAND = [2, rid];
+        return id;
+      }
+      case 'rep_round': {
+        const id = mk('operator_round', hostId);
+        blocks[id].inputs.NUM = slotIn(rep, 0, 4, id);
+        return id;
+      }
+      case 'rep_abs': {
+        const id = mk('operator_mathop', hostId);
+        blocks[id].fields.OPERATOR = ['abs', null];
+        blocks[id].inputs.NUM = slotIn(rep, 0, 4, id);
+        return id;
+      }
+      case 'rep_join': {
+        const id = mk('operator_join', hostId);
+        blocks[id].inputs.STRING1 = slotIn(rep, 0, 10, id);
+        blocks[id].inputs.STRING2 = slotIn(rep, 1, 10, id);
+        return id;
+      }
+      case 'rep_len': {
+        const id = mk('operator_length', hostId);
+        blocks[id].inputs.STRING = slotIn(rep, 0, 10, id);
+        return id;
+      }
+      case 'rep_letter': {
+        const id = mk('operator_letter_of', hostId);
+        blocks[id].inputs.LETTER = slotIn(rep, 0, 6, id);
+        blocks[id].inputs.STRING = slotIn(rep, 1, 10, id);
+        return id;
+      }
+      case 'rep_answer': return mk('sensing_answer', hostId);
       default: return null;
     }
   }
@@ -6794,20 +7221,100 @@ function sb3SpriteBlocks(sprite, index) {
         const txt = String(node.val === undefined ? '' : node.val);
         const eq = txt.indexOf('=');
         if (eq < 0) return null;
-        const name = txt.slice(0, eq).trim();
+        const name = cleanVarName(txt.slice(0, eq));
         if (!name) return null;
         const raw = txt.slice(eq + 1).trim();
+        const rep = node.reps && node.reps[1];
         usedVars.add(name);
+        const campo = [name, sb3VarId(name, sb3VarOwner(sprite, name))];
         if (t === 'set_var') {
           const bid = mk('data_setvariableto', parentId);
-          blocks[bid].fields.VARIABLE = [name, sb3VarId(name, sb3VarOwner(sprite, name))];
-          blocks[bid].inputs.VALUE = [1, [10, raw]];
+          blocks[bid].fields.VARIABLE = campo;
+          const rid = rep ? reporterIn(rep, bid) : null;
+          blocks[bid].inputs.VALUE = rid ? [3, rid, [10, raw]] : [1, [10, raw]];
           return bid;
         }
         const bid = mk('data_changevariableby', parentId);
-        blocks[bid].fields.VARIABLE = [name, sb3VarId(name, sb3VarOwner(sprite, name))];
+        blocks[bid].fields.VARIABLE = campo;
+        const rid = rep ? reporterIn(rep, bid) : null;
+        if (rid) {
+          if (t === 'add_var') {
+            blocks[bid].inputs.VALUE = [3, rid, [4, '0']];
+          } else {
+            /* Scratch no tiene «restar»: se cambia por (0 − valor). */
+            const neg = mk('operator_subtract', bid);
+            blocks[rid].parent = neg;
+            blocks[neg].inputs.NUM1 = [1, [4, '0']];
+            blocks[neg].inputs.NUM2 = [3, rid, [4, '0']];
+            blocks[bid].inputs.VALUE = [3, neg, [4, '0']];
+          }
+          return bid;
+        }
         const amount = num(raw, 0);
         blocks[bid].inputs.VALUE = [1, [4, String(t === 'sub_var' ? -amount : amount)]];
+        return bid;
+      }
+      case 'ask': {
+        const slots = splitSlots(node.val === undefined ? BYID.ask.def : node.val, BYID.ask, 2);
+        const a = mk('sensing_askandwait', parentId);
+        blocks[a].inputs.QUESTION = slotIn(node, 0, 10, a);
+        const target = cleanVarName(slots[1]);
+        if (!target) return a;
+        usedVars.add(target);
+        const b = mk('data_setvariableto', a);
+        blocks[b].fields.VARIABLE = [target, sb3VarId(target, sb3VarOwner(sprite, target))];
+        blocks[b].inputs.VALUE = [3, mk('sensing_answer', b), [10, '']];
+        blocks[a].next = b;
+        tail[a] = b;
+        return a;
+      }
+      case 'idx_next':
+      case 'idx_prev': {
+        const p = String(node.val === undefined ? BYID[t].def : node.val).split(',');
+        const name = cleanVarName(p[0]);
+        if (!name) return null;
+        usedVars.add(name);
+        const a = mk('data_setvariableto', parentId);
+        blocks[a].fields.VARIABLE = [name, sb3VarId(name, sb3VarOwner(sprite, name))];
+        const largo = host => {
+          const l = mk('data_lengthoflist', host);
+          blocks[l].fields.LIST = listField(node);
+          return l;
+        };
+        /* siguiente = (valor mod largo) + 1 ; anterior = ((valor − 2 + largo) mod largo) + 1 */
+        const mas1 = mk('operator_add', a);
+        const resto = mk('operator_mod', mas1);
+        blocks[mas1].inputs.NUM1 = [3, resto, [4, '0']];
+        blocks[mas1].inputs.NUM2 = [1, [4, '1']];
+        if (t === 'idx_next') {
+          blocks[resto].inputs.NUM1 = [3, varBlock(name, resto), [4, '0']];
+        } else {
+          const suma = mk('operator_add', resto);
+          const menos = mk('operator_subtract', suma);
+          blocks[menos].inputs.NUM1 = [3, varBlock(name, menos), [4, '0']];
+          blocks[menos].inputs.NUM2 = [1, [4, '2']];
+          blocks[suma].inputs.NUM1 = [3, menos, [4, '0']];
+          blocks[suma].inputs.NUM2 = [3, largo(suma), [4, '0']];
+          blocks[resto].inputs.NUM1 = [3, suma, [4, '0']];
+        }
+        blocks[resto].inputs.NUM2 = [3, largo(resto), [4, '1']];
+        blocks[a].inputs.VALUE = [3, mas1, [4, '0']];
+        return a;
+      }
+      case 'repeat_until': {
+        const bid = mk('control_repeat_until', parentId);
+        const cond = conditionIn(node, bid);
+        if (!cond) return null;
+        blocks[bid].inputs.CONDITION = cond;
+        const sub = buildStack(node.body || [], bid);
+        if (sub) blocks[bid].inputs.SUBSTACK = [2, sub];
+        return bid;
+      }
+      case 'wait_until': {
+        const bid = mk('control_wait_until', parentId);
+        const cond = conditionIn(node, bid);
+        if (!cond) return null;
+        blocks[bid].inputs.CONDITION = cond;
         return bid;
       }
       case 'save_pos': {
@@ -7843,9 +8350,16 @@ function bindEvents() {
     if (input.dataset.xy !== undefined) {
       /* Bloque de varios campos: node.val es "a,b". Se actualiza sólo el
          índice editado para no pisar la otra casilla ni los reporteros. */
-      const parts = String(info.node.val === undefined ? '' : info.node.val).split(',');
-      parts[Number(input.dataset.xy)] = input.value;
-      info.node.val = parts.join(',');
+      const idef = BYID[info.node.type];
+      const isep = defSep(idef);
+      const ilabel = (idef && (idef.n[lang] || idef.n.es)) || '';
+      const icount = (ilabel.match(/\{(?:v|x|y)\}/g) || []).length;
+      const parts = blockValues(info.node, idef, Math.max(icount, 2));
+      let typed = input.value;
+      /* El separador no puede ser parte de lo escrito: se quita. */
+      if (isep === '=' || isep === '\u0001') typed = typed.split(isep).join('');
+      parts[Number(input.dataset.xy)] = typed;
+      info.node.val = parts.join(isep);
     } else {
       info.node.val = input.value;
     }
@@ -8204,3 +8718,13 @@ render();
    link compartido, hydrateShared() la reemplaza al aplicar el proyecto. */
 resetHistory();
 if (pendingShare) hydrateShared(pendingShare);
+/* ?ejemplo=id (botones de tutorial.html): abre ese juego de muestra como
+   proyecto NUEVO, sin tocar el que estaba abierto, y limpia la URL para que
+   recargar no lo vuelva a abrir. */
+try {
+  const exId = new URLSearchParams(location.search).get('ejemplo');
+  if (exId && EXAMPLES.some(x => x.id === exId)) {
+    openExample(exId);
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
+} catch (err) { }

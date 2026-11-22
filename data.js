@@ -14,7 +14,7 @@ const L = (es, en, pt, fr) => ({ es, en, pt, fr });
    con esta misma cadena más una huella de los tres archivos de la app;
    tests/check-parity.js verifica que no se desincronicen y
    tests/bump-sw.js los actualiza juntos. */
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v24';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -509,9 +509,19 @@ const BLOCKS = [
     d: L('Envuelve los bloques y los repite sin parar.', 'Wraps blocks and repeats them forever.', 'Envolve os blocos e repete sem parar.', 'Entoure les blocs et les répète sans fin.')
   },
   {
+    id: 'repeat_until', cat: 'control', icon: 'repeat', def: 'score > 5', w: 104, c: 1, bool: 1,
+    n: L('Repetir hasta que {v}', 'Repeat until {v}', 'Repetir até que {v}', 'Répéter jusqu’à ce que {v}'),
+    d: L('Repite los bloques de adentro hasta que la condición sea verdadera.', 'Repeats the blocks inside until the condition is true.', 'Repete os blocos de dentro até que a condição seja verdadeira.', 'Répète les blocs à l’intérieur jusqu’à ce que la condition soit vraie.')
+  },
+  {
     id: 'wait', cat: 'control', icon: 'clock', def: 1, w: 50, num: 1,
     n: L('Esperar {v} seg', 'Wait {v} sec', 'Esperar {v} seg', 'Attendre {v} s'),
     d: L('Hace una pausa antes del siguiente bloque.', 'Pauses before the next block.', 'Faz uma pausa antes do próximo bloco.', 'Fait une pause avant le bloc suivant.')
+  },
+  {
+    id: 'wait_until', cat: 'control', icon: 'clock', def: 'score > 5', w: 104, bool: 1,
+    n: L('Esperar hasta que {v}', 'Wait until {v}', 'Esperar até que {v}', 'Attendre jusqu’à ce que {v}'),
+    d: L('Detiene el guion hasta que la condición sea verdadera.', 'Pauses the script until the condition is true.', 'Pausa o roteiro até que a condição seja verdadeira.', 'Met le script en pause jusqu’à ce que la condition soit vraie.')
   },
   {
     id: 'if_tilt', cat: 'control', icon: 'tilt', c: 1,
@@ -586,6 +596,13 @@ const BLOCKS = [
     n: L('Reiniciar cronómetro', 'Reset timer', 'Reiniciar cronômetro', 'Réinitialiser le chrono'),
     d: L('Vuelve el cronómetro a cero. Después lo leés con el reportero «Cronómetro».', 'Sets the timer back to zero. Read it with the "Timer" reporter.', 'Volta o cronômetro a zero. Depois leia com o repórter «Cronômetro».', 'Remet le chrono à zéro. Lisez-le avec le rapporteur « Chronomètre ».')
   },
+  /* Muestra un diálogo con la pregunta y espera el Enter. La respuesta queda en
+     el reportero «Respuesta» y también en la variable que se indique. */
+  {
+    id: 'ask', cat: 'sensor', icon: 'message', def: '¿Tu nombre?\u0001respuesta', sep: '\u0001', ws: [108, 76], varAt: 1, noRepAt: [1],
+    n: L('Preguntar {x} y guardar en {y}', 'Ask {x} and store in {y}', 'Perguntar {x} e guardar em {y}', 'Demander {x} et ranger dans {y}'),
+    d: L('Muestra una pregunta y espera a que el jugador escriba y toque Enter. Guarda la respuesta en «Respuesta» y en esa variable.', 'Shows a question and waits for the player to type and press Enter. Stores the answer in «Answer» and in that variable.', 'Mostra uma pergunta e espera o jogador digitar e apertar Enter. Guarda a resposta em «Resposta» e nessa variável.', 'Affiche une question et attend que le joueur écrive et appuie sur Entrée. Range la réponse dans « Réponse » et dans cette variable.')
+  },
   {
     id: 'vibrate', cat: 'sensor', icon: 'vibrate', def: 200, w: 62, num: 1,
     n: L('Vibrar {v} ms', 'Vibrate {v} ms', 'Vibrar {v} ms', 'Vibrer {v} ms'),
@@ -621,20 +638,23 @@ const BLOCKS = [
     n: L('Crear variable', 'Create variable', 'Criar variável', 'Créer une variable'),
     d: L('Crea una variable nueva con un nombre.', 'Creates a new variable with a name.', 'Cria uma variável nova com um nome.', 'Crée une nouvelle variable avec un nom.')
   },
+  /* Variables con DOS casillas: nombre y valor. El valor admite un reportero ƒ
+     (al azar, respuesta, cuentas…). node.val sigue siendo «nombre=valor», el
+     mismo formato de siempre, así que los proyectos viejos se abren igual. */
   {
-    id: 'set_var', cat: 'vars', icon: 'edit', def: 'nombre=0', w: 98,
-    n: L('Poner {v}', 'Set {v}', 'Pôr {v}', 'Mettre {v}'),
-    d: L('Guarda un valor en una variable (nombre=valor).', 'Stores a value in a variable (name=value).', 'Guarda um valor numa variável (nome=valor).', 'Stocke une valeur (nom=valeur).')
+    id: 'set_var', cat: 'vars', icon: 'edit', def: 'nombre=0', sep: '=', ws: [84, 72], varAt: 0, noRepAt: [0],
+    n: L('Poner {x} a {y}', 'Set {x} to {y}', 'Definir {x} como {y}', 'Mettre {x} à {y}'),
+    d: L('Guarda un valor en una variable (si no existe, se crea). El valor puede ser un número, un texto o un reportero ƒ.', 'Stores a value in a variable (created if it does not exist). The value can be a number, a text or a reporter ƒ.', 'Guarda um valor em uma variável (criada se não existir). O valor pode ser um número, um texto ou um repórter ƒ.', 'Range une valeur dans une variable (créée si elle n’existe pas). La valeur peut être un nombre, un texte ou un rapporteur ƒ.')
   },
   {
-    id: 'add_var', cat: 'vars', icon: 'plus', def: 'nombre=1', w: 98,
-    n: L('Sumar a {v}', 'Add to {v}', 'Somar a {v}', 'Ajouter à {v}'),
-    d: L('Suma una cantidad a una variable (nombre=valor).', 'Adds an amount to a variable (name=value).', 'Soma um valor a uma variável (nome=valor).', 'Ajoute une valeur (nom=valeur).')
+    id: 'add_var', cat: 'vars', icon: 'plus', def: 'nombre=1', sep: '=', ws: [84, 60], varAt: 0, noRepAt: [0],
+    n: L('Aumentar {x} en {y}', 'Increase {x} by {y}', 'Aumentar {x} em {y}', 'Augmenter {x} de {y}'),
+    d: L('Le suma ese valor a la variable. El valor puede ser un reportero ƒ.', 'Adds that value to the variable. The value can be a reporter ƒ.', 'Soma esse valor à variável. O valor pode ser um repórter ƒ.', 'Ajoute cette valeur à la variable. La valeur peut être un rapporteur ƒ.')
   },
   {
-    id: 'sub_var', cat: 'vars', icon: 'minus', def: 'nombre=1', w: 98,
-    n: L('Restar a {v}', 'Subtract {v}', 'Subtrair de {v}', 'Soustraire à {v}'),
-    d: L('Resta una cantidad a una variable (nombre=valor).', 'Subtracts from a variable (name=value).', 'Subtrai de uma variável (nome=valor).', 'Retire une valeur (nom=valeur).')
+    id: 'sub_var', cat: 'vars', icon: 'minus', def: 'nombre=1', sep: '=', ws: [84, 60], varAt: 0, noRepAt: [0],
+    n: L('Disminuir {x} en {y}', 'Decrease {x} by {y}', 'Diminuir {x} em {y}', 'Diminuer {x} de {y}'),
+    d: L('Le resta ese valor a la variable. El valor puede ser un reportero ƒ.', 'Subtracts that value from the variable. The value can be a reporter ƒ.', 'Subtrai esse valor da variável. O valor pode ser um repórter ƒ.', 'Retire cette valeur de la variable. La valeur peut être un rapporteur ƒ.')
   },
   /* Guarda la posición del personaje en dos variables (nombres separados por
      coma en node.val, como en go_xy). Luego «Ir a x: y:» acepta esos nombres. */
@@ -670,6 +690,18 @@ const BLOCKS = [
     id: 'list_clear', cat: 'vars', icon: 'list', def: LIST_DEFAULT, w: 104, pick: 'lists',
     n: L('Vaciar {v}', 'Clear {v}', 'Esvaziar {v}', 'Vider {v}'),
     d: L('Deja la lista elegida sin ningún valor.', 'Removes every value from the chosen list.', 'Deixa a lista escolhida sem nenhum valor.', 'Vide la liste choisie.')
+  },
+  /* Recorren una lista de a una posición y vuelven al principio (o al final)
+     al llegar al borde: sirven para «próxima pregunta» y «pregunta anterior». */
+  {
+    id: 'idx_next', cat: 'vars', icon: 'plus', def: 'indice,' + LIST_DEFAULT, w: 84, pick: 'lists', pickAt: 1, varAt: 0,
+    n: L('Avanzar {x} en la lista {y}', 'Advance {x} in list {y}', 'Avançar {x} na lista {y}', 'Avancer {x} dans la liste {y}'),
+    d: L('Sube la variable a la posición siguiente de la lista; después de la última vuelve a la primera.', 'Moves the variable to the next position of the list; after the last one it goes back to the first.', 'Move a variável para a próxima posição da lista; depois da última volta à primeira.', 'Passe la variable à la position suivante de la liste ; après la dernière, elle revient à la première.')
+  },
+  {
+    id: 'idx_prev', cat: 'vars', icon: 'minus', def: 'indice,' + LIST_DEFAULT, w: 84, pick: 'lists', pickAt: 1, varAt: 0,
+    n: L('Retroceder {x} en la lista {y}', 'Go back {x} in list {y}', 'Voltar {x} na lista {y}', 'Reculer {x} dans la liste {y}'),
+    d: L('Baja la variable a la posición anterior de la lista; antes de la primera pasa a la última.', 'Moves the variable to the previous position of the list; before the first one it goes to the last.', 'Move a variável para a posição anterior da lista; antes da primeira vai para a última.', 'Passe la variable à la position précédente de la liste ; avant la première, elle va à la dernière.')
   },
   {
     id: 'when_msg', cat: 'multi', icon: 'message', hat: 1,
@@ -750,6 +782,11 @@ const BLOCKS = [
     d: L('Devuelve los segundos desde que abriste el proyecto o desde el último reinicio.', 'Returns the seconds since you opened the project or since the last reset.', 'Devolve os segundos desde que abriu o projeto ou desde o último reinicio.', 'Renvoie les secondes depuis l’ouverture du projet ou la dernière remise à zéro.')
   },
   {
+    id: 'rep_answer', cat: 'sensor', icon: 'message', rep: 1,
+    n: L('Respuesta', 'Answer', 'Resposta', 'Réponse'),
+    d: L('Devuelve lo último que el jugador escribió en «Preguntar».', 'Returns the last thing the player typed in «Ask».', 'Devolve a última coisa que o jogador digitou em «Perguntar».', 'Renvoie la dernière chose que le joueur a écrite dans « Demander ».')
+  },
+  {
     id: 'rep_x', cat: 'ops', icon: 'target', rep: 1,
     n: L('Posición x', 'X position', 'Posição x', 'Position x'),
     d: L('Devuelve la coordenada x del personaje.', 'Returns the character’s x coordinate.', 'Devolve a coordenada x do personagem.', 'Renvoie la coordonnée x du personnage.')
@@ -777,7 +814,7 @@ const BLOCKS = [
     d: L('Devuelve hacia dónde mira ese personaje (0 = arriba, 90 = derecha, 180 = abajo, 270 = izquierda). Con «mí mismo», la propia.', 'Returns where that sprite is facing (0 = up, 90 = right, 180 = down, 270 = left). With «myself», its own.', 'Devolve para onde esse personagem olha (0 = cima, 90 = direita, 180 = baixo, 270 = esquerda). Com «eu mesmo», a própria.', 'Renvoie où regarde ce personnage (0 = haut, 90 = droite, 180 = bas, 270 = gauche). Avec « moi-même », la sienne.')
   },
   {
-    id: 'rep_var', cat: 'ops', icon: 'box', rep: 1, repName: 1, def: 'vidas', w: 76,
+    id: 'rep_var', cat: 'ops', icon: 'box', rep: 1, repName: 1, varAt: 0, def: 'vidas', w: 76,
     n: L('Variable {v}', 'Variable {v}', 'Variável {v}', 'Variable {v}'),
     d: L('Devuelve el valor de la variable que escribas.', 'Returns the value of the variable you type.', 'Devolve o valor da variável que você escrever.', 'Renvoie la valeur de la variable indiquée.')
   },
@@ -822,6 +859,61 @@ const BLOCKS = [
     d: L('Devuelve verdadero si el primero es mayor; sirve para «Si {v} entonces».', 'Returns true if the first is greater; for «If {v} then».', 'Devolve verdadeiro se o primeiro for maior; para «Se {v} então».', 'Renvoie vrai si le premier est plus grand ; pour « Si {v} alors ».')
   },
   {
+    id: 'rep_lt', cat: 'ops', icon: 'branch', rep: 1, def: '0,1', w: 46,
+    n: L('{x} < {y}', '{x} < {y}', '{x} < {y}', '{x} < {y}'),
+    d: L('Devuelve verdadero si el primero es menor; sirve para «Si {v} entonces».', 'Returns true if the first is smaller; for «If {v} then».', 'Devolve verdadeiro se o primeiro for menor; para «Se {v} então».', 'Renvoie vrai si le premier est plus petit ; pour « Si {v} alors ».')
+  },
+  {
+    id: 'rep_eq', cat: 'ops', icon: 'branch', rep: 1, def: '1\u00011', sep: '\u0001', w: 52,
+    n: L('{x} = {y}', '{x} = {y}', '{x} = {y}', '{x} = {y}'),
+    d: L('Devuelve verdadero si son iguales (números o textos, sin distinguir mayúsculas ni tildes). Ideal para comparar respuestas.', 'Returns true if they are equal (numbers or texts, ignoring case and accents). Great for checking answers.', 'Devolve verdadeiro se forem iguais (números ou textos, sem diferenciar maiúsculas nem acentos). Ótimo para conferir respostas.', 'Renvoie vrai s’ils sont égaux (nombres ou textes, sans tenir compte de la casse ni des accents). Idéal pour vérifier des réponses.')
+  },
+  {
+    id: 'rep_and', cat: 'ops', icon: 'branch', rep: 1, def: '1,1', w: 40,
+    n: L('{x} y {y}', '{x} and {y}', '{x} e {y}', '{x} et {y}'),
+    d: L('Verdadero sólo si las dos condiciones son verdaderas.', 'True only if both conditions are true.', 'Verdadeiro só se as duas condições forem verdadeiras.', 'Vrai seulement si les deux conditions sont vraies.')
+  },
+  {
+    id: 'rep_or', cat: 'ops', icon: 'branch', rep: 1, def: '0,1', w: 40,
+    n: L('{x} o {y}', '{x} or {y}', '{x} ou {y}', '{x} ou {y}'),
+    d: L('Verdadero si al menos una de las condiciones es verdadera.', 'True if at least one condition is true.', 'Verdadeiro se pelo menos uma condição for verdadeira.', 'Vrai si au moins une condition est vraie.')
+  },
+  {
+    id: 'rep_not', cat: 'ops', icon: 'branch', rep: 1, def: 0, w: 40,
+    n: L('no {v}', 'not {v}', 'não {v}', 'non {v}'),
+    d: L('Invierte una condición: lo verdadero pasa a falso y al revés.', 'Flips a condition: true becomes false and the other way round.', 'Inverte uma condição: o verdadeiro vira falso e vice-versa.', 'Inverse une condition : le vrai devient faux et inversement.')
+  },
+  {
+    id: 'rep_mod', cat: 'ops', icon: 'calculator', rep: 1, def: '10,3', w: 46,
+    n: L('Resto de {x} ÷ {y}', 'Remainder of {x} ÷ {y}', 'Resto de {x} ÷ {y}', 'Reste de {x} ÷ {y}'),
+    d: L('Lo que sobra al dividir (10 ÷ 3 sobra 1). Sirve para saber si un número es par.', 'What is left after dividing (10 ÷ 3 leaves 1). Handy to know if a number is even.', 'O que sobra ao dividir (10 ÷ 3 sobra 1). Serve para saber se um número é par.', 'Ce qui reste après la division (10 ÷ 3 reste 1). Utile pour savoir si un nombre est pair.')
+  },
+  {
+    id: 'rep_round', cat: 'ops', icon: 'calculator', rep: 1, def: '1.5', w: 52,
+    n: L('Redondear {v}', 'Round {v}', 'Arredondar {v}', 'Arrondir {v}'),
+    d: L('Redondea al entero más cercano.', 'Rounds to the nearest whole number.', 'Arredonda para o inteiro mais próximo.', 'Arrondit à l’entier le plus proche.')
+  },
+  {
+    id: 'rep_abs', cat: 'ops', icon: 'calculator', rep: 1, def: '-5', w: 52,
+    n: L('Valor absoluto de {v}', 'Absolute value of {v}', 'Valor absoluto de {v}', 'Valeur absolue de {v}'),
+    d: L('El número sin signo: −5 pasa a 5.', 'The number without its sign: −5 becomes 5.', 'O número sem sinal: −5 vira 5.', 'Le nombre sans son signe : −5 devient 5.')
+  },
+  {
+    id: 'rep_join', cat: 'ops', icon: 'edit', rep: 1, def: 'Hola \u0001mundo', sep: '\u0001', ws: [64, 64],
+    n: L('Unir {x} y {y}', 'Join {x} and {y}', 'Juntar {x} e {y}', 'Joindre {x} et {y}'),
+    d: L('Pega dos textos o valores en uno solo.', 'Glues two texts or values into one.', 'Cola dois textos ou valores em um só.', 'Colle deux textes ou valeurs en un seul.')
+  },
+  {
+    id: 'rep_len', cat: 'ops', icon: 'edit', rep: 1, def: 'Hola', w: 64,
+    n: L('Letras en {v}', 'Length of {v}', 'Letras em {v}', 'Lettres dans {v}'),
+    d: L('Cuenta cuántas letras tiene un texto.', 'Counts how many letters a text has.', 'Conta quantas letras tem um texto.', 'Compte combien de lettres a un texte.')
+  },
+  {
+    id: 'rep_letter', cat: 'ops', icon: 'edit', rep: 1, def: '1\u0001Hola', sep: '\u0001', ws: [40, 64],
+    n: L('Letra {x} de {y}', 'Letter {x} of {y}', 'Letra {x} de {y}', 'Lettre {x} de {y}'),
+    d: L('Devuelve la letra de esa posición dentro de un texto (la primera es la 1).', 'Returns the letter at that position inside a text (the first is 1).', 'Devolve a letra dessa posição dentro de um texto (a primeira é a 1).', 'Renvoie la lettre à cette position dans un texte (la première est la 1).')
+  },
+  {
     id: 'show2', cat: 'multi', icon: 'eye', legacy: 1,
     n: L('Mostrar amigo', 'Show friend', 'Mostrar amigo', 'Montrer l’ami'),
     d: L('Muestra al segundo personaje (🐶).', 'Shows the second character (🐶).', 'Mostra o segundo personagem (🐶).', 'Montre le deuxième personnage (🐶).')
@@ -849,7 +941,9 @@ const REPORTER_BLOCKS = BLOCKS.filter(b => b.rep);
 const REPORTER_HOSTS = [
   'move', 'turn', 'point_dir', 'go_xy', 'say', 'size', 'wait',
   'repeat', 'if_score', 'if_cond', 'if_else', 'vibrate',
-  'score_add', 'score_set', 'op_calc'
+  'score_add', 'score_set', 'op_calc',
+  'set_var', 'add_var', 'sub_var', 'list_add', 'list_del', 'list_replace',
+  'ask', 'repeat_until', 'wait_until'
 ];
 BLOCKS.forEach(b => { if (REPORTER_HOSTS.indexOf(b.id) >= 0) b.repOk = 1; });
 
@@ -899,6 +993,49 @@ const UI_EXTRA = {
     ex2: 'Atrapa la fruta',
     ex2d: 'Clones que caen, marcador y una cesta que movés con las flechas.',
     ex3: 'Esquiva los cometas',
+    ex4: 'Atrapa las estrellas',
+    ex4d: 'Juego simple: mueve al gato con las flechas y junta 5 estrellas.',
+    ex5: 'Esquiva meteoritos',
+    ex5d: 'Nivel intermedio: vidas, clones y condiciones para ganar o perder.',
+    ex6: 'Defensa espacial',
+    ex6d: 'Nivel avanzado: gira la nave y dispara en su dirección usando mensajes.',
+    exStar: 'Estrella',
+    exUfo: 'Ovni',
+    exMeteor: 'Meteorito',
+    exBullet: 'Bala',
+    exInvader: 'Invasor',
+    exVarLives: 'vidas',
+    exVarEnd: 'fin',
+    exMsgGo: 'empezar',
+    exMsgShoot: 'disparo',
+    exStarInstr: '¡Atrapa 5 estrellas! Muévete con las flechas',
+    exWin: '¡Ganaste! 🎉',
+    exLose: '¡Perdiste! 💥',
+    exMeteorTitle: '☄️ ESQUIVA LOS METEORITOS',
+    exMeteorInstr: 'Mueve el ovni con ← y →. Llega a 10 puntos',
+    exDefTitle: '🚀 DEFENSA ESPACIAL',
+    exDefInstr: '← → giran la nave. ESPACIO dispara. Llega a 10 puntos',
+    tutorialLink: 'Tutoriales paso a paso',
+    askTitle: 'Pregunta',
+    askPlaceholder: 'Escribí tu respuesta…',
+    askSend: 'Enviar',
+    ex7: 'Quiz de preguntas',
+    ex7d: 'Preguntas y respuestas con listas: el búho pregunta y revisa lo que escribís.',
+    exOwl: 'Búho',
+    exListQ: 'preguntas',
+    exListA: 'respuestas',
+    exVarIdx: 'indice',
+    exVarAns: 'respuesta',
+    exQuizTitle: '🦉 ¡QUIZ DE PREGUNTAS!',
+    exQ1: '¿Cuánto es 2 + 3?',
+    exA1: '5',
+    exQ2: '¿Cuál es la capital de Francia?',
+    exA2: 'París',
+    exQ3: '¿Cuántos días tiene una semana?',
+    exA3: '7',
+    exQuizOk: '¡Correcto! 🎉',
+    exQuizBad: 'Era: ',
+    exQuizEnd: 'Terminaste. Puntos: ',
     ex3d: 'Los cometas caen solos. Si te tocan, perdés los puntos.',
     exCat: 'Gato',
     exBasket: 'Cesta',
@@ -1053,6 +1190,49 @@ const UI_EXTRA = {
     ex2: 'Catch the fruit',
     ex2d: 'Clones fall, a score counts, and you move the basket with the arrow keys.',
     ex3: 'Dodge the comets',
+    ex4: 'Catch the stars',
+    ex4d: 'Simple game: move the cat with the arrows and collect 5 stars.',
+    ex5: 'Dodge the meteors',
+    ex5d: 'Intermediate: lives, clones and conditions to win or lose.',
+    ex6: 'Space defense',
+    ex6d: 'Advanced: turn the ship and shoot in its direction using messages.',
+    exStar: 'Star',
+    exUfo: 'UFO',
+    exMeteor: 'Meteor',
+    exBullet: 'Bullet',
+    exInvader: 'Invader',
+    exVarLives: 'lives',
+    exVarEnd: 'over',
+    exMsgGo: 'start',
+    exMsgShoot: 'shoot',
+    exStarInstr: 'Catch 5 stars! Move with the arrows',
+    exWin: 'You win! 🎉',
+    exLose: 'You lose! 💥',
+    exMeteorTitle: '☄️ DODGE THE METEORS',
+    exMeteorInstr: 'Move the UFO with ← and →. Reach 10 points',
+    exDefTitle: '🚀 SPACE DEFENSE',
+    exDefInstr: '← → turn the ship. SPACE shoots. Reach 10 points',
+    tutorialLink: 'Step-by-step tutorials',
+    askTitle: 'Question',
+    askPlaceholder: 'Type your answer…',
+    askSend: 'Send',
+    ex7: 'Quiz',
+    ex7d: 'Questions and answers with lists: the owl asks and checks what you type.',
+    exOwl: 'Owl',
+    exListQ: 'questions',
+    exListA: 'answers',
+    exVarIdx: 'index',
+    exVarAns: 'answer',
+    exQuizTitle: '🦉 QUIZ TIME!',
+    exQ1: 'What is 2 + 3?',
+    exA1: '5',
+    exQ2: 'What is the capital of France?',
+    exA2: 'Paris',
+    exQ3: 'How many days are in a week?',
+    exA3: '7',
+    exQuizOk: 'Correct! 🎉',
+    exQuizBad: 'It was: ',
+    exQuizEnd: 'Finished. Points: ',
     ex3d: 'Comets fall on their own. If they hit you, you lose your points.',
     exCat: 'Cat',
     exBasket: 'Basket',
@@ -1207,6 +1387,49 @@ const UI_EXTRA = {
     ex2: 'Pegue a fruta',
     ex2d: 'Clones caem, o placar conta e você move a cesta com as setas.',
     ex3: 'Desvie dos cometas',
+    ex4: 'Pegue as estrelas',
+    ex4d: 'Jogo simples: mova o gato com as setas e junte 5 estrelas.',
+    ex5: 'Desvie dos meteoros',
+    ex5d: 'Intermediário: vidas, clones e condições para ganhar ou perder.',
+    ex6: 'Defesa espacial',
+    ex6d: 'Avançado: gire a nave e atire na direção dela usando mensagens.',
+    exStar: 'Estrela',
+    exUfo: 'OVNI',
+    exMeteor: 'Meteoro',
+    exBullet: 'Bala',
+    exInvader: 'Invasor',
+    exVarLives: 'vidas',
+    exVarEnd: 'fim',
+    exMsgGo: 'comecar',
+    exMsgShoot: 'tiro',
+    exStarInstr: 'Pegue 5 estrelas! Mova-se com as setas',
+    exWin: 'Você ganhou! 🎉',
+    exLose: 'Você perdeu! 💥',
+    exMeteorTitle: '☄️ DESVIE DOS METEOROS',
+    exMeteorInstr: 'Mova o OVNI com ← e →. Chegue a 10 pontos',
+    exDefTitle: '🚀 DEFESA ESPACIAL',
+    exDefInstr: '← → giram a nave. ESPAÇO atira. Chegue a 10 pontos',
+    tutorialLink: 'Tutoriais passo a passo',
+    askTitle: 'Pergunta',
+    askPlaceholder: 'Digite sua resposta…',
+    askSend: 'Enviar',
+    ex7: 'Quiz de perguntas',
+    ex7d: 'Perguntas e respostas com listas: a coruja pergunta e confere o que você digita.',
+    exOwl: 'Coruja',
+    exListQ: 'perguntas',
+    exListA: 'respostas',
+    exVarIdx: 'indice',
+    exVarAns: 'resposta',
+    exQuizTitle: '🦉 QUIZ DE PERGUNTAS!',
+    exQ1: 'Quanto é 2 + 3?',
+    exA1: '5',
+    exQ2: 'Qual é a capital da França?',
+    exA2: 'Paris',
+    exQ3: 'Quantos dias tem uma semana?',
+    exA3: '7',
+    exQuizOk: 'Correto! 🎉',
+    exQuizBad: 'Era: ',
+    exQuizEnd: 'Terminou. Pontos: ',
     ex3d: 'Os cometas caem sozinhos. Se acertarem você, perde os pontos.',
     exCat: 'Gato',
     exBasket: 'Cesta',
@@ -1361,6 +1584,49 @@ const UI_EXTRA = {
     ex2: 'Attrape le fruit',
     ex2d: 'Des clones tombent, un score compte, et vous déplacez le panier avec les flèches.',
     ex3: 'Évite les comètes',
+    ex4: 'Attrape les étoiles',
+    ex4d: 'Jeu simple : bouge le chat avec les flèches et ramasse 5 étoiles.',
+    ex5: 'Évite les météorites',
+    ex5d: 'Intermédiaire : vies, clones et conditions pour gagner ou perdre.',
+    ex6: 'Défense spatiale',
+    ex6d: 'Avancé : fais tourner le vaisseau et tire dans sa direction avec des messages.',
+    exStar: 'Étoile',
+    exUfo: 'OVNI',
+    exMeteor: 'Météorite',
+    exBullet: 'Balle',
+    exInvader: 'Envahisseur',
+    exVarLives: 'vies',
+    exVarEnd: 'fin',
+    exMsgGo: 'commencer',
+    exMsgShoot: 'tir',
+    exStarInstr: 'Attrape 5 étoiles ! Bouge avec les flèches',
+    exWin: 'Gagné ! 🎉',
+    exLose: 'Perdu ! 💥',
+    exMeteorTitle: '☄️ ÉVITE LES MÉTÉORITES',
+    exMeteorInstr: 'Bouge l\'OVNI avec ← et →. Atteins 10 points',
+    exDefTitle: '🚀 DÉFENSE SPATIALE',
+    exDefInstr: '← → font tourner le vaisseau. ESPACE tire. Atteins 10 points',
+    tutorialLink: 'Tutoriels pas à pas',
+    askTitle: 'Question',
+    askPlaceholder: 'Écris ta réponse…',
+    askSend: 'Envoyer',
+    ex7: 'Quiz de questions',
+    ex7d: 'Questions et réponses avec des listes : le hibou demande et vérifie ce que tu écris.',
+    exOwl: 'Hibou',
+    exListQ: 'questions',
+    exListA: 'reponses',
+    exVarIdx: 'indice',
+    exVarAns: 'reponse',
+    exQuizTitle: '🦉 QUIZ DE QUESTIONS !',
+    exQ1: 'Combien font 2 + 3 ?',
+    exA1: '5',
+    exQ2: 'Quelle est la capitale de la France ?',
+    exA2: 'Paris',
+    exQ3: 'Combien de jours dans une semaine ?',
+    exA3: '7',
+    exQuizOk: 'Correct ! 🎉',
+    exQuizBad: 'C’était : ',
+    exQuizEnd: 'Fini. Points : ',
     ex3d: 'Les comètes tombent seules. Si elles vous touchent, vous perdez vos points.',
     exCat: 'Chat',
     exBasket: 'Panier',

@@ -171,8 +171,9 @@ if (!/function\s+pickMatch\s*\(/.test(engine)) { ok = false; console.log('FAIL f
   const cBlocks = [...dataSrc.matchAll(/id: '([a-z0-9_]+)', cat: '[a-z]+',[^\n]*?\bc: 1\b/g)].map(m => m[1]);
   const condMatch = /const COND_TYPES = \{([\s\S]*?)\};/.exec(engine);
   const condIds = condMatch ? [...condMatch[1].matchAll(/([a-z0-9_]+)\s*:\s*1/g)].map(m => m[1]) : [];
-  /* repeat/forever no llevan condición; «sino» es la rama negativa. */
-  const propios = ['repeat', 'forever', 'sino', 'def_proc'];
+  /* repeat/forever no llevan condición; «sino» es la rama negativa;
+     «repetir hasta» es un bucle (se resuelve en execNode, no como un «si»). */
+  const propios = ['repeat', 'forever', 'repeat_until', 'sino', 'def_proc'];
   const faltan = cBlocks.filter(id => propios.indexOf(id) < 0 && condIds.indexOf(id) < 0);
   if (!condIds.length) { ok = false; console.log('FAIL falta COND_TYPES en engine.js'); }
   if (faltan.length) {
@@ -1016,9 +1017,9 @@ if (fs.existsSync(wfDir)) {
       ok = false; console.log('FAIL ' + id + ' no tiene el pickAt correcto');
     }
   });
-  if (ctx.PB.filter(b => b.pick === 'lists').length !== 4 ||
+  if (ctx.PB.filter(b => b.pick === 'lists').length !== 6 ||
       ctx.ALLB.filter(b => b.rep && b.pick === 'lists').length !== 2) {
-    ok = false; console.log('FAIL el catálogo de listas no tiene 4 bloques y 2 reporteros');
+    ok = false; console.log('FAIL el catálogo de listas no tiene 6 bloques (4 + avanzar/retroceder) y 2 reporteros');
   }
   ['normalizeLists', 'listRead', 'listData', 'listIndexOf', 'applyListBlock',
     'renderLists', 'createList', 'deleteList', 'newListFor', 'listNameOf',
@@ -1102,8 +1103,8 @@ if (fs.existsSync(wfDir)) {
       !callP || callP.pick !== 'procs' || callP.hat || callP.c) {
     ok = false; console.log('FAIL «Definir» no es sombrero con cuerpo o «Llamar» está mal declarado');
   }
-  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 67) {
-    ok = false; console.log('FAIL la paleta no tiene 67 bloques con los dos de procedimientos');
+  if (ctx.PB.filter(b => b.pick === 'procs').length !== 2 || ctx.PB.length !== 72) {
+    ok = false; console.log('FAIL la paleta no tiene 72 bloques con los dos de procedimientos');
   }
   ['isProcNode', 'procName', 'cleanProcName', 'procDefNode', 'runProcedure',
     'newProcFor', 'procMutation'].forEach(fn => {

@@ -2843,7 +2843,11 @@ function renderRepChoices() {
     b.className = 'rep-choice';
     b.dataset.repPick = def.id;
     const name = document.createElement('b');
-    name.textContent = blockPlainName(def);
+    /* «Posición x de …»: en los reporteros que eligen un personaje la lista
+       muestra «…» (cualquier personaje), no el valor de fábrica «mí mismo». */
+    name.textContent = def.pick === 'sprites'
+      ? (def.n[lang] || def.n.es).replace(/\{(?:v|x|y)\}/g, '…')
+      : blockPlainName(def);
     const desc = document.createElement('small');
     desc.textContent = def.d[lang] || def.d.es;
     b.appendChild(name);

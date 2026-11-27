@@ -19,7 +19,7 @@
    caché sirve; tests/check-parity.js falla si la huella está desactualizada.
    En Vercel, vercel.json evita que la CDN cachee este archivo. */
 
-const VERSION = 'scrachmo-v25-1963401d';
+const VERSION = 'scrachmo-v26-71d35866';
 
 /* Todo lo que se pide en install tiene que existir: si un solo archivo falta,
    addAll() rechaza y el service worker no se instala. */

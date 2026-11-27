@@ -14,7 +14,7 @@ const L = (es, en, pt, fr) => ({ es, en, pt, fr });
    con esta misma cadena más una huella de los tres archivos de la app;
    tests/check-parity.js verifica que no se desincronicen y
    tests/bump-sw.js los actualiza juntos. */
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },

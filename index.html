@@ -179,7 +179,12 @@ footer{border-top:1px solid var(--line);padding:34px 0 40px;background:rgba(5,8,
   .hero{grid-template-columns:1fr;gap:46px;padding-top:52px}
   .visual{max-width:540px;margin-inline:auto;width:100%}
   .grid,.steps{grid-template-columns:repeat(2,1fr)}
-  .nav-links{display:none}
+  /* En pantallas chicas el menú no se oculta: pasa a una segunda fila que se
+     desliza de costado, así «Tutoriales» siempre se puede tocar. */
+  .nav-in{flex-wrap:wrap;row-gap:0;padding-bottom:0}
+  .nav-links{order:5;flex:1 1 100%;margin-left:0;overflow-x:auto;scrollbar-width:none;padding:2px 0 8px;-webkit-overflow-scrolling:touch}
+  .nav-links::-webkit-scrollbar{display:none}
+  .nav-links a{white-space:nowrap;padding:7px 12px;font-size:13.5px}
 }
 @media(max-width:620px){
   .nav-in{gap:9px;min-height:62px}
